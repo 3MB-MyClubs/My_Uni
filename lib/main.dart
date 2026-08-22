@@ -75,8 +75,8 @@ void main() {
     runApp(
       ProviderScope(
         child: DevicePreview(
-          enabled: bool.fromEnvironment('CLUBUP_DEVICE_PREVIEW'),
-          child: const MyApp(startupInitializer: _initializeAfterFirstFrame),
+          enabled: const bool.fromEnvironment('CLUBUP_DEVICE_PREVIEW'),
+          child: MyApp(startupInitializer: () => _initializeAfterFirstFrame()),
         ),
       ),
     );
@@ -448,7 +448,11 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
 
     setState(() {
       _requiredUpdate = requiredUpdate;
-      if (blockWhileChecking) _isCheckingForUpdate = false;
+      // Always release the current check. A resume-triggered check may have
+      // replaced the initial blocking check and is intentionally started with
+      // blockWhileChecking=false; leaving this conditional here can strand
+      // users on the branded launch screen forever.
+      _isCheckingForUpdate = false;
     });
   }
 

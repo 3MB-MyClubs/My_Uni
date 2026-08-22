@@ -94,6 +94,7 @@ class StudentProfileScreen extends StatelessWidget {
   final VoidCallback? onFollowingTap;
   final List<Club> followedClubs;
   final ValueChanged<Club>? onClubTap;
+  final bool clubsLoading;
   final StudentProfileData data;
 
   const StudentProfileScreen({
@@ -107,6 +108,7 @@ class StudentProfileScreen extends StatelessWidget {
     this.onFollowingTap,
     this.followedClubs = const [],
     this.onClubTap,
+    this.clubsLoading = false,
   });
 
   static const _clubColors = [
@@ -214,11 +216,19 @@ class StudentProfileScreen extends StatelessWidget {
       children: [
         ProfileSectionHeader(
           title: l10n.myClubs,
-          actionLabel: entries.isEmpty ? null : l10n.seeAll,
+          actionLabel: clubsLoading || entries.isEmpty ? null : l10n.seeAll,
           onAction: () => _showFollowedClubsSheet(context),
         ),
         const SizedBox(height: 14),
-        if (entries.isEmpty)
+        if (clubsLoading)
+          LinearProgressIndicator(
+            key: const ValueKey('profile-clubs-loading'),
+            minHeight: 3,
+            borderRadius: const BorderRadius.all(Radius.circular(999)),
+            color: ProfileColors.accent,
+            backgroundColor: ProfileColors.border,
+          )
+        else if (entries.isEmpty)
           GestureDetector(
             onTap: onFindClubs,
             behavior: HitTestBehavior.opaque,

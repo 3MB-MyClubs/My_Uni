@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import '../models/user.dart';
 import '../models/club.dart';
@@ -44,6 +46,9 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
   final GlobalKey _moreButtonKey = GlobalKey();
   bool _connectionsLoading = false;
   String? _connectionsError;
+  String? _clubContentScope;
+  int _clubContentRequest = 0;
+  bool _clubContentLoading = true;
   static const List<Color> _clubColors = [
     Color(0xFF8C1D40),
     Color(0xFF1565C0),
@@ -124,6 +129,7 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
   @override
   void initState() {
     super.initState();
+    _ensureClubContentForScope();
     _hydrateProfile();
     _refreshClubMemberCounts();
   }
@@ -146,6 +152,32 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
     } catch (_) {
       // Keep the last successful aggregate snapshot while offline.
     }
+  }
+
+  void _ensureClubContentForScope() {
+    final scope =
+        authService.currentUser?.id ??
+        authService.currentAdmin?.id ??
+        'anonymous';
+    if (_clubContentScope == scope) return;
+
+    _clubContentScope = scope;
+    if (clubs.isNotEmpty) {
+      _clubContentLoading = false;
+      return;
+    }
+
+    _clubContentLoading = true;
+    final request = ++_clubContentRequest;
+    unawaited(() async {
+      try {
+        await lazyContentLoader.ensureContentLoaded();
+      } catch (_) {
+        // Keep any previously loaded directory visible when offline.
+      }
+      if (!mounted || request != _clubContentRequest) return;
+      setState(() => _clubContentLoading = false);
+    }());
   }
 
   Future<void> _hydrateProfile() async {
@@ -173,6 +205,11 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
   }
 
   List<Club> get _subscribedClubs {
+    if (_clubContentLoading ||
+        (_isOwnProfile && userState.followedClubsLoading)) {
+      return const [];
+    }
+
     final liveIds = peopleService.clubIdsFor(widget.user.id);
     final ids = _isOwnProfile
         ? userState.followedClubIds
@@ -326,6 +363,7 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
 
   @override
   Widget build(BuildContext context) {
+    _ensureClubContentForScope();
     final user = widget.user;
     final l10n = AppLocalizations.of(context)!;
     final bottomInset = MediaQuery.paddingOf(context).bottom;
@@ -489,12 +527,15 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
   /// count header rather than calling them mutual.
   Widget _buildClubsSection(BuildContext context) {
     final l10n = AppLocalizations.of(context)!;
+    final clubsLoading =
+        _clubContentLoading ||
+        (_isOwnProfile && userState.followedClubsLoading);
     final theirClubs = _subscribedClubs;
     final mutual = _isOwnProfile || !authService.isStudentSession
         ? const <Club>[]
         : theirClubs.where((club) => userState.isFollowing(club.id)).toList();
     final shown = mutual.isNotEmpty ? mutual : theirClubs;
-    if (shown.isEmpty) return const SizedBox.shrink();
+    if (shown.isEmpty && !clubsLoading) return const SizedBox.shrink();
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -503,30 +544,41 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
           title: mutual.isNotEmpty
               ? S.mutualClubs
               : l10n.clubsCountTitle(theirClubs.length),
-          actionLabel: shown.length > 2 ? l10n.seeAll : null,
+          actionLabel: !clubsLoading && shown.length > 2 ? l10n.seeAll : null,
           onAction: () => _openConnections(_ConnTab.clubs),
         ),
         const SizedBox(height: 14),
-        SingleChildScrollView(
-          scrollDirection: Axis.horizontal,
-          clipBehavior: Clip.none,
-          child: Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              for (var i = 0; i < shown.length; i++) ...[
-                if (i > 0) const SizedBox(width: 12),
-                ProfileClubCard(
-                  club: shown[i],
-                  color: _clubColor(shown[i]),
-                  detail: l10n.membersCountLabel(clubMemberCount(shown[i].id)),
-                  width: 150,
-                  nameSize: 11,
-                  onTap: () => _openClub(shown[i]),
-                ),
+        if (clubsLoading)
+          LinearProgressIndicator(
+            key: const ValueKey('visited-profile-clubs-loading'),
+            minHeight: 3,
+            borderRadius: const BorderRadius.all(Radius.circular(999)),
+            color: ProfileColors.accent,
+            backgroundColor: ProfileColors.border,
+          )
+        else
+          SingleChildScrollView(
+            scrollDirection: Axis.horizontal,
+            clipBehavior: Clip.none,
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                for (var i = 0; i < shown.length; i++) ...[
+                  if (i > 0) const SizedBox(width: 12),
+                  ProfileClubCard(
+                    club: shown[i],
+                    color: _clubColor(shown[i]),
+                    detail: l10n.membersCountLabel(
+                      clubMemberCount(shown[i].id),
+                    ),
+                    width: 150,
+                    nameSize: 11,
+                    onTap: () => _openClub(shown[i]),
+                  ),
+                ],
               ],
-            ],
+            ),
           ),
-        ),
         const SizedBox(height: 22),
       ],
     );
@@ -611,6 +663,9 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
   }
 
   void _openConnections(_ConnTab tab) {
+    final clubsLoading =
+        _clubContentLoading ||
+        (_isOwnProfile && userState.followedClubsLoading);
     Navigator.push(
       context,
       MaterialPageRoute(
@@ -626,6 +681,7 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
           onOpenUser: _openUserProfile,
           peopleLoading: _connectionsLoading,
           peopleError: _connectionsError,
+          clubsLoading: clubsLoading,
         ),
       ),
     );
@@ -717,6 +773,7 @@ class _ConnectionsScreen extends StatefulWidget {
   final ValueChanged<User> onOpenUser;
   final bool peopleLoading;
   final String? peopleError;
+  final bool clubsLoading;
 
   const _ConnectionsScreen({
     required this.title,
@@ -730,6 +787,7 @@ class _ConnectionsScreen extends StatefulWidget {
     required this.onOpenUser,
     required this.peopleLoading,
     required this.peopleError,
+    required this.clubsLoading,
   });
 
   @override
@@ -791,7 +849,10 @@ class _ConnectionsScreenState extends State<_ConnectionsScreen> {
               _buildSearchBar(),
               Expanded(
                 child: switch (_tab) {
-                  _ConnTab.clubs => _buildClubsList(_matchClubs(clubs)),
+                  _ConnTab.clubs => _buildClubsList(
+                    _matchClubs(clubs),
+                    loading: widget.clubsLoading,
+                  ),
                   _ConnTab.followers => _buildPeopleList(
                     _matchPeople(followers),
                     AppLocalizations.of(context)!.noFollowersYet,
@@ -897,10 +958,12 @@ class _ConnectionsScreenState extends State<_ConnectionsScreen> {
     );
   }
 
-  Widget _buildClubsList(List<Club> clubs) {
+  Widget _buildClubsList(List<Club> clubs, {required bool loading}) {
     if (clubs.isEmpty) {
       return _emptyState(
-        _query.isEmpty
+        loading
+            ? AppLocalizations.of(context)!.loadingConnections
+            : _query.isEmpty
             ? AppLocalizations.of(context)!.noClubsYetShort
             : AppLocalizations.of(context)!.noClubsFound,
       );

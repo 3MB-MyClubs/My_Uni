@@ -5,6 +5,8 @@ import 'supabase_read_cache.dart';
 import 'lazy_content_loader.dart';
 
 class ClubFollowService {
+  final Map<String, int> _followedClubRevisions = {};
+
   SupabaseClient? get _client {
     if (!SupabaseConfig.isConfigured) return null;
     return Supabase.instance.client;
@@ -14,7 +16,11 @@ class ClubFollowService {
 
   String _cacheKey(String userId) => 'club-following:$userId';
 
+  int followedClubRevisionFor(String userId) =>
+      _followedClubRevisions[userId] ?? 0;
+
   void _invalidateUser(String userId) {
+    _followedClubRevisions[userId] = followedClubRevisionFor(userId) + 1;
     supabaseReadCache.invalidate(_cacheKey(userId));
     supabaseReadCache.invalidate('people-profile-details:$userId');
   }
@@ -65,6 +71,9 @@ class ClubFollowService {
       if (error.code == '23505') return;
       rethrow;
     }
+    // A read that began while the insert was in flight must not become the
+    // cache or overwrite the optimistic state after the write commits.
+    _invalidateUser(userId);
     supabaseReadCache.invalidate('club-community-count:$clubId');
     supabaseReadCache.invalidate('club-community-members:$clubId');
     lazyContentLoader.invalidateContent();
@@ -84,6 +93,7 @@ class ClubFollowService {
         .delete()
         .eq('profile_id', userId)
         .eq('club_id', clubId);
+    _invalidateUser(userId);
     supabaseReadCache.invalidate('club-community-count:$clubId');
     supabaseReadCache.invalidate('club-community-members:$clubId');
     lazyContentLoader.invalidateContent();
@@ -112,6 +122,7 @@ class ClubFollowService {
     if (rows.isNotEmpty) {
       await client.from('club_followers').insert(rows);
     }
+    _invalidateUser(userId);
     // The previous membership set is not available after the replacement, so
     // invalidate all opened-club snapshots rather than risking stale counts
     // for a club that was removed from the new set.

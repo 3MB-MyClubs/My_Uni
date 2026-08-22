@@ -99,6 +99,39 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
+  testWidgets('student profile keeps the club loading state visible', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      ProviderScope(
+        child: MaterialApp(
+          localizationsDelegates: AppLocalizations.localizationsDelegates,
+          supportedLocales: AppLocalizations.supportedLocales,
+          home: StudentProfileScreen(
+            onSettings: () {},
+            clubsLoading: true,
+            data: const StudentProfileData(
+              userId: 'clubs-loading-test',
+              initials: 'S',
+              name: 'Student',
+              graduation: '',
+              major: '',
+              year: '',
+              bio: '',
+              clubs: 0,
+              following: 0,
+              followers: 0,
+            ),
+          ),
+        ),
+      ),
+    );
+    await tester.pump();
+
+    expect(find.byKey(const ValueKey('profile-clubs-loading')), findsOneWidget);
+    expect(find.text(S.noClubsYetLine), findsNothing);
+  });
+
   testWidgets(
     'student profile renders the profile-screen frame at phone width',
     (tester) async {
