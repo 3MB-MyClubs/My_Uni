@@ -101,6 +101,23 @@ flutter:
     - assets/lottie/
     - assets/branding/
 
+  # Figtree is the typeface the ClubUp-Desings handoff is set in. It is applied
+  # only by the search area for now (see lib/widgets/search_design.dart); the
+  # rest of the app still renders in the platform default.
+  fonts:
+    - family: Figtree
+      fonts:
+        - asset: assets/fonts/Figtree-Regular.ttf
+          weight: 400
+        - asset: assets/fonts/Figtree-Medium.ttf
+          weight: 500
+        - asset: assets/fonts/Figtree-SemiBold.ttf
+          weight: 600
+        - asset: assets/fonts/Figtree-Bold.ttf
+          weight: 700
+        - asset: assets/fonts/Figtree-ExtraBold.ttf
+          weight: 800
+
   # To add assets to your application, add an assets section, like this:
   # assets:
   #   - images/a_dot_burr.jpeg

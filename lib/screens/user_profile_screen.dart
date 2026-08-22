@@ -20,15 +20,13 @@ import '../services/user_prefs_service.dart';
 import '../services/user_state.dart';
 import '../widgets/club_avatar.dart';
 import '../widgets/moderation_reason_sheet.dart';
-import '../widgets/student_activity_section.dart';
-import '../widgets/student_campus_profile.dart';
+import '../widgets/profile_design.dart';
 import '../widgets/user_avatar.dart';
 import 'chat_thread_screen.dart';
 import 'club_profile_screen.dart';
 import 'event_detail_screen.dart';
 import 'saved_posts_screen.dart';
 import 'student_activity_screen.dart';
-import 'this_week_screen.dart';
 
 // ── Design palette ─────────────────────────────────────────────────────────────
 const _burgundy = Color(0xFF8C1D40);
@@ -42,6 +40,8 @@ class UserProfileScreen extends StatefulWidget {
 }
 
 class _UserProfileScreenState extends State<UserProfileScreen> {
+  /// Anchors `dropdown-menu` under the header's overflow button.
+  final GlobalKey _moreButtonKey = GlobalKey();
   bool _connectionsLoading = false;
   String? _connectionsError;
   static const List<Color> _clubColors = [
@@ -199,67 +199,27 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
   Future<void> _handleFollowTap() =>
       _toggleUserFollow(widget.user, () => setState(() {}));
 
-  void _showSafetyOptions() {
-    showModalBottomSheet<void>(
+  /// `dropdown-menu` on `profile-menu` — the anchored Report / Ban card that
+  /// replaced the old safety bottom sheet. The frame's second row reads "Ban
+  /// User"; a student cannot ban anyone, so it carries the app's real
+  /// destructive action, block-and-report, in the same red weight.
+  void _showSafetyMenu() {
+    showProfileOverflowMenu(
       context: context,
-      backgroundColor: AppColors.card,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
-      ),
-      builder: (sheetContext) => SafeArea(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            const SizedBox(height: 12),
-            Container(
-              width: 40,
-              height: 4,
-              decoration: BoxDecoration(
-                color: AppColors.divider,
-                borderRadius: const BorderRadius.all(Radius.circular(999)),
-              ),
-            ),
-            const SizedBox(height: 10),
-            ListTile(
-              leading: Icon(Icons.flag_outlined, color: AppColors.primaryRed),
-              title: Text(
-                AppLocalizations.of(context)!.reportUser,
-                style: TextStyle(
-                  color: AppColors.text,
-                  fontWeight: FontWeight.w700,
-                ),
-              ),
-              subtitle: Text(
-                AppLocalizations.of(context)!.reportUserSubtitle,
-                style: TextStyle(color: AppColors.secondaryText),
-              ),
-              onTap: () {
-                Navigator.pop(sheetContext);
-                _reportUser();
-              },
-            ),
-            ListTile(
-              leading: const Icon(Icons.block_rounded, color: Colors.red),
-              title: Text(
-                AppLocalizations.of(context)!.blockAndReportUser,
-                style: const TextStyle(
-                  color: Colors.red,
-                  fontWeight: FontWeight.w700,
-                ),
-              ),
-              subtitle: Text(
-                AppLocalizations.of(context)!.blockAndReportSubtitle,
-                style: TextStyle(color: AppColors.secondaryText),
-              ),
-              onTap: () {
-                Navigator.pop(sheetContext);
-                _blockUser();
-              },
-            ),
-            const SizedBox(height: 8),
-          ],
+      anchorKey: _moreButtonKey,
+      actions: [
+        ProfileMenuAction(
+          icon: Icons.flag_outlined,
+          label: AppLocalizations.of(context)!.reportUser,
+          onTap: _reportUser,
         ),
-      ),
+        ProfileMenuAction(
+          icon: Icons.block_rounded,
+          label: AppLocalizations.of(context)!.blockAndReportUser,
+          onTap: _blockUser,
+          destructive: true,
+        ),
+      ],
     );
   }
 
@@ -355,55 +315,6 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
       );
   }
 
-  /// The events & activities block — what this student is going to and what
-  /// they have already been to. Rebuilds with the RSVP and check-in stores so
-  /// it stays in step with the event screens.
-  Widget _buildActivitySection(User user) {
-    final displayName = userState.displayNameFor(user.id, user.name);
-    return ListenableBuilder(
-      listenable: Listenable.merge([
-        rsvpStore,
-        checkinStore,
-        studentActivityService,
-      ]),
-      builder: (context, _) {
-        final summary = studentActivityService.summaryFor(user.id);
-        // A visitor looking at an empty record gets nothing useful from a
-        // placeholder card, so the whole block stays out of their way.
-        if (summary.isEmpty && !_isOwnProfile) return const SizedBox.shrink();
-
-        return StudentActivityPreview(
-          summary: summary,
-          isOwnProfile: _isOwnProfile,
-          studentName: displayName,
-          onSeeAll: () => Navigator.push(
-            context,
-            MaterialPageRoute(
-              builder: (_) => StudentActivityScreen(
-                userId: user.id,
-                studentName: displayName,
-                isOwnProfile: _isOwnProfile,
-              ),
-            ),
-          ),
-          onEntryTap: (entry) => Navigator.push(
-            context,
-            MaterialPageRoute(
-              builder: (_) =>
-                  EventDetailScreen(event: entry.event, color: entry.color),
-            ),
-          ),
-          onBrowseEvents: _isOwnProfile
-              ? () => Navigator.push(
-                  context,
-                  MaterialPageRoute(builder: (_) => const ThisWeekScreen()),
-                )
-              : null,
-        );
-      },
-    );
-  }
-
   void _openUserProfile(User u) {
     Navigator.push(
       context,
@@ -416,122 +327,278 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
   @override
   Widget build(BuildContext context) {
     final user = widget.user;
+    final l10n = AppLocalizations.of(context)!;
+    final bottomInset = MediaQuery.paddingOf(context).bottom;
+
     return ListenableBuilder(
       listenable: userState,
       builder: (context, _) {
-        final subClubs = _subscribedClubs;
-        final followingList = _following;
-        final followersList = _followers;
+        final displayName = userState.displayNameFor(user.id, user.name);
+        final handle = profileHandle(user.email);
         final isFollowingUser = userState.isFollowingUser(user.id);
         final isPending = userState.hasPendingRequest(user.id);
-        final memberships = [
-          for (final club in subClubs.take(4))
-            StudentCampusMembership(
-              club: club,
-              color: _clubColor(club),
-              role:
-                  _roleTitleFor(club) ??
-                  AppLocalizations.of(context)!.memberRoleFallback,
-              detail: AppLocalizations.of(
-                context,
-              )!.membersCountLabel(clubMemberCount(club.id)),
-            ),
-        ];
+        final canAct = !_isOwnProfile && authService.isStudentSession;
 
-        return StudentCampusProfileView(
-          profile: StudentCampusProfile(
-            userId: user.id,
-            name: userState.displayNameFor(user.id, user.name),
-            email: user.email,
-            major: userState.majors[user.id] ?? '',
-            year: userState.years[user.id] ?? '',
-            bio: userState.bios[user.id] ?? '',
-            clubs: subClubs.length,
-            following: followingList.length,
-            followers: followersList.length,
-            doubleMajors: userState.doubleMajors[user.id] ?? const [],
-            minors: userState.minors[user.id] ?? const [],
-          ),
-          title: _isOwnProfile
-              ? AppLocalizations.of(context)!.myProfileTitle
-              : AppLocalizations.of(context)!.studentProfileTitle,
-          leading: StudentProfileIconButton(
-            icon: Icons.chevron_left_rounded,
-            tooltip: AppLocalizations.of(context)!.backTooltip,
-            onTap: () => Navigator.maybePop(context),
-          ),
-          trailing: _isOwnProfile
-              ? StudentProfileIconButton(
-                  icon: Icons.bookmark_outline_rounded,
-                  tooltip: AppLocalizations.of(context)!.savedPostsTooltip,
-                  onTap: () => Navigator.push(
-                    context,
-                    MaterialPageRoute(builder: (_) => const SavedPostsScreen()),
+        return Scaffold(
+          backgroundColor: ProfileColors.background,
+          body: SafeArea(
+            bottom: false,
+            child: Column(
+              children: [
+                ProfileBackHeader(
+                  title: _isOwnProfile
+                      ? l10n.myProfileTitle
+                      : handle.isEmpty
+                      ? displayName
+                      : handle,
+                  onBack: () => Navigator.maybePop(context),
+                  backTooltip: l10n.backTooltip,
+                  trailing: _buildHeaderAction(context),
+                ),
+                Expanded(
+                  child: ListView(
+                    physics: const BouncingScrollPhysics(
+                      parent: AlwaysScrollableScrollPhysics(),
+                    ),
+                    padding: EdgeInsets.fromLTRB(
+                      kProfilePagePadding,
+                      16,
+                      kProfilePagePadding,
+                      bottomInset + kProfileNavClearance,
+                    ),
+                    children: [
+                      ProfileHero(
+                        userId: user.id,
+                        name: displayName,
+                        handle: handle,
+                        bio: userState.bios[user.id] ?? '',
+                        badgeLabel: !_isOwnProfile && _userFollowsMe(user)
+                            ? S.followsYou
+                            : null,
+                        gap: 14,
+                        identityGap: 6,
+                        stats: [
+                          ProfileStat(
+                            value: '${_subscribedClubs.length}',
+                            label: l10n.clubs,
+                            onTap: () => _openConnections(_ConnTab.clubs),
+                          ),
+                          ProfileStat(
+                            value: '${_following.length}',
+                            label: l10n.following,
+                            onTap: () => _openConnections(_ConnTab.following),
+                          ),
+                          ProfileStat(
+                            value: '${_followers.length}',
+                            label: l10n.followers,
+                            onTap: () => _openConnections(_ConnTab.followers),
+                          ),
+                        ],
+                        actions: canAct
+                            ? Row(
+                                children: [
+                                  Expanded(
+                                    child: ProfileActionButton(
+                                      label: isPending
+                                          ? l10n.requestedLabel
+                                          : isFollowingUser
+                                          ? l10n.following
+                                          : _userFollowsMe(user)
+                                          ? l10n.followBack
+                                          : l10n.follow,
+                                      // `btn-follow` carries a plus only while
+                                      // following is still the action to take.
+                                      icon: isFollowingUser || isPending
+                                          ? null
+                                          : Icons.add_rounded,
+                                      filled: !isFollowingUser && !isPending,
+                                      onTap: _handleFollowTap,
+                                    ),
+                                  ),
+                                  const SizedBox(width: 10),
+                                  Expanded(
+                                    child: ProfileActionButton(
+                                      label: S.message,
+                                      icon: Icons.chat_bubble_outline_rounded,
+                                      iconSize: 19,
+                                      filled: false,
+                                      onTap: () => _openThread(user),
+                                    ),
+                                  ),
+                                ],
+                              )
+                            : null,
+                      ),
+                      const SizedBox(height: 22),
+                      _buildClubsSection(context),
+                      _buildEventsSection(context, user),
+                    ],
                   ),
-                )
-              : authService.isStudentSession
-              ? StudentProfileIconButton(
-                  icon: Icons.more_horiz_rounded,
-                  tooltip: AppLocalizations.of(context)!.safetyOptions,
-                  onTap: _showSafetyOptions,
-                )
-              : const SizedBox(width: 36, height: 36),
-          primaryAction: !_isOwnProfile && authService.isStudentSession
-              ? Row(
-                  children: [
-                    Expanded(
-                      child: StudentProfilePrimaryButton(
-                        label: isPending
-                            ? AppLocalizations.of(context)!.requestedLabel
-                            : isFollowingUser
-                            ? AppLocalizations.of(context)!.following
-                            : _userFollowsMe(user)
-                            ? AppLocalizations.of(context)!.followBack
-                            : AppLocalizations.of(context)!.follow,
-                        filled: !isFollowingUser && !isPending,
-                        onTap: _handleFollowTap,
-                      ),
+                ),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  /// The header's trailing control: saved posts on your own profile, the
+  /// overflow menu when a student is looking at someone else, nothing
+  /// otherwise (a club account has no follow, message or report action).
+  Widget _buildHeaderAction(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
+    if (_isOwnProfile) {
+      return ProfileCircleButton(
+        icon: Icons.bookmark_border_rounded,
+        iconSize: 19,
+        tooltip: l10n.savedPostsTooltip,
+        onTap: () => Navigator.push(
+          context,
+          MaterialPageRoute(builder: (_) => const SavedPostsScreen()),
+        ),
+      );
+    }
+    if (!authService.isStudentSession) return const SizedBox(width: 34);
+    return ProfileCircleButton(
+      key: _moreButtonKey,
+      icon: Icons.more_vert_rounded,
+      iconSize: 20,
+      washed: true,
+      tooltip: l10n.safetyOptions,
+      onTap: _showSafetyMenu,
+    );
+  }
+
+  void _openThread(User user) {
+    final myId = authService.currentUser?.id ?? '';
+    final threadId = chatStore.ensureDirectThread(myId, user.id);
+    if (threadId == null) return;
+    Navigator.push(
+      context,
+      ChatPageRoute(
+        builder: (_) => ChatThreadScreen(threadId: threadId, recipient: user),
+      ),
+    );
+  }
+
+  // ── mutual-clubs ───────────────────────────────────────────────────────────
+
+  /// `mutual-clubs`. The header is only honest when there is an overlap, so
+  /// with none it falls back to this student's own clubs under the existing
+  /// count header rather than calling them mutual.
+  Widget _buildClubsSection(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
+    final theirClubs = _subscribedClubs;
+    final mutual = _isOwnProfile || !authService.isStudentSession
+        ? const <Club>[]
+        : theirClubs.where((club) => userState.isFollowing(club.id)).toList();
+    final shown = mutual.isNotEmpty ? mutual : theirClubs;
+    if (shown.isEmpty) return const SizedBox.shrink();
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        ProfileSectionHeader(
+          title: mutual.isNotEmpty
+              ? S.mutualClubs
+              : l10n.clubsCountTitle(theirClubs.length),
+          actionLabel: shown.length > 2 ? l10n.seeAll : null,
+          onAction: () => _openConnections(_ConnTab.clubs),
+        ),
+        const SizedBox(height: 14),
+        SingleChildScrollView(
+          scrollDirection: Axis.horizontal,
+          clipBehavior: Clip.none,
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              for (var i = 0; i < shown.length; i++) ...[
+                if (i > 0) const SizedBox(width: 12),
+                ProfileClubCard(
+                  club: shown[i],
+                  color: _clubColor(shown[i]),
+                  detail: l10n.membersCountLabel(clubMemberCount(shown[i].id)),
+                  width: 150,
+                  nameSize: 11,
+                  onTap: () => _openClub(shown[i]),
+                ),
+              ],
+            ],
+          ),
+        ),
+        const SizedBox(height: 22),
+      ],
+    );
+  }
+
+  // ── hosting ────────────────────────────────────────────────────────────────
+
+  /// `hosting` — what this student is running next. Students never host events
+  /// in the app, clubs do, so "Hosting Next" here means an upcoming event at a
+  /// club where they hold a board role. With no such event the same cards show
+  /// their upcoming events under the plain header instead of over-claiming.
+  Widget _buildEventsSection(BuildContext context, User user) {
+    final l10n = AppLocalizations.of(context)!;
+    return ListenableBuilder(
+      listenable: Listenable.merge([
+        rsvpStore,
+        checkinStore,
+        studentActivityService,
+      ]),
+      builder: (context, _) {
+        final upcoming = studentActivityService.summaryFor(user.id).upcoming;
+        final hosting = upcoming
+            .where(
+              (entry) =>
+                  entry.club != null && _roleTitleFor(entry.club!) != null,
+            )
+            .toList();
+        final shown = (hosting.isNotEmpty ? hosting : upcoming)
+            .take(3)
+            .toList();
+        if (shown.isEmpty) return const SizedBox.shrink();
+
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            ProfileSectionHeader(
+              title: hosting.isNotEmpty ? S.hostingNext : l10n.upcomingEvents,
+              actionLabel: l10n.seeAll,
+              onAction: () => Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (_) => StudentActivityScreen(
+                    userId: user.id,
+                    studentName: userState.displayNameFor(user.id, user.name),
+                    isOwnProfile: _isOwnProfile,
+                  ),
+                ),
+              ),
+            ),
+            const SizedBox(height: 14),
+            for (var i = 0; i < shown.length; i++) ...[
+              if (i > 0) const SizedBox(height: 12),
+              ProfileEventCard(
+                event: shown[i].event,
+                color: shown[i].color,
+                whenLabel: profileWhenLabel(
+                  context,
+                  shown[i].event.dateTime,
+                  live: shown[i].isLive,
+                ),
+                onTap: () => Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (_) => EventDetailScreen(
+                      event: shown[i].event,
+                      color: shown[i].color,
                     ),
-                    const SizedBox(width: 8),
-                    Expanded(
-                      child: StudentProfilePrimaryButton(
-                        label: S.message,
-                        filled: false,
-                        onTap: () {
-                          final myId = authService.currentUser?.id ?? '';
-                          final threadId = chatStore.ensureDirectThread(
-                            myId,
-                            user.id,
-                          );
-                          if (threadId == null) return;
-                          Navigator.push(
-                            context,
-                            ChatPageRoute(
-                              builder: (_) => ChatThreadScreen(
-                                threadId: threadId,
-                                recipient: user,
-                              ),
-                            ),
-                          );
-                        },
-                      ),
-                    ),
-                  ],
-                )
-              : null,
-          activitySection: _buildActivitySection(user),
-          memberships: memberships,
-          clubsTitle: AppLocalizations.of(
-            context,
-          )!.clubsCountTitle(subClubs.length),
-          clubsActionLabel: subClubs.length > 4
-              ? AppLocalizations.of(context)!.seeAll
-              : null,
-          onClubsAction: () => _openConnections(_ConnTab.clubs),
-          onClubTap: _openClub,
-          onClubsTap: () => _openConnections(_ConnTab.clubs),
-          onFollowingTap: () => _openConnections(_ConnTab.following),
-          onFollowersTap: () => _openConnections(_ConnTab.followers),
+                  ),
+                ),
+              ),
+            ],
+          ],
         );
       },
     );

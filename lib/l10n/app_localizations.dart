@@ -2414,6 +2414,12 @@ abstract class AppLocalizations {
   /// **'Followers added here are shown publicly in the Board tab.'**
   String get boardMembersPublicHint;
 
+  /// No description provided for @boardMemberships.
+  ///
+  /// In en, this message translates to:
+  /// **'Board Memberships'**
+  String get boardMemberships;
+
   /// No description provided for @bothInClub.
   ///
   /// In en, this message translates to:
@@ -6637,6 +6643,132 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Graduate'**
   String get academicYearGraduate;
+
+  /// No description provided for @trendingClubs.
+  ///
+  /// In en, this message translates to:
+  /// **'Trending Clubs'**
+  String get trendingClubs;
+
+  /// No description provided for @suggestedClubs.
+  ///
+  /// In en, this message translates to:
+  /// **'Suggested Clubs'**
+  String get suggestedClubs;
+
+  /// No description provided for @suggestedProfiles.
+  ///
+  /// In en, this message translates to:
+  /// **'Suggested Profiles'**
+  String get suggestedProfiles;
+
+  /// No description provided for @searchEverythingHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Search clubs, people, events...'**
+  String get searchEverythingHint;
+
+  /// No description provided for @filtersTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Filters'**
+  String get filtersTitle;
+
+  /// No description provided for @searchInLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Search In'**
+  String get searchInLabel;
+
+  /// No description provided for @sortByLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Sort By'**
+  String get sortByLabel;
+
+  /// No description provided for @categoriesLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Categories'**
+  String get categoriesLabel;
+
+  /// No description provided for @sortMostMembers.
+  ///
+  /// In en, this message translates to:
+  /// **'Most Members'**
+  String get sortMostMembers;
+
+  /// No description provided for @sortRecentlyActive.
+  ///
+  /// In en, this message translates to:
+  /// **'Recently Active'**
+  String get sortRecentlyActive;
+
+  /// No description provided for @applyLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Apply'**
+  String get applyLabel;
+
+  /// No description provided for @selectMajorTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Select Major'**
+  String get selectMajorTitle;
+
+  /// No description provided for @clearAll.
+  ///
+  /// In en, this message translates to:
+  /// **'Clear All'**
+  String get clearAll;
+
+  /// No description provided for @doneCount.
+  ///
+  /// In en, this message translates to:
+  /// **'Done ({n})'**
+  String doneCount(int n);
+
+  /// No description provided for @hostedByClub.
+  ///
+  /// In en, this message translates to:
+  /// **'hosted by {club}'**
+  String hostedByClub(String club);
+
+  /// No description provided for @shareAction.
+  ///
+  /// In en, this message translates to:
+  /// **'Share'**
+  String get shareAction;
+
+  /// No description provided for @imGoing.
+  ///
+  /// In en, this message translates to:
+  /// **'I\'m Going'**
+  String get imGoing;
+
+  /// No description provided for @remindMe.
+  ///
+  /// In en, this message translates to:
+  /// **'Remind Me'**
+  String get remindMe;
+
+  /// No description provided for @shareWithFriends.
+  ///
+  /// In en, this message translates to:
+  /// **'Share with Friends'**
+  String get shareWithFriends;
+
+  /// No description provided for @sendToMoreFriends.
+  ///
+  /// In en, this message translates to:
+  /// **'Send to More Friends'**
+  String get sendToMoreFriends;
+
+  /// No description provided for @peopleYouFollowCount.
+  ///
+  /// In en, this message translates to:
+  /// **'{n,plural, one{1 person you follow} other{{n} people you follow}}'**
+  String peopleYouFollowCount(int n);
 }
 
 class _AppLocalizationsDelegate

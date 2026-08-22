@@ -1388,6 +1388,9 @@ class AppLocalizationsEn extends AppLocalizations {
       'Followers added here are shown publicly in the Board tab.';
 
   @override
+  String get boardMemberships => 'Board Memberships';
+
+  @override
   String bothInClub(String club) {
     return 'Both in $club';
   }
@@ -4046,4 +4049,79 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get academicYearGraduate => 'Graduate';
+
+  @override
+  String get trendingClubs => 'Trending Clubs';
+
+  @override
+  String get suggestedClubs => 'Suggested Clubs';
+
+  @override
+  String get suggestedProfiles => 'Suggested Profiles';
+
+  @override
+  String get searchEverythingHint => 'Search clubs, people, events...';
+
+  @override
+  String get filtersTitle => 'Filters';
+
+  @override
+  String get searchInLabel => 'Search In';
+
+  @override
+  String get sortByLabel => 'Sort By';
+
+  @override
+  String get categoriesLabel => 'Categories';
+
+  @override
+  String get sortMostMembers => 'Most Members';
+
+  @override
+  String get sortRecentlyActive => 'Recently Active';
+
+  @override
+  String get applyLabel => 'Apply';
+
+  @override
+  String get selectMajorTitle => 'Select Major';
+
+  @override
+  String get clearAll => 'Clear All';
+
+  @override
+  String doneCount(int n) {
+    return 'Done ($n)';
+  }
+
+  @override
+  String hostedByClub(String club) {
+    return 'hosted by $club';
+  }
+
+  @override
+  String get shareAction => 'Share';
+
+  @override
+  String get imGoing => 'I\'m Going';
+
+  @override
+  String get remindMe => 'Remind Me';
+
+  @override
+  String get shareWithFriends => 'Share with Friends';
+
+  @override
+  String get sendToMoreFriends => 'Send to More Friends';
+
+  @override
+  String peopleYouFollowCount(int n) {
+    String _temp0 = intl.Intl.pluralLogic(
+      n,
+      locale: localeName,
+      other: '$n people you follow',
+      one: '1 person you follow',
+    );
+    return '$_temp0';
+  }
 }

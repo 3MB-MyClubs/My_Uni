@@ -108,8 +108,15 @@ void main() {
     );
     await tester.pump(const Duration(milliseconds: 600));
 
-    expect(find.text('Discover Clubs'), findsOneWidget);
-    expect(find.text('Find People'), findsOneWidget);
+    // The STUDENT SEARCH redesign dropped the Discover Clubs / Find People
+    // tabs; the two sides of the directory are now the "Search In" cards in
+    // the Filters sheet behind the search field's slider icon.
+    await tester.tap(find.byKey(const ValueKey('search-filter-button')));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 600));
+
+    expect(find.text('Clubs'), findsOneWidget);
+    expect(find.text('Students'), findsOneWidget);
     expect(find.text('Events'), findsNothing);
 
     await binding.takeScreenshot('phase0-explore-search');

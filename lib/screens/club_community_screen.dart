@@ -25,6 +25,7 @@ import '../services/people_service.dart';
 import '../services/rsvp_store.dart';
 import '../services/student_club_role_service.dart';
 import '../services/theme_service.dart';
+import '../services/user_profile_link.dart';
 import '../services/user_state.dart';
 import '../widgets/chat_campus_backdrop.dart';
 import '../widgets/club_avatar.dart';
@@ -1288,6 +1289,16 @@ class _ClubCommunityScreenState extends State<ClubCommunityScreen>
     ).then((_) => _markVisibleMessagesSeen());
   }
 
+  Future<void> _openSharedUserProfile(String userIdentifier) async {
+    final user = await resolveUserProfileLink(userIdentifier);
+    if (!mounted || user == null) return;
+    await Navigator.push(
+      context,
+      ChatPageRoute<void>(builder: (_) => UserProfileScreen(user: user)),
+    );
+    if (mounted) _markVisibleMessagesSeen();
+  }
+
   void _openParticipantProfile(ClubPerson person) {
     if (person.isClubAccount) {
       _openClubProfile();
@@ -2377,6 +2388,7 @@ class _ClubCommunityScreenState extends State<ClubCommunityScreen>
             : _personFor(message.replyToSenderId!).name,
         onLongPress: () => _showMessageActions(message),
         onOpenSender: () => _openParticipantProfile(sender),
+        onUserLinkTap: _openSharedUserProfile,
         statusLabel: mine
             ? (chatStore.seenCountFor(message) > 1 ? S.seen : S.delivered)
             : null,

@@ -1155,4 +1155,40 @@ class S {
 
   static String monthShort(int month) =>
       _t(_monthsEn[(month - 1) % 12], _monthsTr[(month - 1) % 12]);
+
+  // ── HOME area (ClubUp-Desings handoff) ─────────────────────────────────────
+  /// `categories-horizontal-track` greeting prefix, e.g. "Hi, Hakan".
+  static String get hiPrefix => _t('Hi,', 'Merhaba,');
+  static String get unfollow => _t('Unfollow', 'Takibi bırak');
+  static String get repliesTitle => _t('Replies', 'Yanıtlar');
+  static String get replyAction => _t('Reply', 'Yanıtla');
+  static String get noRepliesYetLine =>
+      _t('No replies yet. Start the thread!', 'Henüz yanıt yok. İlk sen yaz!');
+  static String replyToHint(String name) =>
+      _t('Reply to $name…', '$name kişisine yanıt ver…');
+  static String get shareSheetTitle => _t('Share', 'Paylaş');
+  static String get quickSendLabel => _t('QUICK SEND', 'HIZLI GÖNDER');
+  static String get shareResultsLabel => _t('RESULTS', 'SONUÇLAR');
+  static String get shareSearchHint => _t('Search chats…', 'Sohbetlerde ara…');
+  static String get sendAction => _t('Send', 'Gönder');
+  static String get copyLinkAction => _t('Copy Link', 'Bağlantıyı kopyala');
+  static String get noShareMatches =>
+      _t('No chats match that name.', 'Bu ada uyan sohbet yok.');
+
+  // ── PROFILE area (ClubUp-Desings handoff) ──────────────────────────────────
+  /// `mutual-clubs` section header on `profile-menu`.
+  static String get mutualClubs => _t('Mutual Clubs', 'Ortak Kulüpler');
+
+  /// `hosting` section header — upcoming events at clubs where this student
+  /// holds a board role.
+  static String get hostingNext => _t('Hosting Next', 'Sırada Düzenliyor');
+
+  /// The `badge` beside a peer's handle when they already follow you.
+  static String get followsYou => _t('Follows you', 'Seni takip ediyor');
+
+  /// Quiet placeholders — the frames have no empty state for these sections.
+  static String get noClubsYetLine =>
+      _t('No clubs yet. Find one to join!', 'Henüz kulüp yok. Birine katıl!');
+  static String get noUpcomingEventsLine =>
+      _t('Nothing on the calendar yet.', 'Takvimde henüz bir şey yok.');
 }

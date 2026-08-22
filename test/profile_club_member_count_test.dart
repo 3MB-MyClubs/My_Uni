@@ -5,10 +5,10 @@ import 'package:flutter_application_1/models/user.dart';
 import 'package:flutter_application_1/screens/profile_screen.dart';
 import 'package:flutter_application_1/screens/student_profile_screen.dart';
 import 'package:flutter_application_1/screens/user_profile_screen.dart';
+import 'package:flutter_application_1/services/app_strings.dart';
 import 'package:flutter_application_1/services/auth_service.dart';
 import 'package:flutter_application_1/services/mock_data.dart';
 import 'package:flutter_application_1/services/user_state.dart';
-import 'package:flutter_application_1/widgets/student_campus_profile.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -84,9 +84,9 @@ void main() {
     await tester.pumpWidget(app(UserProfileScreen(user: visitedUser)));
     await tester.pump();
 
-    final profile = tester.widget<StudentCampusProfileView>(
-      find.byType(StudentCampusProfileView),
-    );
-    expect(profile.memberships.single.detail, '37 members');
+    // The visited student shares this club with the signed-in student, so it
+    // shows up as a mutual club with the aggregate count under its name.
+    expect(find.text(S.mutualClubs), findsOneWidget);
+    expect(find.text('37 members'), findsOneWidget);
   });
 }

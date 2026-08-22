@@ -28,21 +28,25 @@ import '../services/image_cache_service.dart';
 import '../services/image_aspect_ratio.dart';
 import '../services/media_delivery_service.dart';
 import '../services/theme_service.dart';
+import '../services/user_profile_link.dart';
 import '../services/user_state.dart';
 import '../widgets/chat_campus_backdrop.dart';
 import '../widgets/chat_video_player.dart';
 import '../widgets/club_avatar.dart';
 import '../widgets/group_avatar_stack.dart';
 import '../widgets/user_avatar.dart';
+import '../widgets/user_profile_link_text.dart';
 import '../widgets/app_network_image.dart';
 import '../widgets/app_pressable.dart';
 import '../widgets/shared_post_message_card.dart';
 import '../widgets/shared_event_message_card.dart';
+import '../widgets/shared_user_profile_message_card.dart';
 import '../widgets/sent_message_entrance.dart';
 import '../widgets/swipe_to_reply.dart';
 import 'club_community_screen.dart';
 import 'group_info_screen.dart';
 import 'media_preview_screen.dart';
+import 'user_profile_screen.dart';
 
 /// What the composer's "+" sheet can attach to a student message.
 enum _ChatAttachment { photo, camera }
@@ -124,6 +128,15 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
   User? get _peer {
     final peerId = ChatStore.dmPeerOf(widget.threadId, _myId);
     return peerId == null ? null : _userForId(peerId);
+  }
+
+  Future<void> _openSharedUserProfile(String userIdentifier) async {
+    final user = await resolveUserProfileLink(userIdentifier);
+    if (!mounted || user == null) return;
+    await Navigator.of(
+      context,
+    ).push(ChatPageRoute<void>(builder: (_) => UserProfileScreen(user: user)));
+    if (mounted) _markVisibleMessagesSeen();
   }
 
   static const List<Color> _clubColors = [
@@ -1703,7 +1716,17 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
 
     final linkedEventId = m.linkedEventId;
     final hasEventPreview = linkedEventId != null;
-    final hasText = m.content.trim().isNotEmpty && !hasEventPreview;
+    final userLinkMatches = UserProfileLink.matchesIn(m.content);
+    final sharedUserLink = userLinkMatches.isEmpty
+        ? null
+        : userLinkMatches.first;
+    final isStandaloneUserLink =
+        sharedUserLink != null &&
+        UserProfileLink.isStandalone(m.content, sharedUserLink);
+    final hasText =
+        m.content.trim().isNotEmpty &&
+        !hasEventPreview &&
+        !isStandaloneUserLink;
     final photoPath = m.kind == ChatMessageKind.photo ? m.attachmentPath : null;
     final attachedFilePath = m.kind == ChatMessageKind.file
         ? m.attachmentPath
@@ -1792,14 +1815,34 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
                 hasMedia ? 8 : 0,
                 hasMedia ? 3 : 0,
               ),
-              child: Text(
-                m.content,
+              child: UserProfileLinkText(
+                key: ValueKey('chat-message-text-${m.id}'),
+                text: m.content,
                 style: TextStyle(
                   fontSize: 14.5,
                   height: 1.45,
                   letterSpacing: -0.1,
                   color: mine ? Colors.white : AppColors.text,
                 ),
+                linkStyle: TextStyle(
+                  fontSize: 14.5,
+                  height: 1.45,
+                  letterSpacing: -0.1,
+                  fontWeight: FontWeight.w700,
+                  decoration: TextDecoration.underline,
+                  decorationColor: mine ? Colors.white : AppColors.primaryRed,
+                  color: mine ? Colors.white : AppColors.primaryRed,
+                ),
+                onUserLinkTap: _openSharedUserProfile,
+              ),
+            ),
+          if (sharedUserLink != null)
+            Padding(
+              padding: EdgeInsets.only(top: hasText ? 8 : 0),
+              child: SharedUserProfileMessageCard(
+                userIdentifier: sharedUserLink.userIdentifier,
+                onDarkBackground: mine,
+                onOpenProfile: _openSharedUserProfile,
               ),
             ),
         ],

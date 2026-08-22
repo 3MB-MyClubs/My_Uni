@@ -4,6 +4,7 @@ import 'package:flutter_application_1/models/club.dart';
 import 'package:flutter_application_1/models/event.dart';
 import 'package:flutter_application_1/screens/student_activity_screen.dart';
 import 'package:flutter_application_1/screens/student_profile_screen.dart';
+import 'package:flutter_application_1/services/app_strings.dart';
 import 'package:flutter_application_1/services/checkin_store.dart';
 import 'package:flutter_application_1/services/mock_data.dart';
 import 'package:flutter_application_1/services/student_activity_service.dart';
@@ -111,16 +112,10 @@ void main() {
   /// Records a door scan through the real store. Seed events use non-UUID
   /// ids, so the write stays local and never reaches Supabase.
   Future<void> scanIn(String eventId) async {
-    await checkinStore.toggle(
-      eventId: eventId,
-      userId: _studentId,
-    );
+    await checkinStore.toggle(eventId: eventId, userId: _studentId);
     addTearDown(() async {
       if (checkinStore.isCheckedIn(eventId, _studentId)) {
-        await checkinStore.toggle(
-          eventId: eventId,
-          userId: _studentId,
-        );
+        await checkinStore.toggle(eventId: eventId, userId: _studentId);
       }
     });
   }
@@ -175,7 +170,9 @@ void main() {
     expect(academicYearLabel(DateTime(2026, 9, 1)), '2026–27');
   });
 
-  testWidgets('the profile shows going and been-there events', (tester) async {
+  testWidgets('the profile lists only this student\'s upcoming events', (
+    tester,
+  ) async {
     tester.view.physicalSize = const Size(1170, 2532);
     tester.view.devicePixelRatio = 3;
     addTearDown(tester.view.resetPhysicalSize);
@@ -185,25 +182,24 @@ void main() {
     await tester.pump();
 
     await tester.scrollUntilVisible(
-      find.text('EVENTS & ACTIVITIES'),
+      find.text('Upcoming events'),
       240,
       scrollable: find.byType(Scrollable).first,
     );
     await tester.pump();
 
-    expect(find.text('GOING · 1'), findsOneWidget);
-    expect(find.text('BEEN THERE · 2'), findsOneWidget);
+    // `events-section` — the RSVP that has not happened yet, with its club.
     expect(find.text('Line-Follower Workshop'), findsOneWidget);
-    expect(find.text('Open-Air Jazz Night'), findsOneWidget);
-    expect(find.text('Going'), findsOneWidget);
-    expect(find.text('Attended'), findsOneWidget);
-    expect(find.text('Not scanned'), findsOneWidget);
+    expect(find.text('KU Robotics'), findsOneWidget);
+    // The past record moved to the full history behind "See all"; the frame
+    // has no attended/not-scanned rows on the profile itself.
+    expect(find.text('Open-Air Jazz Night'), findsNothing);
+    expect(find.text('Arduino 101'), findsNothing);
+    expect(find.text('Attended'), findsNothing);
+    expect(find.text('Not scanned'), findsNothing);
+    // Someone else's event must never reach this student's record.
     expect(find.text('Someone Else Only'), findsNothing);
-    expect(find.text('See all 3'), findsOneWidget);
-    expect(
-      find.text('Attendance is confirmed by event check-in'),
-      findsOneWidget,
-    );
+    expect(find.text('See all'), findsOneWidget);
     expect(tester.takeException(), isNull);
   });
 
@@ -216,12 +212,13 @@ void main() {
     await tester.pumpWidget(_hostProfile());
     await tester.pump();
 
+    // With no clubs on this fixture the only "See all" is the events one.
     await tester.scrollUntilVisible(
-      find.text('See all 3'),
+      find.text('See all'),
       240,
       scrollable: find.byType(Scrollable).first,
     );
-    await tester.tap(find.text('See all 3'));
+    await tester.tap(find.text('See all'));
     await tester.pumpAndSettle();
 
     expect(find.byType(StudentActivityScreen), findsOneWidget);
@@ -260,17 +257,18 @@ void main() {
     await tester.pump();
 
     await tester.scrollUntilVisible(
-      find.text('No events yet'),
+      find.text(S.noUpcomingEventsLine),
       240,
       scrollable: find.byType(Scrollable).first,
     );
     await tester.pump();
 
-    expect(find.text('No events yet'), findsOneWidget);
-    expect(find.text("Browse this week's events"), findsOneWidget);
-    expect(find.text('See all 0'), findsNothing);
+    // The frames have no empty state for this section, so it collapses to one
+    // centred line and drops its "See all" rather than linking to nothing.
+    expect(find.text(S.noUpcomingEventsLine), findsOneWidget);
+    expect(find.text('See all'), findsNothing);
     expect(
-      tester.getCenter(find.text('No events yet')).dx,
+      tester.getCenter(find.text(S.noUpcomingEventsLine)).dx,
       closeTo(tester.getCenter(find.byType(Scaffold)).dx, 0.1),
     );
     expect(tester.takeException(), isNull);

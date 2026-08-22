@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:io';
 import 'dart:math' as math;
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart' show ScrollDirection;
 import 'package:flutter/services.dart';
 import 'package:intl/intl.dart';
 import '../services/app_colors.dart';
@@ -41,7 +42,9 @@ import 'user_profile_screen.dart';
 import 'club_profile_screen.dart';
 import 'create_post_screen.dart' show buildPostBanner;
 import '../widgets/big_picture_post_composer_sheet.dart';
+import '../widgets/clubup_design.dart';
 import '../widgets/comments_sheet.dart';
+import '../widgets/home_design.dart';
 import '../widgets/moderation_reason_sheet.dart';
 import '../services/comment_store.dart';
 import '../widgets/user_avatar.dart';
@@ -166,6 +169,7 @@ class _FeedScreenState extends State<FeedScreen> {
   // Only render the blur once content has actually scrolled under the bar —
   // pixel-identical in both states (the translucent fill is the same).
   bool _scrolledUnder = false;
+  bool _studentHeaderControlsVisible = true;
   double _refreshProgress = 0;
   bool _isRefreshing = false;
   int _refreshCycle = 0;
@@ -237,6 +241,15 @@ class _FeedScreenState extends State<FeedScreen> {
       rsvpStore.seedAll(cache.railShown!, userId);
     }
     return cache.mixed!;
+  }
+
+  /// What the Home list renders. The redesigned student Home (`home-feed-alt`
+  /// in ClubUp-Desings) is posts only, so the suggestion rails the mixed feed
+  /// injects are dropped there; club-admin sessions keep the full mix.
+  List<dynamic> _homeFeedItems() {
+    final mixed = _mixedFeed();
+    if (!authService.isStudentSession) return mixed;
+    return mixed.whereType<_FeedItem>().toList(growable: false);
   }
 
   List<Event> _computeRailShown() {
@@ -828,11 +841,14 @@ class _FeedScreenState extends State<FeedScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final mixed = _mixedFeed();
+    final designHome = authService.isStudentSession;
+    final mixed = _homeFeedItems();
     final showFeedSkeleton =
         _pagingController.isInitialLoading && mixed.isEmpty;
     return Scaffold(
-      backgroundColor: AppColors.background,
+      backgroundColor: designHome
+          ? ClubUpColors.background
+          : AppColors.background,
       body: NotificationListener<ScrollNotification>(
         onNotification: (n) {
           // Vertical feed scroll only (depth 0) — not the horizontal events
@@ -848,10 +864,24 @@ class _FeedScreenState extends State<FeedScreen> {
           final refreshProgress = n.metrics.pixels < 0
               ? (-n.metrics.pixels / 82).clamp(0.0, 1.0)
               : 0.0;
-          if (under != _scrolledUnder || refreshProgress != _refreshProgress) {
+          var showStudentHeaderControls = _studentHeaderControlsVisible;
+          if (designHome) {
+            if (!under) showStudentHeaderControls = true;
+            if (n is UserScrollNotification) {
+              if (n.direction == ScrollDirection.reverse) {
+                showStudentHeaderControls = false;
+              } else if (n.direction == ScrollDirection.forward) {
+                showStudentHeaderControls = true;
+              }
+            }
+          }
+          if (under != _scrolledUnder ||
+              refreshProgress != _refreshProgress ||
+              showStudentHeaderControls != _studentHeaderControlsVisible) {
             setState(() {
               _scrolledUnder = under;
               _refreshProgress = refreshProgress;
+              _studentHeaderControlsVisible = showStudentHeaderControls;
             });
           }
           return false;
@@ -868,11 +898,16 @@ class _FeedScreenState extends State<FeedScreen> {
               onRefresh: _onRefresh,
               showIndicator: false,
             ),
-            _buildTopBar(),
-            _buildGreeting(),
-            _buildEventsRail(),
-            _buildFeedTabs(),
-            _buildComposer(),
+            if (designHome) ...[
+              _buildDesignTopBar(),
+              SliverToBoxAdapter(child: HomeGreeting(name: _greetingName)),
+            ] else ...[
+              _buildTopBar(),
+              _buildGreeting(),
+              _buildEventsRail(),
+              _buildFeedTabs(),
+              _buildComposer(),
+            ],
             if (showFeedSkeleton) ...[
               ..._buildFeedSkeletonSlivers(),
             ] else if (_pagingController.initialError != null && mixed.isEmpty)
@@ -967,54 +1002,75 @@ class _FeedScreenState extends State<FeedScreen> {
                 ),
               )
             else ...[
-              SliverToBoxAdapter(
-                child: Padding(
-                  padding: const EdgeInsets.fromLTRB(14, 14, 14, 6),
-                  child: Row(
-                    children: [
-                      Text(
-                        AppLocalizations.of(context)!.latest,
-                        style: TextStyle(
-                          fontSize: 15,
-                          fontWeight: FontWeight.bold,
-                          color: AppColors.text,
+              // The design has no section label above the cards.
+              if (!designHome)
+                SliverToBoxAdapter(
+                  child: Padding(
+                    padding: const EdgeInsets.fromLTRB(14, 14, 14, 6),
+                    child: Row(
+                      children: [
+                        Text(
+                          AppLocalizations.of(context)!.latest,
+                          style: TextStyle(
+                            fontSize: 15,
+                            fontWeight: FontWeight.bold,
+                            color: AppColors.text,
+                          ),
                         ),
-                      ),
-                    ],
+                      ],
+                    ),
                   ),
                 ),
-              ),
-              SliverList(
-                delegate: SliverChildBuilderDelegate((context, i) {
-                  final item = mixed[i];
-                  if (item is List<User>) {
-                    return _PeopleSuggestionCard(
-                      key: const ValueKey('home-people-suggestions'),
-                      suggestions: item,
-                      onFollowed: () => setState(() {}),
+              if (designHome)
+                SliverList(
+                  delegate: SliverChildBuilderDelegate((context, i) {
+                    final item = mixed[i] as _FeedItem;
+                    final post = item.data as NewsPost;
+                    return KeyedSubtree(
+                      key: ValueKey('home-feed-item-${item.id}'),
+                      child: StaggeredEntrance(
+                        index: i,
+                        child: HomeFeedPostCard(
+                          key: ValueKey('home-design-card-${item.id}'),
+                          post: post,
+                          onChanged: () => setState(() {}),
+                        ),
+                      ),
                     );
-                  }
-                  if (item is _EventSuggestion) {
-                    return _TrendingEventCard(
-                      key: ValueKey('home-event-suggestion-${item.event.id}'),
-                      event: item.event,
-                      onUpdate: () => setState(() {}),
+                  }, childCount: mixed.length),
+                )
+              else
+                SliverList(
+                  delegate: SliverChildBuilderDelegate((context, i) {
+                    final item = mixed[i];
+                    if (item is List<User>) {
+                      return _PeopleSuggestionCard(
+                        key: const ValueKey('home-people-suggestions'),
+                        suggestions: item,
+                        onFollowed: () => setState(() {}),
+                      );
+                    }
+                    if (item is _EventSuggestion) {
+                      return _TrendingEventCard(
+                        key: ValueKey('home-event-suggestion-${item.event.id}'),
+                        event: item.event,
+                        onUpdate: () => setState(() {}),
+                      );
+                    }
+                    if (item is _ClubSuggestion) {
+                      return _ClubSuggestionCard(
+                        key: ValueKey('home-club-suggestion-${item.club.id}'),
+                        club: item.club,
+                        onUpdate: () => setState(() {}),
+                      );
+                    }
+                    final feedItem = item as _FeedItem;
+                    return KeyedSubtree(
+                      key: ValueKey('home-feed-item-${feedItem.id}'),
+                      child: _buildFeedCard(feedItem, i),
                     );
-                  }
-                  if (item is _ClubSuggestion) {
-                    return _ClubSuggestionCard(
-                      key: ValueKey('home-club-suggestion-${item.club.id}'),
-                      club: item.club,
-                      onUpdate: () => setState(() {}),
-                    );
-                  }
-                  final feedItem = item as _FeedItem;
-                  return KeyedSubtree(
-                    key: ValueKey('home-feed-item-${feedItem.id}'),
-                    child: _buildFeedCard(feedItem, i),
-                  );
-                }, childCount: mixed.length),
-              ),
+                  }, childCount: mixed.length),
+                ),
               if (_pagingController.isNextPageLoading)
                 const SliverToBoxAdapter(
                   child: SizedBox(
@@ -1069,6 +1125,14 @@ class _FeedScreenState extends State<FeedScreen> {
                     ),
                   ),
                 ),
+              // `feed-scroller-content` ends on 100pt of clearance for the
+              // floating bottom nav.
+              if (designHome)
+                SliverToBoxAdapter(
+                  child: SizedBox(
+                    height: MediaQuery.paddingOf(context).bottom + 100,
+                  ),
+                ),
             ],
           ],
         ),
@@ -1121,6 +1185,91 @@ class _FeedScreenState extends State<FeedScreen> {
   String _firstName(String fullName) {
     final parts = fullName.trim().split(' ');
     return parts.isNotEmpty && parts.first.isNotEmpty ? parts.first : fullName;
+  }
+
+  /// Unread notifications behind the bell — local rows plus whatever the
+  /// inbox service has fetched. Shared by both Home headers.
+  int _unreadNotificationCount() {
+    final myId =
+        authService.currentUser?.id ?? authService.currentAdmin?.id ?? '';
+    final unreadIds = <String>{};
+    for (final notification
+        in [...notifications, ...userState.dynamicNotifications].where(
+          (n) =>
+              canViewNotification(n, currentUserId: myId) &&
+              n.targetType != 'story' &&
+              !userState.isNotificationRead(n),
+        )) {
+      unreadIds.add(notification.id);
+    }
+    for (final row in notificationInboxService.rows) {
+      final notification = AppNotification(
+        id: row['id']?.toString() ?? '',
+        userId: row['user_id']?.toString() ?? '',
+        fromId: row['actor_user_id']?.toString(),
+        message: row['body']?.toString() ?? '',
+        createdAt:
+            DateTime.tryParse(row['created_at']?.toString() ?? '') ??
+            DateTime.fromMillisecondsSinceEpoch(0),
+        read: row['read_at'] != null,
+        notificationType: row['type']?.toString(),
+        targetType: row['target_type']?.toString(),
+        targetId: row['target_id']?.toString(),
+      );
+      if (row['read_at'] == null &&
+          canViewNotification(notification, currentUserId: myId)) {
+        unreadIds.add(notification.id);
+      }
+    }
+    return unreadIds.length;
+  }
+
+  // ── ClubUp top bar — redesigned student Home ──────────────────────────────
+  /// `premium-header-container` of `home-feed-alt`. The old glass app bar and
+  /// its scrolled-under crossfade are kept for club-admin sessions below; the
+  /// design's header is a flat band on the page background with a hairline.
+  SliverAppBar _buildDesignTopBar() {
+    return SliverAppBar(
+      key: const ValueKey('home-active-feed-header'),
+      pinned: true,
+      floating: false,
+      automaticallyImplyLeading: false,
+      forceMaterialTransparency: true,
+      backgroundColor: Colors.transparent,
+      surfaceTintColor: Colors.transparent,
+      scrolledUnderElevation: 0,
+      elevation: 0,
+      toolbarHeight: 69,
+      titleSpacing: 0,
+      leading: const SizedBox.shrink(),
+      leadingWidth: 0,
+      title: ListenableBuilder(
+        listenable: Listenable.merge([userState, notificationInboxService]),
+        builder: (_, _) => HomeFeedHeader(
+          feedTab: _feedTab,
+          onSelectFeedTab: (tab) => setState(() => _selectFeedTab(tab)),
+          unreadCount: _unreadNotificationCount(),
+          atTop: !_scrolledUnder,
+          controlsVisible: _studentHeaderControlsVisible,
+          scopeAnchorKey: onboardingAnchors.keyFor(
+            OnboardingAnchors.homeFeedToggle,
+          ),
+          onBellTap: () => Navigator.push(
+            context,
+            MaterialPageRoute(builder: (_) => NotificationsScreen()),
+          ),
+          overlay: AnimatedOpacity(
+            key: const ValueKey('home-refresh-indicator'),
+            opacity: _isRefreshing || _refreshProgress > 0 ? 1 : 0,
+            duration: const Duration(milliseconds: 120),
+            child: InstagramRefreshSpinner(
+              progress: _isRefreshing ? 1 : _refreshProgress,
+              spinning: _isRefreshing,
+            ),
+          ),
+        ),
+      ),
+    );
   }
 
   // ── ClubUp top bar ────────────────────────────────────────────────────────
@@ -1213,47 +1362,6 @@ class _FeedScreenState extends State<FeedScreen> {
                     notificationInboxService,
                   ]),
                   builder: (_, x) {
-                    final myId =
-                        authService.currentUser?.id ??
-                        authService.currentAdmin?.id ??
-                        '';
-                    final unreadIds = <String>{};
-                    for (final notification
-                        in [
-                          ...notifications,
-                          ...userState.dynamicNotifications,
-                        ].where(
-                          (n) =>
-                              canViewNotification(n, currentUserId: myId) &&
-                              n.targetType != 'story' &&
-                              !userState.isNotificationRead(n),
-                        )) {
-                      unreadIds.add(notification.id);
-                    }
-                    for (final row in notificationInboxService.rows) {
-                      final notification = AppNotification(
-                        id: row['id']?.toString() ?? '',
-                        userId: row['user_id']?.toString() ?? '',
-                        fromId: row['actor_user_id']?.toString(),
-                        message: row['body']?.toString() ?? '',
-                        createdAt:
-                            DateTime.tryParse(
-                              row['created_at']?.toString() ?? '',
-                            ) ??
-                            DateTime.fromMillisecondsSinceEpoch(0),
-                        read: row['read_at'] != null,
-                        notificationType: row['type']?.toString(),
-                        targetType: row['target_type']?.toString(),
-                        targetId: row['target_id']?.toString(),
-                      );
-                      if (row['read_at'] == null &&
-                          canViewNotification(
-                            notification,
-                            currentUserId: myId,
-                          )) {
-                        unreadIds.add(notification.id);
-                      }
-                    }
                     return _TopBarIconButton(
                       key: const ValueKey('home-notifications-bell'),
                       icon: Icons.notifications_none_rounded,
@@ -1266,7 +1374,7 @@ class _FeedScreenState extends State<FeedScreen> {
                           builder: (_) => NotificationsScreen(),
                         ),
                       ),
-                      badgeCount: unreadIds.length,
+                      badgeCount: _unreadNotificationCount(),
                     );
                   },
                 ),

@@ -11,6 +11,13 @@ import 'package:flutter_application_1/services/user_state.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 
+/// These drive the redesigned search screen from the ClubUp-Desings
+/// STUDENT SEARCH handoff: the Discover Clubs / Find People tabs are gone, and
+/// the major filter now lives behind the search field's Filters sheet
+/// (filter button → "Major" row → Select Major picker → Done → Apply).
+AppLocalizations get l10n =>
+    lookupAppLocalizations(Locale(localeService.languageCode));
+
 void main() {
   const engineeringId = 'major-filter-engineering';
   const economicsId = 'major-filter-economics';
@@ -77,7 +84,18 @@ void main() {
     await tester.pump(const Duration(milliseconds: 500));
   }
 
+  Future<void> openFilters(WidgetTester tester) async {
+    await tester.tap(find.byKey(const ValueKey('search-filter-button')));
+    await tester.pumpAndSettle();
+  }
+
+  Future<void> applyFilters(WidgetTester tester) async {
+    await tester.tap(find.byKey(const ValueKey('search-filters-apply')));
+    await tester.pumpAndSettle();
+  }
+
   Future<void> selectMajor(WidgetTester tester, String major) async {
+    await openFilters(tester);
     await tester.tap(find.byKey(const ValueKey('people-major-filter')));
     await tester.pumpAndSettle();
     await tester.enterText(
@@ -86,10 +104,13 @@ void main() {
     );
     await tester.pump();
     await tester.tap(find.byKey(ValueKey('academic-program-$major')));
+    await tester.pump();
+    await tester.tap(find.byKey(const ValueKey('major-picker-done')));
     await tester.pumpAndSettle();
+    await applyFilters(tester);
   }
 
-  testWidgets('Explore search contains clubs and people, but not events', (
+  testWidgets('Filters sheet searches clubs and students, but not events', (
     tester,
   ) async {
     await tester.pumpWidget(
@@ -103,9 +124,11 @@ void main() {
       ),
     );
     await tester.pump();
+    await openFilters(tester);
 
-    expect(find.text('Discover Clubs'), findsOneWidget);
-    expect(find.text('Find People'), findsOneWidget);
+    expect(find.text('Search In'), findsOneWidget);
+    expect(find.text('Clubs'), findsOneWidget);
+    expect(find.text('Students'), findsOneWidget);
     expect(find.text('Events'), findsNothing);
     expect(tester.takeException(), isNull);
   });
@@ -135,7 +158,7 @@ void main() {
     await pumpFindPeople(tester);
     await selectMajor(tester, 'Computer Engineering');
 
-    final search = find.widgetWithText(TextField, S.searchPeople);
+    final search = find.widgetWithText(TextField, l10n.searchEverythingHint);
     await tester.enterText(search, 'Bora');
     await tester.pump(const Duration(milliseconds: 400));
 
@@ -146,8 +169,20 @@ void main() {
     await tester.pump(const Duration(milliseconds: 400));
     expect(find.text('Ada Engineering'), findsOneWidget);
 
+    // Reset Filters closes the sheet and restores the original discovery UI.
+    await openFilters(tester);
     await tester.tap(find.byKey(const ValueKey('clear-people-major-filter')));
-    await tester.pump(const Duration(milliseconds: 400));
+    await tester.pumpAndSettle();
+    expect(find.byKey(const ValueKey('search-filters-apply')), findsNothing);
+    expect(find.byKey(const ValueKey('search-discovery-list')), findsOneWidget);
+    expect(tester.widget<TextField>(search).controller?.text, isEmpty);
+
+    // Re-enter Students with no major selected; the prior major filter should
+    // not survive the global reset.
+    await openFilters(tester);
+    await tester.tap(find.byKey(const ValueKey('search-scope-students')));
+    await applyFilters(tester);
+
     await tester.enterText(search, 'Bora');
     await tester.pump(const Duration(milliseconds: 400));
 
@@ -162,7 +197,11 @@ void main() {
     await themeService.setDark(false);
     await pumpFindPeople(tester);
 
-    expect(find.text(S.filterByMajor), findsOneWidget);
+    await openFilters(tester);
+    expect(find.text(l10n.majorLabel), findsOneWidget);
+    await tester.tap(find.byKey(const ValueKey('search-filters-apply')));
+    await tester.pumpAndSettle();
+
     await selectMajor(tester, 'Medicine');
 
     expect(find.text(S.noPeopleInSelectedMajor), findsOneWidget);

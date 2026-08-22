@@ -1,3 +1,4 @@
+import 'dart:async' show unawaited;
 import 'dart:io';
 import 'dart:ui' show ImageFilter;
 import 'package:flutter/material.dart';
@@ -12,6 +13,7 @@ import '../services/app_colors.dart';
 import '../services/account_switcher_service.dart';
 import '../services/auth_service.dart';
 import '../services/club_admin_access.dart';
+import '../services/club_follow_helper.dart';
 import '../services/content_store.dart';
 import '../services/locale_service.dart';
 import '../services/media_delivery_service.dart';
@@ -28,9 +30,9 @@ import '../services/user_state.dart';
 import '../services/view_tracker.dart';
 import '../widgets/app_network_image.dart';
 import '../widgets/club_avatar.dart';
+import '../widgets/clubup_design.dart';
 import '../widgets/loading_skeleton.dart';
-import '../widgets/rsvp_button.dart';
-import '../widgets/app_motion.dart';
+import '../widgets/event_cover_image.dart';
 import '../widgets/event_share_sheet.dart';
 import '../widgets/user_avatar.dart';
 import 'club_profile_screen.dart';
@@ -84,7 +86,11 @@ class EventDetailScreen extends StatefulWidget {
 }
 
 class _EventDetailScreenState extends State<EventDetailScreen> {
+  static const int _quickInviteSlotCount = 5;
+  static const double _stickyCtaScrollClearance = 154;
+
   final Set<String> _invitedFriendIds = {};
+  final List<String> _quickInviteFriendIds = [];
   List<User> _remoteAttendees = const [];
   bool _remoteAttendeesLoaded = false;
 
@@ -240,7 +246,86 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
         role: 'student',
         subscribedClubIds: const [],
       ),
+      User(
+        id: 'event-friend-ece',
+        name: 'Ece Yılmaz',
+        email: '',
+        password: '',
+        role: 'student',
+        subscribedClubIds: const [],
+      ),
+      User(
+        id: 'event-friend-can',
+        name: 'Can Kaya',
+        email: '',
+        password: '',
+        role: 'student',
+        subscribedClubIds: const [],
+      ),
+      User(
+        id: 'event-friend-selin',
+        name: 'Selin Aksoy',
+        email: '',
+        password: '',
+        role: 'student',
+        subscribedClubIds: const [],
+      ),
     ];
+  }
+
+  /// Keeps the three quick-invite slots stable while an invitation animates.
+  /// Invited profiles are replaced separately after their success motion ends.
+  List<User> get _quickInviteFriends {
+    final candidates = _suggestedFriends;
+    final candidatesById = {
+      for (final candidate in candidates) candidate.id: candidate,
+    };
+    _quickInviteFriendIds.removeWhere((id) => !candidatesById.containsKey(id));
+
+    final assigned = _quickInviteFriendIds.toSet();
+    for (final candidate in candidates) {
+      if (_quickInviteFriendIds.length >= _quickInviteSlotCount) break;
+      if (_invitedFriendIds.contains(candidate.id) ||
+          !assigned.add(candidate.id)) {
+        continue;
+      }
+      _quickInviteFriendIds.add(candidate.id);
+    }
+
+    return [for (final id in _quickInviteFriendIds) ?candidatesById[id]];
+  }
+
+  void _replaceInvitedQuickInviteSlots() {
+    final candidates = _suggestedFriends;
+    final candidatesById = {
+      for (final candidate in candidates) candidate.id: candidate,
+    };
+    final reserved = <String>{
+      for (final id in _quickInviteFriendIds)
+        if (candidatesById.containsKey(id) && !_invitedFriendIds.contains(id))
+          id,
+    };
+
+    for (var index = 0; index < _quickInviteFriendIds.length; index++) {
+      final currentId = _quickInviteFriendIds[index];
+      if (candidatesById.containsKey(currentId) &&
+          !_invitedFriendIds.contains(currentId)) {
+        continue;
+      }
+
+      User? replacement;
+      for (final candidate in candidates) {
+        if (_invitedFriendIds.contains(candidate.id) ||
+            !reserved.add(candidate.id)) {
+          continue;
+        }
+        replacement = candidate;
+        break;
+      }
+      if (replacement != null) {
+        _quickInviteFriendIds[index] = replacement.id;
+      }
+    }
   }
 
   Color get _accent => _event.accentColorHex != null
@@ -314,6 +399,10 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
     }
     setState(() {
       _invitedFriendIds.addAll(newRecipients.map((person) => person.id));
+    });
+    Future<void>.delayed(const Duration(milliseconds: 620), () {
+      if (!mounted) return;
+      setState(_replaceInvitedQuickInviteSlots);
     });
     ScaffoldMessenger.of(context)
       ..hideCurrentSnackBar()
@@ -418,13 +507,23 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
     });
   }
 
-  String _countdownLabel() {
-    if (_isLive) return AppLocalizations.of(context)!.happeningNow;
-    final diff = _event.dateTime.difference(DateTime.now());
-    if (diff.isNegative) return AppLocalizations.of(context)!.ended;
-    if (diff.inDays == 0) return AppLocalizations.of(context)!.today;
-    if (diff.inDays == 1) return AppLocalizations.of(context)!.tomorrow;
-    return AppLocalizations.of(context)!.inDaysCount(diff.inDays);
+  /// `time-badge` — the handoff's "Tonight · 7 PM - 11 PM". Day wording and
+  /// clock format come from the app's locale helpers, so this reads correctly
+  /// in Turkish where the mockup's 12-hour "7 PM" would be wrong.
+  String _whenBadgeLabel() {
+    final l10n = AppLocalizations.of(context)!;
+    if (_isLive) return l10n.happeningNow;
+    if (_isPast) return l10n.ended;
+
+    final start = _event.dateTime;
+    final diff = start.difference(DateTime.now());
+    final day = diff.inDays == 0
+        ? l10n.today
+        : diff.inDays == 1
+        ? l10n.tomorrow
+        : DateFormat.MMMEd(localeService.languageCode).format(start);
+    final clock = DateFormat.Hm(localeService.languageCode);
+    return '$day · ${clock.format(start)} - ${clock.format(_event.endTime)}';
   }
 
   void _openClub() {
@@ -453,19 +552,20 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
         event.registrationUrl!.trim().isNotEmpty;
     final hasProgramme = event.schedule != null && event.schedule!.isNotEmpty;
     final hasSpeakers = event.speakers.isNotEmpty;
-    final hasCapacity = event.capacity != null && event.capacity! > 0;
     final canEngage = authService.isStudentSession;
     final showCta = canEngage && !_isPast;
 
     return Scaffold(
-      backgroundColor: AppColors.background,
+      backgroundColor: ClubUpColors.background,
       body: Stack(
         children: [
           // ── Scrollable content ──────────────────────────────────────────
           Positioned.fill(
             child: SingleChildScrollView(
               physics: const BouncingScrollPhysics(),
-              padding: EdgeInsets.only(bottom: showCta ? 168 : 40),
+              padding: EdgeInsets.only(
+                bottom: showCta ? _stickyCtaScrollClearance : 40,
+              ),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
@@ -484,32 +584,33 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
                     onDelete: _confirmDelete,
                   ),
 
-                  // Ticket-style date / time / location (+ capacity)
-                  Transform.translate(
-                    offset: const Offset(0, -6),
-                    child: Padding(
-                      padding: const EdgeInsets.fromLTRB(16, 0, 16, 0),
-                      child: ListenableBuilder(
-                        listenable: rsvpStore,
-                        builder: (_, _) => _TicketCard(
-                          event: event,
-                          accent: accent,
-                          countdown: _countdownLabel(),
-                          showCapacity: hasCapacity,
-                          takenSeats: _rsvpCount,
-                        ),
-                      ),
+                  // `title-block` — time badge, event name, location
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(20, 20, 20, 0),
+                    child: _EventTitleBlock(
+                      event: event,
+                      whenLabel: _whenBadgeLabel(),
                     ),
+                  ),
+
+                  const Padding(
+                    padding: EdgeInsets.fromLTRB(20, 20, 20, 0),
+                    child: _EventDivider(),
                   ),
 
                   // Host
                   Padding(
-                    padding: const EdgeInsets.fromLTRB(16, 16, 16, 0),
+                    padding: const EdgeInsets.fromLTRB(20, 20, 20, 0),
                     child: _HostCard(
                       event: event,
                       accent: accent,
                       onView: _openClub,
                     ),
+                  ),
+
+                  const Padding(
+                    padding: EdgeInsets.fromLTRB(20, 20, 20, 0),
+                    child: _EventDivider(),
                   ),
 
                   // Registration link
@@ -524,18 +625,19 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
 
                   // About
                   Padding(
-                    padding: const EdgeInsets.fromLTRB(16, 22, 16, 0),
+                    padding: const EdgeInsets.fromLTRB(20, 20, 20, 0),
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         _SecHead(AppLocalizations.of(context)!.aboutThisEvent),
-                        const SizedBox(height: 12),
+                        const SizedBox(height: 8),
                         Text(
                           event.description,
-                          style: TextStyle(
-                            fontSize: 14,
-                            height: 1.65,
-                            color: AppColors.text.withValues(alpha: 0.86),
+                          style: figtree(
+                            size: 14,
+                            weight: FontWeight.w400,
+                            color: ClubUpColors.muted,
+                            height: 1.5,
                           ),
                         ),
                       ],
@@ -545,18 +647,16 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
                   // Tags
                   if (event.tags.isNotEmpty)
                     Padding(
-                      padding: const EdgeInsets.fromLTRB(16, 18, 16, 0),
+                      padding: const EdgeInsets.fromLTRB(20, 20, 20, 0),
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          _SecHead(AppLocalizations.of(context)!.tags),
-                          const SizedBox(height: 12),
                           Wrap(
                             spacing: 8,
                             runSpacing: 8,
                             children: [
                               for (final tag in event.tags)
-                                _Tag(label: tag, accent: accent),
+                                _EventTag(label: tag),
                             ],
                           ),
                         ],
@@ -590,9 +690,14 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
                     _SpeakersRow(speakers: event.speakers),
                   ],
 
+                  const Padding(
+                    padding: EdgeInsets.fromLTRB(20, 20, 20, 0),
+                    child: _EventDivider(),
+                  ),
+
                   // People attending
                   Padding(
-                    padding: const EdgeInsets.fromLTRB(16, 24, 16, 0),
+                    padding: const EdgeInsets.fromLTRB(20, 20, 20, 0),
                     child: ListenableBuilder(
                       listenable: rsvpStore,
                       builder: (_, _) {
@@ -610,11 +715,16 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
                     ),
                   ),
 
-                  // Bring your friends
+                  const Padding(
+                    padding: EdgeInsets.fromLTRB(20, 20, 20, 0),
+                    child: _EventDivider(),
+                  ),
+
+                  // Share with friends
                   Padding(
-                    padding: const EdgeInsets.fromLTRB(16, 28, 16, 0),
+                    padding: const EdgeInsets.fromLTRB(20, 20, 20, 0),
                     child: _BringFriendsSection(
-                      friends: _suggestedFriends.take(3).toList(),
+                      friends: _quickInviteFriends,
                       invitedFriendIds: _invitedFriendIds,
                       onInvite: _inviteFriend,
                       onSeeAll: _showAllSuggestedFriends,
@@ -1512,117 +1622,247 @@ class _Hero extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final bg = AppColors.background;
-    final hasImage = event.imagePath != null && event.imagePath!.isNotEmpty;
-    final topInset = MediaQuery.paddingOf(context).top;
+    final topPad = MediaQuery.paddingOf(context).top;
 
     return SizedBox(
-      height: 360,
+      height: 320,
       child: Stack(
         fit: StackFit.expand,
         children: [
-          // Photo / gradient
-          if (hasImage)
-            _eventHeroImage(path: event.imagePath!, accent: accent)
-          else
-            _GradientHero(color: accent),
-
-          // Scrim — dark at top for buttons, fades into the page bg at bottom
-          Positioned.fill(
-            child: IgnorePointer(
-              child: DecoratedBox(
-                decoration: BoxDecoration(
-                  gradient: LinearGradient(
-                    begin: Alignment.topCenter,
-                    end: Alignment.bottomCenter,
-                    stops: const [0.0, 0.24, 0.5, 0.86, 1.0],
-                    colors: [
-                      Colors.black.withValues(alpha: 0.45),
-                      Colors.transparent,
-                      Colors.transparent,
-                      bg.withValues(alpha: 0.86),
-                      bg,
-                    ],
-                  ),
+          EventCoverImage(
+            event: event,
+            color: accent,
+            fit: BoxFit.cover,
+            borderRadius: BorderRadius.zero,
+          ),
+          // `top-scrim` — keeps the status bar and glass buttons legible over
+          // whatever the cover photo happens to be.
+          Positioned(
+            top: 0,
+            left: 0,
+            right: 0,
+            child: Container(
+              height: 100 + topPad,
+              decoration: const BoxDecoration(
+                gradient: LinearGradient(
+                  begin: Alignment.topCenter,
+                  end: Alignment.bottomCenter,
+                  colors: [Color(0x99000000), Color(0x00000000)],
+                  stops: [0.25, 1.0],
                 ),
               ),
             ),
           ),
-
-          // Nav row
           Positioned(
-            top: topInset + 8,
-            left: 14,
-            right: 14,
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                _GlassButton(
-                  icon: Icons.arrow_back_ios_new_rounded,
-                  onTap: onBack,
-                ),
-                Row(
-                  children: [
-                    if (canDelete) ...[
-                      _GlassButton(
-                        icon: Icons.delete_outline_rounded,
-                        onTap: onDelete,
-                      ),
-                      const SizedBox(width: 9),
-                    ],
-                    if (canEngage) ...[
-                      _GlassButton(
-                        icon: saved
-                            ? Icons.bookmark_rounded
-                            : Icons.bookmark_outline_rounded,
-                        active: saved,
-                        activeColor: accent,
-                        onTap: onToggleSaved,
-                      ),
-                      const SizedBox(width: 9),
-                      _GlassButton(
+            top: topPad,
+            left: 0,
+            right: 0,
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  _HeroGlassButton(
+                    icon: Icons.arrow_back_rounded,
+                    onTap: onBack,
+                    semanticLabel: MaterialLocalizations.of(
+                      context,
+                    ).backButtonTooltip,
+                  ),
+                  Row(
+                    children: [
+                      _HeroGlassButton(
                         icon: Icons.ios_share_rounded,
                         onTap: onShare,
+                        semanticLabel: AppLocalizations.of(
+                          context,
+                        )!.shareAction,
                       ),
-                    ],
-                  ],
-                ),
-              ],
-            ),
-          ),
-
-          // Status pill + title
-          Positioned(
-            left: 20,
-            right: 20,
-            bottom: 18,
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                _StatusPill(isLive: isLive, isPast: isPast, accent: accent),
-                const SizedBox(height: 11),
-                Text(
-                  event.title,
-                  style: TextStyle(
-                    color: AppColors.text,
-                    fontSize: 28,
-                    fontWeight: FontWeight.w800,
-                    letterSpacing: -0.8,
-                    height: 1.12,
-                    shadows: const [
-                      Shadow(
-                        color: Colors.black26,
-                        blurRadius: 12,
-                        offset: Offset(0, 2),
-                      ),
+                      if (canEngage) ...[
+                        const SizedBox(width: 8),
+                        _HeroGlassButton(
+                          icon: saved
+                              ? Icons.bookmark_rounded
+                              : Icons.bookmark_border_rounded,
+                          onTap: onToggleSaved,
+                          semanticLabel: AppLocalizations.of(context)!.save,
+                        ),
+                      ],
+                      if (canDelete) ...[
+                        const SizedBox(width: 8),
+                        _HeroGlassButton(
+                          icon: Icons.delete_outline_rounded,
+                          onTap: onDelete,
+                          semanticLabel: AppLocalizations.of(context)!.delete,
+                        ),
+                      ],
                     ],
                   ),
-                ),
-              ],
+                ],
+              ),
             ),
           ),
+          if (isLive || isPast)
+            Positioned(
+              left: 20,
+              bottom: 16,
+              child: _StatusPill(
+                isLive: isLive,
+                isPast: isPast,
+                accent: accent,
+              ),
+            ),
         ],
+      ),
+    );
+  }
+}
+
+/// `back-button` / `bookmark-button` — a translucent blurred disc so the
+/// control reads over any photo.
+class _HeroGlassButton extends StatelessWidget {
+  final IconData icon;
+  final VoidCallback onTap;
+  final String? semanticLabel;
+
+  const _HeroGlassButton({
+    required this.icon,
+    required this.onTap,
+    this.semanticLabel,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Semantics(
+      button: true,
+      label: semanticLabel,
+      child: GestureDetector(
+        onTap: onTap,
+        child: ClipRRect(
+          borderRadius: BorderRadius.circular(18),
+          child: BackdropFilter(
+            filter: ImageFilter.blur(sigmaX: 6, sigmaY: 6),
+            child: Container(
+              width: 36,
+              height: 36,
+              alignment: Alignment.center,
+              color: Colors.white.withValues(alpha: 0.2),
+              child: Icon(icon, size: 20, color: Colors.white),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// `title-block` — the time badge, the event name and the location row that
+/// the handoff moved off the photo and into the scrolling content.
+class _EventTitleBlock extends StatelessWidget {
+  final Event event;
+  final String whenLabel;
+
+  const _EventTitleBlock({required this.event, required this.whenLabel});
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Container(
+          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+          decoration: BoxDecoration(
+            color: ClubUpColors.accent.withValues(alpha: 0.1),
+            borderRadius: BorderRadius.circular(8),
+          ),
+          child: Text(
+            whenLabel,
+            style: figtree(
+              size: 12,
+              weight: FontWeight.w700,
+              color: ClubUpColors.accentText,
+            ),
+          ),
+        ),
+        const SizedBox(height: 12),
+        Text(
+          event.title,
+          style: figtree(
+            size: 24,
+            weight: FontWeight.w800,
+            color: ClubUpColors.text,
+            height: 1.2,
+          ),
+        ),
+        if (event.location.trim().isNotEmpty) ...[
+          const SizedBox(height: 12),
+          Row(
+            children: [
+              Container(
+                width: 28,
+                height: 28,
+                alignment: Alignment.center,
+                decoration: BoxDecoration(
+                  color: ClubUpColors.chip,
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: Icon(
+                  Icons.place_outlined,
+                  size: 16,
+                  color: ClubUpColors.muted,
+                ),
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text(
+                  event.location,
+                  style: figtree(
+                    size: 14,
+                    weight: FontWeight.w500,
+                    color: ClubUpColors.muted,
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ],
+      ],
+    );
+  }
+}
+
+/// The hairline the handoff puts between every section of the detail screen.
+class _EventDivider extends StatelessWidget {
+  const _EventDivider();
+
+  @override
+  Widget build(BuildContext context) =>
+      Divider(height: 1, thickness: 1, color: ClubUpColors.border);
+}
+
+/// `tag-*` — a student-side copy. The shared [_Tag] is also used by the club
+/// admin event screen, whose design has not been reviewed yet.
+class _EventTag extends StatelessWidget {
+  final String label;
+
+  const _EventTag({required this.label});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+      decoration: BoxDecoration(
+        color: ClubUpColors.card,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: ClubUpColors.border),
+      ),
+      child: Text(
+        label,
+        style: figtree(
+          size: 12,
+          weight: FontWeight.w600,
+          color: ClubUpColors.text,
+        ),
       ),
     );
   }
@@ -1690,15 +1930,8 @@ class _StatusPill extends StatelessWidget {
 
 class _GlassButton extends StatelessWidget {
   final IconData icon;
-  final bool active;
-  final Color? activeColor;
   final VoidCallback onTap;
-  const _GlassButton({
-    required this.icon,
-    required this.onTap,
-    this.active = false,
-    this.activeColor,
-  });
+  const _GlassButton({required this.icon, required this.onTap});
 
   @override
   Widget build(BuildContext context) {
@@ -1712,14 +1945,8 @@ class _GlassButton extends StatelessWidget {
             height: 40,
             decoration: BoxDecoration(
               shape: BoxShape.circle,
-              color: active
-                  ? (activeColor ?? Colors.white)
-                  : Colors.black.withValues(alpha: 0.42),
-              border: Border.all(
-                color: active
-                    ? (activeColor ?? Colors.white)
-                    : Colors.white.withValues(alpha: 0.22),
-              ),
+              color: Colors.black.withValues(alpha: 0.42),
+              border: Border.all(color: Colors.white.withValues(alpha: 0.22)),
             ),
             child: Icon(icon, size: 18, color: Colors.white),
           ),
@@ -2070,6 +2297,7 @@ class _HostCard extends StatelessWidget {
   final Event event;
   final Color accent;
   final VoidCallback onView;
+
   const _HostCard({
     required this.event,
     required this.accent,
@@ -2078,96 +2306,87 @@ class _HostCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
     final club = clubForId(event.clubId);
     if (club == null) return const SizedBox.shrink();
-    return Container(
-      padding: const EdgeInsets.fromLTRB(14, 12, 14, 12),
-      decoration: BoxDecoration(
-        color: AppColors.card,
-        borderRadius: BorderRadius.all(Radius.circular(16)),
-        border: Border.all(color: AppColors.divider),
-      ),
-      child: Row(
-        children: [
-          ClubAvatar(
-            clubId: club.id,
-            clubName: club.name,
-            color: accent,
-            imageUrl: club.logoUrl,
-            size: 46,
-            fontSize: 16,
-            borderRadius: 14,
-          ),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
+    final following = userState.isFollowing(club.id);
+
+    return Row(
+      children: [
+        Expanded(
+          child: GestureDetector(
+            onTap: onView,
+            behavior: HitTestBehavior.opaque,
+            child: Row(
               children: [
-                Text(
-                  AppLocalizations.of(context)!.hostedBy,
-                  style: TextStyle(
-                    fontSize: 10,
-                    fontWeight: FontWeight.w700,
-                    letterSpacing: 1,
-                    color: AppColors.secondaryText,
-                  ),
+                ClubAvatar(
+                  clubId: club.id,
+                  clubName: club.name,
+                  color: accent,
+                  imageUrl: club.logoUrl,
+                  size: 40,
+                  fontSize: 16,
+                  shape: 'circle',
                 ),
-                const SizedBox(height: 3),
-                Row(
-                  children: [
-                    Flexible(
-                      child: Text(
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        l10n.hostedBy,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: figtree(
+                          size: 11,
+                          weight: FontWeight.w600,
+                          color: ClubUpColors.muted,
+                        ),
+                      ),
+                      const SizedBox(height: 2),
+                      Text(
                         club.name,
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
-                        style: TextStyle(
-                          fontSize: 14,
-                          fontWeight: FontWeight.w800,
-                          color: AppColors.text,
-                          letterSpacing: -0.3,
+                        style: figtree(
+                          size: 14,
+                          weight: FontWeight.w700,
+                          color: ClubUpColors.text,
                         ),
                       ),
-                    ),
-                    const SizedBox(width: 5),
-                    Icon(Icons.verified_rounded, size: 13, color: accent),
-                  ],
+                    ],
+                  ),
                 ),
               ],
             ),
           ),
-          const SizedBox(width: 10),
-          GestureDetector(
-            onTap: onView,
-            child: Container(
-              height: 30,
-              padding: const EdgeInsets.symmetric(horizontal: 14),
-              alignment: Alignment.center,
-              decoration: BoxDecoration(
-                borderRadius: BorderRadius.all(Radius.circular(9)),
-                border: Border.all(
-                  color: AppColors.divider.withValues(alpha: 0.9),
-                  width: 1.5,
-                ),
+        ),
+        const SizedBox(width: 12),
+        GestureDetector(
+          onTap: () => handleFollowTap(context, club.id, () {}),
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
+            decoration: BoxDecoration(
+              color: ClubUpColors.accent.withValues(alpha: 0.08),
+              borderRadius: BorderRadius.circular(14),
+              border: Border.all(
+                color: ClubUpColors.accent.withValues(alpha: 0.15),
               ),
-              child: Text(
-                AppLocalizations.of(context)!.view,
-                style: TextStyle(
-                  fontSize: 12,
-                  fontWeight: FontWeight.w700,
-                  color: AppColors.text,
-                ),
+            ),
+            child: Text(
+              following ? l10n.followingCheckLabel : l10n.follow,
+              style: figtree(
+                size: 12,
+                weight: FontWeight.w700,
+                color: ClubUpColors.accentText,
               ),
             ),
           ),
-        ],
-      ),
+        ),
+      ],
     );
   }
 }
-
-// ─────────────────────────────────────────────────────────────────────────────
-// Registration link card
-// ─────────────────────────────────────────────────────────────────────────────
 
 class _RegistrationCard extends StatelessWidget {
   final String url;
@@ -2287,12 +2506,11 @@ class _SecHead extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Text(
-      text.toUpperCase(),
-      style: TextStyle(
-        fontSize: 11.5,
-        fontWeight: FontWeight.w700,
-        letterSpacing: 0.5,
-        color: AppColors.secondaryText,
+      text,
+      style: figtree(
+        size: 16,
+        weight: FontWeight.w700,
+        color: ClubUpColors.text,
       ),
     );
   }
@@ -2603,176 +2821,109 @@ class _AttendingCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context)!;
-    return Material(
-      color: AppColors.card,
-      shape: RoundedRectangleBorder(
-        borderRadius: const BorderRadius.all(Radius.circular(16)),
-        side: BorderSide(color: AppColors.divider),
-      ),
-      clipBehavior: Clip.antiAlias,
-      child: InkWell(
-        key: const ValueKey('event-attending-card'),
-        onTap: onTap,
-        child: Padding(
-          padding: const EdgeInsets.fromLTRB(14, 10, 12, 10),
-          child: Row(
+    if (totalCount == 0 && attendees.isEmpty) return const SizedBox.shrink();
+
+    return GestureDetector(
+      onTap: onTap,
+      behavior: HitTestBehavior.opaque,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          if (followedCount > 0)
+            Row(
+              children: [
+                _DetailAvatarStack(
+                  userIds: attendees.map((u) => u.id).toList(),
+                ),
+                const SizedBox(width: 10),
+                Flexible(
+                  child: Text(
+                    l10n.peopleYouFollowCount(followedCount),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: figtree(
+                      size: 13,
+                      weight: FontWeight.w700,
+                      color: ClubUpColors.accentText,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          if (followedCount > 0) const SizedBox(height: 8),
+          Row(
             children: [
-              _AttendeeAvatarStack(
-                attendees: attendees,
-                totalCount: totalCount,
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      l10n.attendingCount(totalCount),
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: TextStyle(
-                        color: AppColors.text,
-                        fontSize: 14,
-                        fontWeight: FontWeight.w800,
-                        letterSpacing: -0.35,
-                      ),
-                    ),
-                    const SizedBox(height: 3),
-                    Text(
-                      l10n.followedPeopleAttending(followedCount),
-                      maxLines: 2,
-                      overflow: TextOverflow.ellipsis,
-                      style: TextStyle(
-                        color: AppColors.secondaryText,
-                        fontSize: 11.5,
-                        height: 1.25,
-                        letterSpacing: -0.1,
-                      ),
-                    ),
-                  ],
+              Text(
+                l10n.goingCount(totalCount),
+                style: figtree(
+                  size: 13,
+                  weight: FontWeight.w600,
+                  color: ClubUpColors.muted,
                 ),
               ),
-              const SizedBox(width: 6),
+              const SizedBox(width: 4),
               Icon(
                 Icons.chevron_right_rounded,
-                size: 22,
-                color: AppColors.secondaryText,
+                size: 14,
+                color: ClubUpColors.muted,
               ),
             ],
           ),
-        ),
-      ),
-    );
-  }
-}
-
-class _AttendeeAvatarStack extends StatelessWidget {
-  const _AttendeeAvatarStack({
-    required this.attendees,
-    required this.totalCount,
-  });
-
-  final List<User> attendees;
-  final int totalCount;
-
-  static const _size = 32.0;
-  static const _step = 19.0;
-
-  @override
-  Widget build(BuildContext context) {
-    final visible = attendees.take(4).toList(growable: false);
-    final hiddenCount = totalCount - visible.length;
-    final slotCount = visible.length + (hiddenCount > 0 ? 1 : 0);
-
-    if (slotCount == 0) {
-      return Container(
-        width: _size,
-        height: _size,
-        decoration: BoxDecoration(
-          shape: BoxShape.circle,
-          color: AppColors.surfaceAlt,
-          border: Border.all(color: AppColors.divider, width: 2),
-        ),
-        child: Icon(
-          Icons.people_outline_rounded,
-          size: 20,
-          color: AppColors.secondaryText,
-        ),
-      );
-    }
-
-    return SizedBox(
-      width: _size + ((slotCount - 1) * _step),
-      height: _size,
-      child: Stack(
-        children: [
-          for (var index = 0; index < visible.length; index++)
-            Positioned(
-              left: index * _step,
-              child: _BorderedEventAvatar(user: visible[index], index: index),
-            ),
-          if (hiddenCount > 0)
-            Positioned(
-              left: visible.length * _step,
-              child: Container(
-                width: _size,
-                height: _size,
-                alignment: Alignment.center,
-                decoration: BoxDecoration(
-                  shape: BoxShape.circle,
-                  color: AppColors.surfaceAlt,
-                  border: Border.all(color: AppColors.card, width: 2.5),
-                ),
-                child: Text(
-                  '+$hiddenCount',
-                  maxLines: 1,
-                  style: TextStyle(
-                    color: AppColors.secondaryText,
-                    fontSize: hiddenCount > 99 ? 10 : 11.5,
-                    fontWeight: FontWeight.w800,
-                    letterSpacing: -0.3,
-                  ),
-                ),
-              ),
-            ),
         ],
       ),
     );
   }
 }
 
-class _BorderedEventAvatar extends StatelessWidget {
-  const _BorderedEventAvatar({required this.user, required this.index});
+/// Best-known display name for an attendee id — checks the people directory
+/// and the seeded user list before falling back to the raw id, so the avatar
+/// always has an initial to draw.
+String _attendeeDisplayName(String userId) {
+  final person =
+      peopleService.cachedPeople.cast<User?>().firstWhere(
+        (u) => u?.id == userId,
+        orElse: () => null,
+      ) ??
+      users.cast<User?>().firstWhere(
+        (u) => u?.id == userId,
+        orElse: () => null,
+      );
+  return userState.displayNameFor(userId, person?.name ?? userId);
+}
 
-  final User user;
-  final int index;
+/// `avatar-stack` on the detail screen — 24px discs, each pulled 8px over the
+/// one before it.
+class _DetailAvatarStack extends StatelessWidget {
+  final List<String> userIds;
 
-  static const _backgrounds = [
-    Color(0xFF4A1E22),
-    Color(0xFF2D153C),
-    Color(0xFF143337),
-    Color(0xFF4A2819),
-  ];
-
-  static const _foregrounds = [
-    Color(0xFFFFDCE1),
-    Color(0xFFEFD9FF),
-    Color(0xFFD5F5F4),
-    Color(0xFFFFE3D2),
-  ];
+  const _DetailAvatarStack({required this.userIds});
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.all(2.5),
-      decoration: BoxDecoration(color: AppColors.card, shape: BoxShape.circle),
-      child: UserAvatar(
-        userId: user.id,
-        name: user.name,
-        size: 27,
-        fontSize: 10,
-        backgroundColor: _backgrounds[index % _backgrounds.length],
-        textColor: _foregrounds[index % _foregrounds.length],
+    final shown = userIds.take(3).toList();
+    if (shown.isEmpty) return const SizedBox.shrink();
+    return SizedBox(
+      height: 24,
+      width: 24 + (shown.length - 1) * 16,
+      child: Stack(
+        children: [
+          for (var i = 0; i < shown.length; i++)
+            Positioned(
+              left: i * 16,
+              child: Container(
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  border: Border.all(color: ClubUpColors.background, width: 2),
+                ),
+                child: UserAvatar(
+                  userId: shown[i],
+                  name: _attendeeDisplayName(shown[i]),
+                  size: 24,
+                  fontSize: 10,
+                ),
+              ),
+            ),
+        ],
       ),
     );
   }
@@ -2796,91 +2947,130 @@ class _BringFriendsSection extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context)!;
+    final reduceMotion =
+        MediaQuery.maybeOf(context)?.disableAnimations ?? false;
+    if (friends.isEmpty) return const SizedBox.shrink();
+
     return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
+      crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Row(
           children: [
-            Expanded(
-              child: Text(
-                l10n.bringYourFriends,
-                style: TextStyle(
-                  color: AppColors.text,
-                  fontSize: 18,
-                  fontWeight: FontWeight.w800,
-                  letterSpacing: -0.45,
-                ),
+            Container(
+              width: 28,
+              height: 28,
+              alignment: Alignment.center,
+              decoration: BoxDecoration(
+                color: ClubUpColors.chip,
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: Icon(
+                Icons.send_rounded,
+                size: 16,
+                color: ClubUpColors.muted,
               ),
             ),
-            TextButton(
-              key: const ValueKey('event-friends-see-all'),
-              onPressed: onSeeAll,
-              style: TextButton.styleFrom(
-                foregroundColor: AppColors.positive,
-                padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 6),
-                minimumSize: const Size(0, 36),
-                tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-              ),
-              child: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Text(
-                    l10n.seeAll,
-                    style: const TextStyle(
-                      fontSize: 13,
-                      fontWeight: FontWeight.w700,
-                    ),
-                  ),
-                  const SizedBox(width: 2),
-                  const Icon(Icons.chevron_right_rounded, size: 17),
-                ],
+            const SizedBox(width: 10),
+            Expanded(
+              child: Text(
+                l10n.shareWithFriends,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: figtree(
+                  size: 16,
+                  weight: FontWeight.w700,
+                  color: ClubUpColors.text,
+                ),
               ),
             ),
           ],
         ),
         const SizedBox(height: 12),
-        Container(
-          key: const ValueKey('event-bring-friends-card'),
-          decoration: BoxDecoration(
-            color: AppColors.card,
-            borderRadius: const BorderRadius.all(Radius.circular(18)),
-            border: Border.all(color: AppColors.divider),
-          ),
-          padding: const EdgeInsets.fromLTRB(14, 6, 14, 12),
-          child: Column(
-            children: [
-              for (var index = 0; index < friends.length; index++) ...[
-                _FriendInviteRow(
-                  friend: friends[index],
-                  invited: invitedFriendIds.contains(friends[index].id),
-                  onInvite: () => onInvite(friends[index]),
-                ),
-                if (index < friends.length - 1)
-                  Divider(height: 1, indent: 64, color: AppColors.divider),
-              ],
-              if (friends.isNotEmpty) const SizedBox(height: 8),
-              SizedBox(
-                width: double.infinity,
-                height: 40,
-                child: OutlinedButton.icon(
-                  key: const ValueKey('event-share-from-friends'),
-                  onPressed: onShare,
-                  style: OutlinedButton.styleFrom(
-                    foregroundColor: AppColors.text,
-                    side: BorderSide(color: AppColors.borderStrong, width: 1.5),
-                    shape: const RoundedRectangleBorder(
-                      borderRadius: BorderRadius.all(Radius.circular(13)),
-                    ),
-                    textStyle: const TextStyle(
-                      fontSize: 14,
-                      fontWeight: FontWeight.w800,
+        // `quick-send-row` — one tap per friend, the row scrolls sideways.
+        SizedBox(
+          height: 86,
+          child: ListView.separated(
+            scrollDirection: Axis.horizontal,
+            padding: EdgeInsets.zero,
+            itemCount: friends.length,
+            separatorBuilder: (_, _) => const SizedBox(width: 12),
+            itemBuilder: (context, i) {
+              final friend = friends[i];
+              final invited = invitedFriendIds.contains(friend.id);
+              return SizedBox(
+                width: 64,
+                child: AnimatedSwitcher(
+                  duration: reduceMotion
+                      ? Duration.zero
+                      : const Duration(milliseconds: 420),
+                  reverseDuration: reduceMotion
+                      ? Duration.zero
+                      : const Duration(milliseconds: 300),
+                  switchInCurve: Curves.easeOutCubic,
+                  switchOutCurve: Curves.easeInCubic,
+                  layoutBuilder: (currentChild, previousChildren) => Stack(
+                    alignment: Alignment.topCenter,
+                    children: [...previousChildren, ?currentChild],
+                  ),
+                  transitionBuilder: (child, animation) => FadeTransition(
+                    opacity: animation,
+                    child: SlideTransition(
+                      position: Tween<Offset>(
+                        begin: const Offset(0.32, 0),
+                        end: Offset.zero,
+                      ).animate(animation),
+                      child: ScaleTransition(
+                        scale: Tween<double>(
+                          begin: 0.92,
+                          end: 1,
+                        ).animate(animation),
+                        child: child,
+                      ),
                     ),
                   ),
-                  icon: const Icon(Icons.ios_share_rounded, size: 18),
-                  label: Text(l10n.shareEventAction),
+                  child: _QuickInviteFriend(
+                    key: ValueKey('event-invite-${friend.id}'),
+                    friend: friend,
+                    invited: invited,
+                    onInvite: () => onInvite(friend),
+                  ),
                 ),
-              ),
-            ],
+              );
+            },
+          ),
+        ),
+        const SizedBox(height: 12),
+        // `btn-send-to-more-friends` — opens the full invite list, which is
+        // the `event-detail-invite` frame.
+        GestureDetector(
+          onTap: onSeeAll,
+          child: Container(
+            height: 52,
+            alignment: Alignment.center,
+            decoration: BoxDecoration(
+              color: ClubUpColors.card,
+              borderRadius: BorderRadius.circular(26),
+              border: Border.all(color: ClubUpColors.border),
+            ),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Icon(Icons.send_outlined, size: 18, color: ClubUpColors.text),
+                const SizedBox(width: 8),
+                Flexible(
+                  child: Text(
+                    l10n.sendToMoreFriends,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: figtree(
+                      size: 13,
+                      weight: FontWeight.w700,
+                      color: ClubUpColors.text,
+                    ),
+                  ),
+                ),
+              ],
+            ),
           ),
         ),
       ],
@@ -2888,8 +3078,9 @@ class _BringFriendsSection extends StatelessWidget {
   }
 }
 
-class _FriendInviteRow extends StatelessWidget {
-  const _FriendInviteRow({
+class _QuickInviteFriend extends StatefulWidget {
+  const _QuickInviteFriend({
+    super.key,
     required this.friend,
     required this.invited,
     required this.onInvite,
@@ -2899,107 +3090,243 @@ class _FriendInviteRow extends StatelessWidget {
   final bool invited;
   final VoidCallback onInvite;
 
-  String _contextDetail(BuildContext context) {
-    final academic = userState.academicSummaryFor(friend.id);
-    if (academic.isNotEmpty) return academic;
+  @override
+  State<_QuickInviteFriend> createState() => _QuickInviteFriendState();
+}
 
-    final currentUser = authService.currentUser;
-    if (currentUser != null) {
-      final myClubs = currentUser.subscribedClubIds.toSet();
-      final friendClubs = {
-        ...friend.subscribedClubIds,
-        ...peopleService.clubIdsFor(friend.id),
-      };
-      final mutualCount = myClubs.intersection(friendClubs).length;
-      if (mutualCount > 0) {
-        return AppLocalizations.of(context)!.mutualClubsCount(mutualCount);
-      }
+class _QuickInviteFriendState extends State<_QuickInviteFriend>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _inviteController;
+  late final Animation<double> _inviteScale;
+  bool _pressed = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _inviteController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 520),
+      value: widget.invited ? 1 : 0,
+    );
+    _inviteScale = TweenSequence<double>([
+      TweenSequenceItem(
+        tween: Tween(
+          begin: 1.0,
+          end: 0.90,
+        ).chain(CurveTween(curve: Curves.easeInOutCubic)),
+        weight: 24,
+      ),
+      TweenSequenceItem(
+        tween: Tween(
+          begin: 0.90,
+          end: 1.07,
+        ).chain(CurveTween(curve: Curves.easeOutCubic)),
+        weight: 36,
+      ),
+      TweenSequenceItem(
+        tween: Tween(
+          begin: 1.07,
+          end: 1.0,
+        ).chain(CurveTween(curve: Curves.easeOutBack)),
+        weight: 40,
+      ),
+    ]).animate(_inviteController);
+  }
+
+  @override
+  void didUpdateWidget(covariant _QuickInviteFriend oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (!oldWidget.invited && widget.invited) {
+      _inviteController.forward(from: 0);
+    } else if (oldWidget.invited && !widget.invited) {
+      _inviteController.value = 0;
     }
+  }
 
-    return AppLocalizations.of(context)!.suggestedForYou;
+  @override
+  void dispose() {
+    _inviteController.dispose();
+    super.dispose();
+  }
+
+  void _setPressed(bool pressed) {
+    if (_pressed == pressed || widget.invited) return;
+    setState(() => _pressed = pressed);
   }
 
   @override
   Widget build(BuildContext context) {
-    final displayName = userState.displayNameFor(friend.id, friend.name);
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 6),
-      child: Row(
-        children: [
-          UserAvatar(
-            userId: friend.id,
-            name: displayName,
-            size: 40,
-            fontSize: 13,
-            backgroundColor: AppColors.lightRed,
-            textColor: AppColors.primaryRed,
-          ),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  displayName,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: TextStyle(
-                    color: AppColors.text,
-                    fontSize: 15,
-                    fontWeight: FontWeight.w800,
-                    letterSpacing: -0.3,
-                  ),
-                ),
-                const SizedBox(height: 3),
-                Text(
-                  _contextDetail(context),
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: TextStyle(
-                    color: AppColors.secondaryText,
-                    fontSize: 12,
-                    letterSpacing: -0.1,
-                  ),
-                ),
-              ],
+    final l10n = AppLocalizations.of(context)!;
+    final reduceMotion =
+        MediaQuery.maybeOf(context)?.disableAnimations ?? false;
+    final duration = reduceMotion
+        ? Duration.zero
+        : const Duration(milliseconds: 360);
+    final displayName = userState.displayNameFor(
+      widget.friend.id,
+      widget.friend.name,
+    );
+    final firstName = displayName.split(' ').first;
+
+    final avatar = Stack(
+      clipBehavior: Clip.none,
+      children: [
+        AnimatedContainer(
+          key: ValueKey('event-quick-invite-avatar-${widget.friend.id}'),
+          duration: duration,
+          curve: Curves.easeOutCubic,
+          width: 56,
+          height: 56,
+          decoration: BoxDecoration(
+            shape: BoxShape.circle,
+            border: Border.all(
+              color: widget.invited ? ClubUpColors.accent : Colors.transparent,
+              width: 2,
             ),
+            boxShadow: widget.invited
+                ? [
+                    BoxShadow(
+                      color: ClubUpColors.accent.withValues(alpha: 0.18),
+                      blurRadius: 12,
+                      spreadRadius: 2,
+                    ),
+                  ]
+                : const [],
           ),
-          const SizedBox(width: 10),
-          SizedBox(
-            height: 40,
-            child: FilledButton(
-              key: ValueKey('event-invite-${friend.id}'),
-              onPressed: invited ? null : onInvite,
-              style: FilledButton.styleFrom(
-                backgroundColor: AppColors.positive,
-                disabledBackgroundColor: AppColors.surfaceAlt,
-                foregroundColor: AppColors.onPositive,
-                disabledForegroundColor: AppColors.positive,
-                padding: const EdgeInsets.symmetric(horizontal: 14),
-                shape: const RoundedRectangleBorder(
-                  borderRadius: BorderRadius.all(Radius.circular(12)),
-                ),
-                textStyle: const TextStyle(
-                  fontSize: 14,
-                  fontWeight: FontWeight.w800,
-                ),
-              ),
-              child: Text(
-                invited
-                    ? AppLocalizations.of(context)!.invited
-                    : AppLocalizations.of(context)!.invite,
+          child: AnimatedScale(
+            scale: widget.invited ? 0.90 : 1,
+            duration: duration,
+            curve: Curves.easeOutCubic,
+            child: IgnorePointer(
+              child: UserAvatar(
+                userId: widget.friend.id,
+                name: displayName,
+                size: 56,
+                fontSize: 20,
               ),
             ),
           ),
-        ],
+        ),
+        Positioned(
+          right: -1,
+          bottom: -1,
+          child: AnimatedSwitcher(
+            duration: reduceMotion
+                ? Duration.zero
+                : const Duration(milliseconds: 420),
+            switchInCurve: Curves.easeOutBack,
+            switchOutCurve: Curves.easeInCubic,
+            transitionBuilder: (child, animation) => FadeTransition(
+              opacity: animation,
+              child: ScaleTransition(
+                scale: Tween<double>(begin: 0.2, end: 1).animate(animation),
+                child: child,
+              ),
+            ),
+            child: widget.invited
+                ? Container(
+                    key: const ValueKey('invited-check'),
+                    width: 20,
+                    height: 20,
+                    alignment: Alignment.center,
+                    decoration: BoxDecoration(
+                      shape: BoxShape.circle,
+                      color: ClubUpColors.accent,
+                      border: Border.all(
+                        color: ClubUpColors.background,
+                        width: 2,
+                      ),
+                    ),
+                    child: const Icon(
+                      Icons.check_rounded,
+                      size: 11,
+                      color: Colors.white,
+                    ),
+                  )
+                : const SizedBox(
+                    key: ValueKey('invite-check-placeholder'),
+                    width: 20,
+                    height: 20,
+                  ),
+          ),
+        ),
+      ],
+    );
+
+    return SizedBox(
+      width: 64,
+      child: Padding(
+        padding: const EdgeInsets.only(top: 4),
+        child: Semantics(
+          button: true,
+          enabled: !widget.invited,
+          label: widget.invited ? l10n.invited : displayName,
+          child: GestureDetector(
+            behavior: HitTestBehavior.opaque,
+            onTapDown: widget.invited ? null : (_) => _setPressed(true),
+            onTapCancel: widget.invited ? null : () => _setPressed(false),
+            onTapUp: widget.invited ? null : (_) => _setPressed(false),
+            onTap: widget.invited ? null : widget.onInvite,
+            child: AnimatedScale(
+              scale: _pressed ? 0.94 : 1,
+              duration: reduceMotion
+                  ? Duration.zero
+                  : const Duration(milliseconds: 120),
+              curve: Curves.easeOutCubic,
+              child: Column(
+                children: [
+                  AnimatedBuilder(
+                    animation: _inviteScale,
+                    child: avatar,
+                    builder: (_, child) => Transform.scale(
+                      scale: reduceMotion ? 1 : _inviteScale.value,
+                      child: child,
+                    ),
+                  ),
+                  const SizedBox(height: 6),
+                  SizedBox(
+                    height: 16,
+                    child: AnimatedSwitcher(
+                      duration: reduceMotion
+                          ? Duration.zero
+                          : const Duration(milliseconds: 320),
+                      switchInCurve: Curves.easeOutCubic,
+                      switchOutCurve: Curves.easeInCubic,
+                      transitionBuilder: (child, animation) => FadeTransition(
+                        opacity: animation,
+                        child: SlideTransition(
+                          position: Tween<Offset>(
+                            begin: const Offset(0, 0.28),
+                            end: Offset.zero,
+                          ).animate(animation),
+                          child: child,
+                        ),
+                      ),
+                      child: Text(
+                        widget.invited ? l10n.invited : firstName,
+                        key: ValueKey(widget.invited),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        textAlign: TextAlign.center,
+                        style: figtree(
+                          size: 12,
+                          weight: FontWeight.w600,
+                          color: widget.invited
+                              ? ClubUpColors.accentText
+                              : ClubUpColors.text,
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
       ),
     );
   }
 }
-
-// ──────────────────────────────────────────────────────────────────────────────
-// Sticky CTA — reminder bell + RSVP + add to calendar
-// ─────────────────────────────────────────────────────────────────────────────
 
 class _StickyCta extends StatefulWidget {
   final Event event;
@@ -3036,92 +3363,101 @@ class _StickyCtaState extends State<_StickyCta> {
 
   @override
   Widget build(BuildContext context) {
-    final bg = AppColors.background;
-    final accent = widget.accent;
+    final l10n = AppLocalizations.of(context)!;
+    final userId =
+        authService.currentUser?.id ?? authService.currentAdmin?.id ?? '';
+
     return Container(
+      key: const ValueKey('event-sticky-actions'),
       decoration: BoxDecoration(
-        gradient: LinearGradient(
-          begin: Alignment.topCenter,
-          end: Alignment.bottomCenter,
-          stops: const [0.0, 0.32],
-          colors: [bg.withValues(alpha: 0.0), bg],
-        ),
+        color: ClubUpColors.card,
+        border: Border(top: BorderSide(color: ClubUpColors.border)),
+        boxShadow: const [
+          BoxShadow(
+            color: Color(0x0F000000),
+            offset: Offset(0, -4),
+            blurRadius: 8,
+          ),
+        ],
       ),
       child: SafeArea(
         top: false,
         child: Padding(
-          padding: const EdgeInsets.fromLTRB(16, 14, 16, 12),
-          // Priority ladder: the RSVP button carries the whole decision on its
-          // own line; calendar and reminder sit below as quiet text actions —
-          // present and tappable, never competing with it.
+          padding: const EdgeInsets.fromLTRB(18, 8, 18, 8),
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              RsvpButton(
-                eventId: widget.event.id,
-                color: accent,
-                isPast: false,
-                event: widget.event,
+              ListenableBuilder(
+                listenable: rsvpStore,
+                builder: (_, _) {
+                  final attending = rsvpStore.isAttending(widget.event.id);
+                  final pending = rsvpStore.isPending(widget.event.id);
+                  return GestureDetector(
+                    onTap: pending || userId.isEmpty
+                        ? null
+                        : () {
+                            HapticFeedback.selectionClick();
+                            unawaited(
+                              rsvpStore.toggle(
+                                widget.event.id,
+                                userId,
+                                event: widget.event,
+                              ),
+                            );
+                          },
+                    child: AnimatedContainer(
+                      key: const ValueKey('event-rsvp-action'),
+                      duration: const Duration(milliseconds: 180),
+                      width: double.infinity,
+                      constraints: const BoxConstraints(minHeight: 44),
+                      padding: const EdgeInsets.symmetric(vertical: 10),
+                      alignment: Alignment.center,
+                      decoration: BoxDecoration(
+                        color: attending
+                            ? Colors.transparent
+                            : ClubUpColors.accent,
+                        borderRadius: BorderRadius.circular(22),
+                        border: Border.all(
+                          color: attending
+                              ? ClubUpColors.accent
+                              : Colors.transparent,
+                          width: 1.5,
+                        ),
+                      ),
+                      child: Text(
+                        attending ? l10n.going : l10n.imGoing,
+                        style: figtree(
+                          size: 14,
+                          weight: FontWeight.w700,
+                          color: attending
+                              ? ClubUpColors.accentText
+                              : Colors.white,
+                        ),
+                      ),
+                    ),
+                  );
+                },
               ),
-              const SizedBox(height: 11),
+              const SizedBox(height: 8),
               Row(
-                crossAxisAlignment: CrossAxisAlignment.center,
                 children: [
                   Expanded(
                     child: AddToCalendarButton(
+                      key: const ValueKey('event-add-to-calendar-action'),
                       event: widget.event,
-                      color: accent,
-                      asLink: true,
+                      color: widget.accent,
                     ),
                   ),
-                  Container(
-                    width: 1,
-                    height: 16,
-                    color: AppColors.divider.withValues(alpha: 0.9),
-                  ),
+                  const SizedBox(width: 8),
                   Expanded(
-                    child: SizedBox(
-                      height: 36,
-                      child: Material(
-                        color: Colors.transparent,
-                        child: InkWell(
-                          borderRadius: BorderRadius.all(Radius.circular(10)),
-                          onTap: _toggleRemind,
-                          child: Row(
-                            mainAxisAlignment: MainAxisAlignment.center,
-                            children: [
-                              AnimatedReminderBell(
-                                active: _remind,
-                                color: accent,
-                                inactiveColor: AppColors.secondaryText,
-                                size: 15,
-                              ),
-                              const SizedBox(width: 7),
-                              Flexible(
-                                child: Text(
-                                  _remind
-                                      ? AppLocalizations.of(
-                                          context,
-                                        )!.remindedLabel
-                                      : AppLocalizations.of(
-                                          context,
-                                        )!.remindMeLabel,
-                                  maxLines: 1,
-                                  overflow: TextOverflow.ellipsis,
-                                  style: TextStyle(
-                                    fontSize: 13,
-                                    fontWeight: FontWeight.w600,
-                                    color: _remind
-                                        ? accent
-                                        : AppColors.secondaryText,
-                                    letterSpacing: -0.1,
-                                  ),
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                      ),
+                    child: _SecondaryActionButton(
+                      key: const ValueKey('event-reminder-action'),
+                      icon: _remind
+                          ? Icons.notifications_active_rounded
+                          : Icons.notifications_none_rounded,
+                      label: l10n.remindMe,
+                      active: _remind,
+                      onTap: _toggleRemind,
                     ),
                   ),
                 ],
@@ -3134,9 +3470,64 @@ class _StickyCtaState extends State<_StickyCta> {
   }
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// Pulsing dot (live status indicator)
-// ─────────────────────────────────────────────────────────────────────────────
+/// `btn-add-to-calendar` / `btn-remind-me` — compact outlined pills under the
+/// main CTA.
+class _SecondaryActionButton extends StatelessWidget {
+  final IconData icon;
+  final String label;
+  final bool active;
+  final VoidCallback onTap;
+
+  const _SecondaryActionButton({
+    super.key,
+    required this.icon,
+    required this.label,
+    required this.onTap,
+    this.active = false,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        constraints: const BoxConstraints(minHeight: 44),
+        padding: const EdgeInsets.symmetric(horizontal: 10),
+        alignment: Alignment.center,
+        decoration: BoxDecoration(
+          color: ClubUpColors.card,
+          borderRadius: BorderRadius.circular(22),
+          border: Border.all(
+            color: active ? ClubUpColors.accent : ClubUpColors.border,
+          ),
+        ),
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(
+              icon,
+              size: 16,
+              color: active ? ClubUpColors.accentText : ClubUpColors.text,
+            ),
+            const SizedBox(width: 6),
+            Flexible(
+              child: Text(
+                label,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: figtree(
+                  size: 12,
+                  weight: FontWeight.w700,
+                  color: active ? ClubUpColors.accentText : ClubUpColors.text,
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
 
 class _PulseDot extends StatefulWidget {
   final Color color;

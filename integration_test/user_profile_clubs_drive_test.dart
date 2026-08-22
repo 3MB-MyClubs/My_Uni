@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:integration_test/integration_test.dart';
 
+import 'package:flutter_application_1/l10n/app_localizations.dart';
 import 'package:flutter_application_1/screens/user_profile_screen.dart';
 import 'package:flutter_application_1/services/auth_service.dart';
 import 'package:flutter_application_1/services/hive_bootstrap.dart';
@@ -14,7 +15,7 @@ import 'package:flutter_application_1/services/user_prefs_service.dart';
 import 'package:flutter_application_1/services/theme_service.dart';
 import 'package:flutter_application_1/onboarding/onboarding_service.dart';
 import 'package:flutter_application_1/services/user_state.dart';
-import 'package:flutter_application_1/widgets/student_campus_profile.dart';
+import 'package:flutter_application_1/widgets/profile_design.dart';
 
 /// Verifies another student's profile lists their clubs inline (like the
 /// own-profile Clubs card) instead of hiding them behind the Clubs stat.
@@ -41,7 +42,7 @@ void main() {
     userState.setMajor(can.id, 'Computer Engineering');
     userState.setYear(can.id, '2nd Year');
 
-    // Give Can a board role so the burgundy role badge renders.
+    // Give Can a board role so the role-first ordering has something to sort.
     final roleClub = clubs.firstWhere((c) => c.id == can.subscribedClubIds[1]);
     if (!roleClub.boardMemberIds.contains(can.id)) {
       roleClub.boardMemberIds.add(can.id);
@@ -52,23 +53,25 @@ void main() {
       ProviderScope(
         child: MaterialApp(
           debugShowCheckedModeBanner: false,
+          localizationsDelegates: AppLocalizations.localizationsDelegates,
+          supportedLocales: AppLocalizations.supportedLocales,
           home: UserProfileScreen(user: can),
         ),
       ),
     );
     await tester.pump(const Duration(milliseconds: 600));
 
-    // The inline clubs card is on screen without tapping anything.
-    expect(find.text('CLUBS · 5'), findsOneWidget);
-    expect(find.textContaining('Vice President'), findsOneWidget);
-    expect(find.text('See all'), findsOneWidget);
-    final profileView = tester.widget<StudentCampusProfileView>(
-      find.byType(StudentCampusProfileView),
+    // `mutual-clubs`: the rail is on screen without tapping anything, and the
+    // board-role club still sorts to the front. The role badge the old campus
+    // card carried is not part of the frame.
+    expect(find.byType(ProfileClubCard), findsWidgets);
+    expect(find.text(roleClub.name), findsOneWidget);
+    expect(find.textContaining('Vice President'), findsNothing);
+    final firstCard = tester.widget<ProfileClubCard>(
+      find.byType(ProfileClubCard).first,
     );
-    expect(profileView.memberships.first.club.id, roleClub.id);
-    expect(profileView.memberships.first.role, 'Vice President');
+    expect(firstCard.club.id, roleClub.id);
 
-    await tester.scrollUntilVisible(find.text('See all'), 120);
     await tester.pump(const Duration(milliseconds: 400));
 
     await binding.convertFlutterSurfaceToImage();
