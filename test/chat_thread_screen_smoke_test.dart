@@ -19,6 +19,7 @@ import 'package:flutter_application_1/services/content_store.dart';
 import 'package:flutter_application_1/services/theme_service.dart';
 import 'package:flutter_application_1/services/user_state.dart';
 import 'package:flutter_application_1/services/mock_data.dart';
+import 'package:flutter_application_1/widgets/chats_design.dart';
 import 'package:flutter_application_1/services/people_service.dart';
 import 'package:flutter_application_1/widgets/club_avatar.dart';
 import 'package:flutter_application_1/widgets/group_avatar_stack.dart';
@@ -255,14 +256,26 @@ void main() {
     );
     await tester.pump();
 
+    // `chat-dm` 102:34 — a photo sits in a 2pt inset with no outline and no
+    // shadow, and the sent and received bubbles differ only in fill.
     for (final message in [sent, received]) {
-      final bubble = tester.widget<Container>(
+      final bubble = tester.widget<ChatBubbleShell>(
         find.byKey(ValueKey('chat-message-bubble-${message.id}')),
       );
-      expect(bubble.padding, const EdgeInsets.all(1));
-      final decoration = bubble.decoration! as BoxDecoration;
-      expect(decoration.border, isA<Border>());
-      expect((decoration.border! as Border).top.width, 0.5);
+      expect(bubble.padding, const EdgeInsets.all(2));
+      expect(bubble.mine, message.senderId == currentId);
+    }
+    final decorations = tester
+        .widgetList<Container>(
+          find.descendant(
+            of: find.byKey(ValueKey('chat-message-bubble-${sent.id}')),
+            matching: find.byType(Container),
+          ),
+        )
+        .map((container) => container.decoration)
+        .whereType<BoxDecoration>();
+    for (final decoration in decorations) {
+      expect(decoration.border, isNull);
       expect(decoration.boxShadow, isNull);
     }
   });

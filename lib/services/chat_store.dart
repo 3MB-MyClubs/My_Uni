@@ -338,10 +338,10 @@ class ChatStore extends ChangeNotifier {
     return message.senderClubId!;
   }
 
-  /// A board member can write a private inbox message from either identity:
-  /// their personal account or the linked club account. Keep that choice in
-  /// the local optimistic message so the remote flush cannot change the
-  /// sender if the account switcher changes before the network request runs.
+  /// Shared club-room posts follow the account switcher because they may be
+  /// authored personally or as the club. Private club-inbox replies are
+  /// different: a board member is answering a student on behalf of the club,
+  /// and the database policy requires that club identity for that reply.
   bool _sendsAsClub(String clubId, String actorId) {
     if (clubId.isEmpty || actorId.isEmpty) return false;
     if (managedClubForAdmin(actorId)?.id == clubId) return true;
@@ -349,8 +349,22 @@ class ChatStore extends ChangeNotifier {
         accountSwitcherService.activeClub?.id == clubId;
   }
 
-  bool _sendsClubInboxAsClub(String clubId, String actorId) =>
-      _sendsAsClub(clubId, actorId);
+  bool _sendsClubInboxAsClub(String clubId, String actorId) {
+    if (_sendsAsClub(clubId, actorId)) return true;
+    final club = clubForId(clubId);
+    return authService.currentUser?.id == actorId &&
+        (club?.boardMemberIds.contains(actorId) ?? false);
+  }
+
+  /// Installs a server-shaped inbox snapshot without weakening any access
+  /// checks. Production snapshots normally arrive through Chat v2; tests use
+  /// this seam to exercise the same navigation and authorization paths without
+  /// connecting to a Supabase project.
+  @visibleForTesting
+  void debugCacheClubInboxConversation(ClubInboxConversation conversation) {
+    _clubInboxes[conversation.id] = conversation;
+    notifyListeners();
+  }
 
   List<String> groupParticipants(String threadId) =>
       groupForThread(threadId)?.memberIds ?? const [];
@@ -2888,10 +2902,9 @@ class ChatStore extends ChangeNotifier {
           );
           continue;
         }
-        // Preserve the identity chosen when the message was created. A board
-        // member writing from Personal must remain a profile sender; only a
-        // selected linked Club account (or a dedicated club session) writes
-        // as the club.
+        // Preserve the identity chosen when the message was created. Board
+        // replies are marked as club-authored at creation time even when the
+        // board member is using their personal app account.
         final sendingAsClub = remoteMessage.senderClubId != null;
         await client.from('club_inbox_messages').insert({
           'id': remoteMessage.id,
@@ -3084,9 +3097,9 @@ class ChatStore extends ChangeNotifier {
       if (conversation == null || !canAccessThread(threadId, userId)) {
         return false;
       }
-      // A personal sender may write their own club inbox. Moderation replies
-      // must use the selected linked club account (or a dedicated club
-      // session), matching the Supabase insert policy.
+      // A student may write their own club inbox. Board members and the linked
+      // club session answer every visible student thread as the club, matching
+      // the Supabase insert policy.
       return conversation.profileId == userId ||
           _sendsClubInboxAsClub(conversation.clubId, userId);
     }

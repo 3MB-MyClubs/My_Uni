@@ -28,6 +28,7 @@ import 'services/app_colors.dart';
 import 'services/hive_bootstrap.dart';
 import 'services/user_prefs_service.dart';
 import 'services/chat_store.dart';
+import 'services/chat_group_prefs.dart';
 import 'services/club_chat_prefs.dart';
 import 'services/checkin_store.dart';
 import 'services/content_store.dart';
@@ -229,6 +230,7 @@ void _startDeferredLocalBootstrap() {
         guarded(contentStore.initialize()),
         guarded(chatStore.initialize()),
         guarded(clubChatPrefs.initialize()),
+        guarded(chatGroupPrefs.initialize()),
         guarded(checkinStore.initialize()),
         guarded(pollStore.initialize()),
         guarded(viewTracker.initialize()),

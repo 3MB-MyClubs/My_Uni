@@ -205,7 +205,12 @@ class _MainNavScreenState extends ConsumerState<MainNavScreen>
     if (_isPlatformModerator)
       const ModerationCenterScreen() // 3
     else
-      ChatsScreen(isTutorialHost: true, controller: _chatsController), // 3
+      ChatsScreen(
+        isTutorialHost: true,
+        controller: _chatsController,
+        // `club-chats-empty` 140:39 / 140:43 route out to Search and This Week.
+        onSelectTab: _selectNavIndex,
+      ), // 3
     ProfileScreen(onLogout: () => widget.onLogout?.call()), // 4
     if (widget.isAdmin) AdminDashboard(onLogout: widget.onLogout), // 5
   ];
@@ -473,9 +478,11 @@ class _MainNavScreenState extends ConsumerState<MainNavScreen>
         _navUpwardDelta = 0;
         _navShrinkController.stop();
         _navExpanding = false;
-        _navShrinkController.value = (_navShrinkController.value +
-                delta / _navShrinkDistance)
-            .clamp(0.0, 1.0);
+        _navShrinkController.value =
+            (_navShrinkController.value + delta / _navShrinkDistance).clamp(
+              0.0,
+              1.0,
+            );
       } else if (delta < 0) {
         // A deliberate upward move restores the bar; the sub-pixel jitter of a
         // settling fling or a bounce does not.

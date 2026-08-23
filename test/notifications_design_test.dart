@@ -661,7 +661,7 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
-  testWidgets('the Home refresh indicator sits over the ClubUp header', (
+  testWidgets('the Home refresh indicator sits beneath the feed switcher', (
     tester,
   ) async {
     await tester.pumpWidget(
@@ -677,6 +677,7 @@ void main() {
 
     final header = find.byType(HomeFeedHeader);
     final logo = find.byKey(const ValueKey('home-clubup-logo'));
+    final scope = find.byKey(const ValueKey('home-feed-scope-dropdown'));
     final refresh = find.byKey(const ValueKey('home-refresh-indicator'));
 
     expect(header, findsOneWidget);
@@ -684,7 +685,11 @@ void main() {
     expect(find.descendant(of: header, matching: refresh), findsOneWidget);
     expect(
       tester.getCenter(refresh).dx,
-      moreOrLessEquals(tester.getCenter(header).dx, epsilon: 0.1),
+      moreOrLessEquals(tester.getCenter(scope).dx, epsilon: 0.1),
+    );
+    expect(
+      tester.getTopLeft(refresh).dy,
+      greaterThan(tester.getRect(scope).bottom),
     );
     expect(tester.widget<AnimatedOpacity>(refresh).opacity, 0);
 

@@ -60,7 +60,7 @@ class _StepDoneState extends State<StepDone>
         child: Stack(
           children: [
             // ── Dark base ───────────────────────────────────────
-            Positioned.fill(child: Container(color: const Color(0xFF0C0608))),
+            Positioned.fill(child: Container(color: const Color(0xFF121212))),
 
             // ── Radial burgundy wash from top ───────────────────
             Positioned.fill(

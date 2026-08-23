@@ -1,5 +1,8 @@
 abstract final class AppLinks {
   static const site = 'https://3mb-myclubs.github.io/My_Uni/';
+
+  /// The browser build of ClubUp — the same account, opened on a desktop.
+  static const webApp = 'https://myclub.bar';
   static const support = '${site}support/';
   static const supportTurkish = '${site}tr/support/';
   static const privacyPolicy = '${site}privacy/';

@@ -62,7 +62,7 @@ class HomeFeedHeader extends StatelessWidget {
   final bool atTop;
   final bool controlsVisible;
 
-  /// Centred pull-to-refresh spinner, layered over the row like before.
+  /// Pull-to-refresh spinner centred beneath the feed-scope switcher.
   final Widget? overlay;
 
   /// The first-login tour highlights the feed-scope control; the old segmented
@@ -85,9 +85,10 @@ class HomeFeedHeader extends StatelessWidget {
           ),
         ),
       ),
-      padding: const EdgeInsets.fromLTRB(20, 12, 20, 16),
+      padding: const EdgeInsets.fromLTRB(20, 12, 20, 28),
       child: Stack(
         alignment: Alignment.center,
+        clipBehavior: Clip.none,
         children: [
           IgnorePointer(
             ignoring: !showControls,
@@ -125,7 +126,26 @@ class HomeFeedHeader extends StatelessWidget {
                         ],
                       ),
                     ),
-                    Expanded(child: Center(child: _scopeDropdown(label))),
+                    Expanded(
+                      child: Center(
+                        child: Stack(
+                          alignment: Alignment.center,
+                          clipBehavior: Clip.none,
+                          children: [
+                            _scopeDropdown(label),
+                            if (overlay != null)
+                              Positioned(
+                                top: 28,
+                                left: 0,
+                                right: 0,
+                                child: Center(
+                                  child: IgnorePointer(child: overlay),
+                                ),
+                              ),
+                          ],
+                        ),
+                      ),
+                    ),
                     _HomeBellChip(
                       unreadCount: unreadCount,
                       onTap: onBellTap,
@@ -136,7 +156,6 @@ class HomeFeedHeader extends StatelessWidget {
               ),
             ),
           ),
-          if (overlay != null) IgnorePointer(child: overlay),
         ],
       ),
     );

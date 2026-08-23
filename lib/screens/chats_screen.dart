@@ -17,7 +17,10 @@ import '../services/people_service.dart';
 import '../services/theme_service.dart';
 import '../onboarding/onboarding_anchors.dart';
 import '../services/user_state.dart';
+import '../widgets/chats_design.dart';
 import '../widgets/club_avatar.dart';
+import '../widgets/club_chat_design.dart';
+import '../widgets/clubup_design.dart';
 import '../widgets/group_avatar_stack.dart';
 import '../widgets/user_avatar.dart';
 import 'chat_thread_screen.dart';
@@ -40,7 +43,17 @@ class ChatsScreen extends StatefulWidget {
   final bool isTutorialHost;
   final ChatsController? controller;
 
-  const ChatsScreen({super.key, this.isTutorialHost = false, this.controller});
+  /// Lets `club-chats-empty`'s "Explore Clubs" / "Browse Events" buttons reach
+  /// the Search and This Week tabs. Null when the screen is hosted outside the
+  /// main navigation, which simply disables them.
+  final ValueChanged<int>? onSelectTab;
+
+  const ChatsScreen({
+    super.key,
+    this.isTutorialHost = false,
+    this.controller,
+    this.onSelectTab,
+  });
 
   @override
   State<ChatsScreen> createState() => _ChatsScreenState();
@@ -49,6 +62,11 @@ class ChatsScreen extends StatefulWidget {
 class _ChatsScreenState extends State<ChatsScreen> {
   String _query = '';
   _ChatInboxFilter _filter = _ChatInboxFilter.students;
+  bool _filterMenuOpen = false;
+
+  /// Gates `club-chats-loading` 140:94. Cleared as soon as the first sync
+  /// future settles or the store notifies, whichever lands first.
+  bool _firstLoadDone = false;
   final Set<String> _requestedProfileIds = {};
   final ScrollController _summaryScrollController = ScrollController();
 
@@ -81,7 +99,13 @@ class _ChatsScreenState extends State<ChatsScreen> {
     _summaryScrollController.addListener(_onSummaryScroll);
     widget.controller?.addListener(_showStudentChats);
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      unawaited(chatStore.startChatV2Sync(_myId));
+      // No fallback timer here on purpose: a pending `Future.delayed` fails
+      // every widget test that mounts this screen. The sync future always
+      // completes, and `_onChatStoreChanged` is a second path out of the
+      // skeleton.
+      unawaited(
+        chatStore.startChatV2Sync(_myId).whenComplete(_markFirstLoadDone),
+      );
       // Club inbox rows are visible to the club admin as well as the student.
       // Hydrate the student profile for both sessions so the private thread
       // has an identity and the private label, not an empty title.
@@ -100,12 +124,18 @@ class _ChatsScreenState extends State<ChatsScreen> {
     super.dispose();
   }
 
+  void _markFirstLoadDone() {
+    if (!mounted || _firstLoadDone) return;
+    setState(() => _firstLoadDone = true);
+  }
+
   void _onEnvChanged() {
     if (mounted) setState(() {});
   }
 
   void _onChatStoreChanged() {
     if (!mounted) return;
+    _markFirstLoadDone();
     unawaited(_hydrateDmProfiles());
   }
 
@@ -125,6 +155,7 @@ class _ChatsScreenState extends State<ChatsScreen> {
           ? _ChatInboxFilter.students
           : _ChatInboxFilter.clubs;
       _query = '';
+      _filterMenuOpen = false;
     });
   }
 
@@ -167,17 +198,15 @@ class _ChatsScreenState extends State<ChatsScreen> {
   }
 
   // ── Time helper ─────────────────────────────────────────────────────────────
+  /// `time-ago` 243:497 — the rows read "15m ago" / "3h ago" / "1d ago", not a
+  /// clock time, so a glance down the inbox sorts itself.
   String _rowTime(DateTime dt) {
-    final now = DateTime.now();
-    final sameDay =
-        dt.year == now.year && dt.month == now.month && dt.day == now.day;
-    if (sameDay) {
-      return '${dt.hour.toString().padLeft(2, '0')}:${dt.minute.toString().padLeft(2, '0')}';
-    }
-    final diff = now.difference(dt);
-    if (diff.inDays <= 1) return S.yesterday;
-    if (diff.inDays < 7) return '${diff.inDays}d';
-    return '${(diff.inDays / 7).floor()}w';
+    final diff = DateTime.now().difference(dt);
+    if (diff.inMinutes < 1) return S.chatsJustNow;
+    if (diff.inMinutes < 60) return S.chatsTimeAgo('${diff.inMinutes}m');
+    if (diff.inHours < 24) return S.chatsTimeAgo('${diff.inHours}h');
+    if (diff.inDays < 7) return S.chatsTimeAgo('${diff.inDays}d');
+    return S.chatsTimeAgo('${(diff.inDays / 7).floor()}w');
   }
 
   User? _userForId(String userId) {
@@ -316,7 +345,7 @@ class _ChatsScreenState extends State<ChatsScreen> {
       );
     }
     return Scaffold(
-      backgroundColor: AppColors.background,
+      backgroundColor: ChatsColors.background,
       body: ListenableBuilder(
         listenable: Listenable.merge([chatStore, userState, moderationService]),
         builder: (context, _) {
@@ -327,6 +356,9 @@ class _ChatsScreenState extends State<ChatsScreen> {
             return peerId == null || !moderationService.isUserBlocked(peerId);
           }).toList();
           final showingClubs = _filter == _ChatInboxFilter.clubs;
+          // The frame only shows conversations, but searching the directory is
+          // how a student starts a first DM with someone they have never
+          // messaged. Kept, and drawn in the same row language.
           final searchingPeople = !showingClubs && query.isNotEmpty;
           final peopleResults = searchingPeople
               ? peopleService.cachedPeople.where((user) {
@@ -349,57 +381,57 @@ class _ChatsScreenState extends State<ChatsScreen> {
                     query.isEmpty || _titleFor(t).toLowerCase().contains(query),
               )
               .toList();
-          final totalUnread = allThreads.fold<int>(
-            0,
-            (total, thread) => total + thread.unread,
-          );
-          return Stack(
-            children: [
-              _buildInboxBackdrop(showingClubs),
-              SafeArea(
-                bottom: false,
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
+          final threadIds = threads.map((t) => t.peerId).toSet();
+          final extraPeople = peopleResults
+              .where((user) => !threadIds.contains(user.id))
+              .toList();
+          // `club-chats-search` 141:3 gives the Clubs tab its own results
+          // layout, so a query there is not just a filtered inbox.
+          final searchingClubs = showingClubs && query.isNotEmpty;
+          if (searchingClubs) {
+            return SafeArea(
+              bottom: false,
+              child: Column(
+                children: [
+                  _buildClubSearchHeader(),
+                  _buildClubSearchField(),
+                  Expanded(child: _buildClubSearchResults(threads)),
+                ],
+              ),
+            );
+          }
+          final loading =
+              !_firstLoadDone && allThreads.isEmpty && query.isEmpty;
+          return SafeArea(
+            bottom: false,
+            child: Stack(
+              children: [
+                Column(
                   children: [
-                    _buildHeader(totalUnread),
-                    if (authService.currentAdmin == null)
-                      _buildChatFilters(allThreads),
-                    _buildSearchBar(),
+                    _buildDesignHeader(),
+                    _buildDesignSearch(),
                     Expanded(
-                      child: searchingPeople
-                          ? _buildPeopleSearchResults(peopleResults)
-                          : threads.isEmpty
-                          ? _buildEmptyState()
+                      child: loading
+                          ? const ClubChatsSkeleton()
+                          : threads.isEmpty && extraPeople.isEmpty
+                          ? _buildDesignEmpty(showingClubs)
                           : ListView.builder(
                               controller: _summaryScrollController,
-                              padding: const EdgeInsets.fromLTRB(
-                                12,
-                                0,
-                                12,
-                                120,
-                              ),
-                              itemCount: threads.length + 1,
-                              itemBuilder: (context, i) => i == 0
-                                  ? Padding(
-                                      padding: const EdgeInsets.fromLTRB(
-                                        4,
-                                        0,
-                                        4,
-                                        9,
-                                      ),
-                                      child: _sectionLabel(
-                                        showingClubs
-                                            ? S.clubChats
-                                            : S.messagesLabel,
-                                      ),
-                                    )
-                                  : _row(threads[i - 1]),
+                              padding: const EdgeInsets.only(bottom: 120),
+                              itemCount: threads.length + extraPeople.length,
+                              itemBuilder: (context, index) =>
+                                  index < threads.length
+                                  ? _designThreadRow(threads[index])
+                                  : _designPersonRow(
+                                      extraPeople[index - threads.length],
+                                    ),
                             ),
                     ),
                   ],
                 ),
-              ),
-            ],
+                ..._buildFilterMenuOverlay(),
+              ],
+            ),
           );
         },
       ),
@@ -452,374 +484,274 @@ class _ChatsScreenState extends State<ChatsScreen> {
 
   /// A KU-inspired ambient layer: People uses linked campus paths, while Clubs
   /// gets a more architectural burgundy-and-gold community pattern.
-  Widget _buildInboxBackdrop(bool showingClubs) {
-    final darkBase = const Color(0xFF13090D);
-    final darkWash = showingClubs
-        ? const Color(0xFF29101A)
-        : const Color(0xFF211018);
-    return Positioned.fill(
-      child: IgnorePointer(
-        child: AnimatedSwitcher(
-          duration: const Duration(milliseconds: 500),
-          child: Container(
-            key: ValueKey('chat-backdrop-${showingClubs ? 'clubs' : 'people'}'),
-            decoration: BoxDecoration(
-              gradient: LinearGradient(
-                begin: Alignment.topLeft,
-                end: Alignment.bottomRight,
-                colors: showingClubs
-                    ? [
-                        themeService.isDark ? darkBase : AppColors.background,
-                        themeService.isDark
-                            ? darkWash
-                            : AppColors.primaryRed.withValues(alpha: 0.055),
-                        themeService.isDark ? darkBase : AppColors.background,
-                      ]
-                    : [
-                        themeService.isDark ? darkBase : AppColors.background,
-                        themeService.isDark
-                            ? darkWash
-                            : AppColors.card.withValues(alpha: 0.72),
-                        themeService.isDark
-                            ? const Color(0xFF180B11)
-                            : AppColors.primaryRed.withValues(alpha: 0.025),
-                      ],
-              ),
-            ),
-            child: CustomPaint(
-              painter: _ChatBackdropPainter(
-                clubs: showingClubs,
-                burgundy: AppColors.primaryRed,
-                gold: AppColors.accentGold,
-                isDark: themeService.isDark,
+  // ── Header: title, the Clubs/Friends dropdown, compose ─────────────────────
+  // A 64pt band with no rule under it: the pill owns the left side, the
+  // compose pen owns the right, and there is no redundant title between them.
+
+  String get _filterLabel =>
+      _filter == _ChatInboxFilter.clubs ? S.chatsTabClubs : S.chatsTabFriends;
+
+  Widget _buildDesignHeader() {
+    return SizedBox(
+      key: const ValueKey('chats-student-header'),
+      height: 64,
+      child: Stack(
+        alignment: Alignment.center,
+        children: [
+          Positioned(
+            left: 20,
+            top: 0,
+            bottom: 0,
+            child: Center(
+              child: GestureDetector(
+                key: const ValueKey('chats-filter-dropdown'),
+                behavior: HitTestBehavior.opaque,
+                onTap: () => setState(() => _filterMenuOpen = !_filterMenuOpen),
+                child: AnimatedContainer(
+                  duration: const Duration(milliseconds: 180),
+                  curve: Curves.easeOutCubic,
+                  height: 28,
+                  padding: const EdgeInsets.symmetric(horizontal: 12),
+                  decoration: BoxDecoration(
+                    color: _filterMenuOpen
+                        ? Colors.white.withValues(alpha: 0.16)
+                        : Colors.transparent,
+                    borderRadius: BorderRadius.circular(999),
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Flexible(
+                        child: AnimatedSwitcher(
+                          duration: const Duration(milliseconds: 220),
+                          switchInCurve: Curves.easeOutCubic,
+                          switchOutCurve: Curves.easeInCubic,
+                          transitionBuilder: (child, animation) =>
+                              FadeTransition(
+                                opacity: animation,
+                                child: SlideTransition(
+                                  position: Tween<Offset>(
+                                    begin: const Offset(0, 0.16),
+                                    end: Offset.zero,
+                                  ).animate(animation),
+                                  child: child,
+                                ),
+                              ),
+                          child: Text(
+                            _filterLabel,
+                            key: ValueKey(_filterLabel),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: figtree(
+                              size: 18,
+                              weight: FontWeight.w800,
+                              color: Colors.white,
+                            ),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 6),
+                      AnimatedRotation(
+                        turns: _filterMenuOpen ? 0.5 : 0,
+                        duration: const Duration(milliseconds: 240),
+                        curve: Curves.easeOutCubic,
+                        child: const Icon(
+                          Icons.keyboard_arrow_down_rounded,
+                          size: 16,
+                          color: Colors.white,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
               ),
             ),
           ),
-        ),
-      ),
-    );
-  }
-
-  Widget _sectionLabel(String text) {
-    return Text(
-      text.toUpperCase(),
-      style: TextStyle(
-        fontSize: 10,
-        fontWeight: FontWeight.w700,
-        letterSpacing: 1.6,
-        color: AppColors.secondaryText,
-      ),
-    );
-  }
-
-  // ── Header (big title + unread pill + compose) ──────────────────────────────
-  Widget _buildChatFilters(List<ChatThreadSummary> threads) {
-    final studentThreads = threads
-        .where((thread) => !_belongsToClubSection(thread))
-        .toList();
-    final clubThreads = threads.where(_belongsToClubSection).toList();
-    final studentUnread = studentThreads.fold<int>(
-      0,
-      (total, thread) => total + thread.unread,
-    );
-    final clubUnread = clubThreads.fold<int>(
-      0,
-      (total, thread) => total + thread.unread,
-    );
-
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(16, 0, 16, 10),
-      child: Container(
-        height: 46,
-        padding: const EdgeInsets.all(4),
-        decoration: BoxDecoration(
-          color: AppColors.surfaceAlt,
-          borderRadius: const BorderRadius.all(Radius.circular(14)),
-          border: Border.all(color: AppColors.divider),
-        ),
-        child: Stack(
-          children: [
-            AnimatedAlign(
-              key: const ValueKey('chat-filter-liquid-indicator'),
-              alignment: _filter == _ChatInboxFilter.students
-                  ? Alignment.centerLeft
-                  : Alignment.centerRight,
-              duration: const Duration(milliseconds: 420),
-              curve: Curves.easeOutBack,
-              child: FractionallySizedBox(
-                widthFactor: 0.5,
-                heightFactor: 1,
-                child: Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 2),
-                  child: DecoratedBox(
-                    decoration: BoxDecoration(
-                      gradient: LinearGradient(
-                        begin: Alignment.topLeft,
-                        end: Alignment.bottomRight,
-                        colors: [
-                          AppColors.card.withValues(alpha: 0.98),
-                          AppColors.lightRed.withValues(alpha: 0.72),
-                        ],
-                      ),
-                      borderRadius: const BorderRadius.all(Radius.circular(10)),
-                      border: Border.all(color: AppColors.glassEdge),
-                      boxShadow: [
-                        BoxShadow(
-                          color: AppColors.primaryRed.withValues(alpha: 0.16),
-                          blurRadius: 14,
-                          spreadRadius: -2,
-                          offset: const Offset(0, 4),
-                        ),
-                        BoxShadow(
-                          color: Colors.white.withValues(alpha: 0.05),
-                          blurRadius: 2,
-                          offset: const Offset(0, -1),
-                        ),
-                      ],
+          Positioned(
+            right: 8,
+            top: 0,
+            bottom: 0,
+            child: Center(
+              child: GestureDetector(
+                key: widget.isTutorialHost
+                    ? onboardingAnchors.keyFor(OnboardingAnchors.chatsCompose)
+                    : const ValueKey('chats-compose-button'),
+                behavior: HitTestBehavior.opaque,
+                onTap: _openCompose,
+                child: SizedBox(
+                  width: 44,
+                  height: 44,
+                  child: Center(
+                    child: Icon(
+                      Icons.edit_rounded,
+                      size: 26,
+                      color: Colors.white,
                     ),
                   ),
                 ),
               ),
             ),
-            Row(
-              children: [
-                Expanded(
-                  child: _buildFilterButton(
-                    key: const ValueKey('chat-filter-students'),
-                    filter: _ChatInboxFilter.students,
-                    label: S.studentChats,
-                    icon: Icons.person_outline_rounded,
-                    unread: studentUnread,
+          ),
+        ],
+      ),
+    );
+  }
+
+  /// `dropdown-menu` 243:565 — a floating 160pt card under the pill.
+  List<Widget> _buildFilterMenuOverlay() {
+    return [
+      Positioned.fill(
+        child: IgnorePointer(
+          ignoring: !_filterMenuOpen,
+          child: AnimatedSwitcher(
+            duration: const Duration(milliseconds: 160),
+            child: _filterMenuOpen
+                ? GestureDetector(
+                    key: const ValueKey('chats-filter-dropdown-scrim'),
+                    behavior: HitTestBehavior.opaque,
+                    onTap: () => setState(() => _filterMenuOpen = false),
+                  )
+                : const SizedBox.shrink(
+                    key: ValueKey('chats-filter-dropdown-scrim-closed'),
                   ),
+          ),
+        ),
+      ),
+      Positioned(
+        top: 60,
+        left: 12,
+        child: IgnorePointer(
+          ignoring: !_filterMenuOpen,
+          child: AnimatedSwitcher(
+            key: const ValueKey('chats-filter-menu-transition'),
+            duration: const Duration(milliseconds: 460),
+            reverseDuration: const Duration(milliseconds: 220),
+            switchInCurve: Curves.easeOutCubic,
+            switchOutCurve: Curves.easeInCubic,
+            transitionBuilder: (child, animation) {
+              final curved = CurvedAnimation(
+                parent: animation,
+                curve: Curves.easeOutCubic,
+                reverseCurve: Curves.easeInCubic,
+              );
+              return FadeTransition(
+                opacity: curved,
+                child: SlideTransition(
+                  position: Tween<Offset>(
+                    begin: const Offset(0, -0.14),
+                    end: Offset.zero,
+                  ).animate(curved),
+                  child: child,
                 ),
-                Expanded(
-                  child: _buildFilterButton(
-                    key: const ValueKey('chat-filter-clubs'),
-                    filter: _ChatInboxFilter.clubs,
-                    label: S.clubChats,
-                    icon: Icons.groups_outlined,
-                    unread: clubUnread,
+              );
+            },
+            child: _filterMenuOpen
+                ? Container(
+                    key: const ValueKey('chats-filter-menu-card'),
+                    width: 160,
+                    decoration: BoxDecoration(
+                      color: ChatsColors.card,
+                      borderRadius: BorderRadius.circular(kChatCardRadius),
+                      boxShadow: [
+                        BoxShadow(
+                          color: Colors.black.withValues(alpha: 0.16),
+                          blurRadius: 20,
+                          offset: const Offset(0, 6),
+                        ),
+                      ],
+                    ),
+                    padding: const EdgeInsets.all(8),
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        _filterMenuOption(
+                          _ChatInboxFilter.clubs,
+                          S.chatsTabClubs,
+                        ),
+                        const ChatsCardDivider(),
+                        _filterMenuOption(
+                          _ChatInboxFilter.students,
+                          S.chatsTabFriends,
+                        ),
+                      ],
+                    ),
+                  )
+                : const SizedBox.shrink(
+                    key: ValueKey('chats-filter-menu-card-closed'),
                   ),
+          ),
+        ),
+      ),
+    ];
+  }
+
+  Widget _filterMenuOption(_ChatInboxFilter filter, String label) {
+    final selected = _filter == filter;
+    return InkWell(
+      key: ValueKey('chats-filter-option-${filter.name}'),
+      onTap: () {
+        setState(() => _filterMenuOpen = false);
+        _selectFilter(filter);
+      },
+      child: SizedBox(
+        height: 37,
+        child: Row(
+          children: [
+            const SizedBox(width: 12),
+            Expanded(
+              child: Text(
+                label,
+                style: figtree(
+                  size: 14,
+                  weight: selected ? FontWeight.w700 : FontWeight.w500,
+                  color: ChatsColors.text,
                 ),
-              ],
+              ),
             ),
+            if (selected)
+              Icon(Icons.check_rounded, size: 16, color: ChatsColors.accent),
+            const SizedBox(width: 12),
           ],
         ),
       ),
     );
   }
 
-  Widget _buildFilterButton({
-    required Key key,
-    required _ChatInboxFilter filter,
-    required String label,
-    required IconData icon,
-    required int unread,
-  }) {
-    final selected = _filter == filter;
-    return Semantics(
-      button: true,
-      selected: selected,
-      label: unread > 0 ? '$label, ${S.nNew(unread)}' : label,
-      child: GestureDetector(
-        key: key,
-        behavior: HitTestBehavior.opaque,
-        onTap: () => _selectFilter(filter),
-        child: Container(
-          height: 38,
-          padding: const EdgeInsets.symmetric(horizontal: 10),
-          child: Row(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              TweenAnimationBuilder<double>(
-                tween: Tween(end: selected ? 1 : 0),
-                duration: const Duration(milliseconds: 320),
-                curve: Curves.easeOutBack,
-                builder: (context, value, child) => Transform.scale(
-                  scale: 1 + (value * 0.10),
-                  child: Icon(
-                    icon,
-                    size: 17,
-                    color: Color.lerp(
-                      AppColors.secondaryText,
-                      AppColors.primaryRed,
-                      value,
-                    ),
-                  ),
-                ),
-              ),
-              const SizedBox(width: 6),
-              Flexible(
-                child: AnimatedDefaultTextStyle(
-                  duration: const Duration(milliseconds: 280),
-                  curve: Curves.easeOutCubic,
-                  style: TextStyle(
-                    fontSize: 12.5,
-                    fontWeight: selected ? FontWeight.w800 : FontWeight.w600,
-                    color: selected ? AppColors.text : AppColors.secondaryText,
-                  ),
-                  child: Text(
-                    label,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                ),
-              ),
-              if (unread > 0) ...[
-                const SizedBox(width: 5),
-                AnimatedContainer(
-                  key: ValueKey('chat-filter-${filter.name}-unread-badge'),
-                  duration: const Duration(milliseconds: 280),
-                  curve: Curves.easeOutCubic,
-                  constraints: const BoxConstraints(minWidth: 18),
-                  height: 18,
-                  padding: const EdgeInsets.symmetric(horizontal: 5),
-                  alignment: Alignment.center,
-                  decoration: BoxDecoration(
-                    color: AppColors.primaryRed,
-                    borderRadius: const BorderRadius.all(Radius.circular(9)),
-                  ),
-                  child: Text(
-                    unread > 9 ? '9+' : '$unread',
-                    style: const TextStyle(
-                      fontSize: 9.5,
-                      fontWeight: FontWeight.w800,
-                      color: Colors.white,
-                    ),
-                  ),
-                ),
-              ],
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-
-  Widget _buildHeader(int totalUnread) {
-    final canPop = Navigator.of(context).canPop();
-    final showCompose =
-        authService.isStudentSession && _filter == _ChatInboxFilter.students;
+  // ── Search ─────────────────────────────────────────────────────────────────
+  /// `search-section` 243:484 — one pill, no filter glyph.
+  Widget _buildDesignSearch() {
     return Padding(
-      padding: const EdgeInsets.fromLTRB(16, 14, 16, 10),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.end,
-        children: [
-          if (canPop)
-            Padding(
-              padding: const EdgeInsets.only(right: 8, bottom: 5),
-              child: GestureDetector(
-                onTap: () => Navigator.maybePop(context),
-                child: Icon(
-                  Icons.arrow_back_ios_new_rounded,
-                  size: 20,
-                  color: AppColors.text,
-                ),
-              ),
-            ),
-          Text.rich(
-            TextSpan(
-              text: S.chats,
-              // The design's red full stop after the title.
-              children: [
-                TextSpan(
-                  text: '.',
-                  style: TextStyle(color: AppColors.primaryRed),
-                ),
-              ],
-              style: TextStyle(
-                fontSize: 28,
-                fontWeight: FontWeight.w900,
-                letterSpacing: -1,
-                color: AppColors.text,
-                height: 1.0,
-              ),
-            ),
-          ),
-          const SizedBox(width: 10),
-          if (totalUnread > 0)
-            Container(
-              margin: const EdgeInsets.only(bottom: 3),
-              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 3),
-              decoration: BoxDecoration(
-                color: AppColors.lightRed,
-                border: Border.all(
-                  color: AppColors.primaryRed.withValues(alpha: 0.27),
-                ),
-                borderRadius: const BorderRadius.all(Radius.circular(999)),
-              ),
-              child: Text(
-                S.nNew(totalUnread),
-                style: TextStyle(
-                  fontSize: 11,
-                  fontWeight: FontWeight.w700,
-                  color: AppColors.primaryRed,
-                ),
-              ),
-            ),
-          const Spacer(),
-          if (showCompose)
-            GestureDetector(
-              key: widget.isTutorialHost
-                  ? onboardingAnchors.keyFor(OnboardingAnchors.chatsCompose)
-                  : null,
-              onTap: _openCompose,
-              child: Container(
-                width: 36,
-                height: 36,
-                decoration: BoxDecoration(
-                  color: AppColors.surfaceAlt,
-                  borderRadius: const BorderRadius.all(Radius.circular(12)),
-                  border: Border.all(color: AppColors.divider),
-                ),
-                child: Icon(
-                  Icons.edit_square,
-                  size: 17,
-                  color: AppColors.primaryRed,
-                ),
-              ),
-            ),
-        ],
-      ),
-    );
-  }
-
-  // ── Search bar ──────────────────────────────────────────────────────────────
-  Widget _buildSearchBar() {
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(16, 0, 16, 10),
+      padding: const EdgeInsets.fromLTRB(20, 0, 20, 12),
       child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 12),
+        height: 37,
+        padding: const EdgeInsets.symmetric(horizontal: 16),
         decoration: BoxDecoration(
-          color: AppColors.surfaceAlt,
-          borderRadius: const BorderRadius.all(Radius.circular(13)),
+          color: ChatsColors.fill,
+          borderRadius: BorderRadius.circular(999),
         ),
         child: Row(
           children: [
-            Icon(
-              Icons.search_rounded,
-              size: 17,
-              color: AppColors.secondaryText,
-            ),
+            Icon(Icons.search_rounded, size: 16, color: ChatsColors.muted),
             const SizedBox(width: 8),
             Expanded(
               child: TextField(
                 key: ValueKey('chat-search-${_filter.name}'),
                 onChanged: (v) => setState(() => _query = v),
-                style: TextStyle(fontSize: 14, color: AppColors.text),
+                style: figtree(
+                  size: 13,
+                  weight: FontWeight.w400,
+                  color: ChatsColors.text,
+                ),
                 decoration: InputDecoration(
-                  hintText: _query.isEmpty
-                      ? (_filter == _ChatInboxFilter.students
-                            ? S.searchPeople
-                            : S.searchClubChats)
-                      : null,
-                  hintStyle: TextStyle(
-                    fontSize: 14,
-                    color: AppColors.secondaryText,
+                  hintText: S.searchConversations,
+                  hintStyle: figtree(
+                    size: 13,
+                    weight: FontWeight.w400,
+                    color: ChatsColors.muted,
                   ),
                   isDense: true,
-                  // The search pill already paints the background; without this
-                  // the global inputDecorationTheme adds a grey fill on top.
+                  // The pill paints the fill; without this the global
+                  // inputDecorationTheme stacks a second one on top.
                   filled: false,
                   border: InputBorder.none,
                   enabledBorder: InputBorder.none,
@@ -827,7 +759,7 @@ class _ChatsScreenState extends State<ChatsScreen> {
                   disabledBorder: InputBorder.none,
                   errorBorder: InputBorder.none,
                   focusedErrorBorder: InputBorder.none,
-                  contentPadding: const EdgeInsets.symmetric(vertical: 11),
+                  contentPadding: EdgeInsets.zero,
                 ),
               ),
             ),
@@ -837,12 +769,11 @@ class _ChatsScreenState extends State<ChatsScreen> {
     );
   }
 
-  // ── A single thread row ─────────────────────────────────────────────────────
-  Widget _row(ChatThreadSummary t) {
+  // ── One inbox row ──────────────────────────────────────────────────────────
+  /// `chat-row` 243:491 — 72pt tall, a 44pt avatar, a hairline underneath and
+  /// a faint wash when unread. No card, no outline, no shadow.
+  Widget _designThreadRow(ChatThreadSummary t) {
     final unread = t.unread;
-    final isPinnedClubRoom =
-        authService.currentAdmin != null &&
-        t.threadId == chatStore.managedCommunityThreadId(_myId);
     final club = t.clubId == null ? null : clubForId(t.clubId!);
     final groupMembers = t.isGroup
         ? chatStore.groupParticipants(t.threadId)
@@ -851,179 +782,165 @@ class _ChatsScreenState extends State<ChatsScreen> {
         .where((id) => id != _myId)
         .toList();
     final title = _titleFor(t);
-    final inbox = chatStore.clubInboxForThread(t.threadId);
-    final showStudentInboxAvatar = inbox != null && inbox.profileId != _myId;
-    final clubColor = club == null
-        ? AppColors.primaryRed
-        : _colorForClub(club.id);
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 2),
-      child: Material(
-        // Rows read as one continuous list: no outline or shadow boxing each
-        // conversation off. Unread threads keep a faint tint for emphasis.
-        color: unread > 0
-            ? clubColor.withValues(alpha: themeService.isDark ? 0.12 : 0.06)
-            : Colors.transparent,
-        borderRadius: const BorderRadius.all(Radius.circular(18)),
-        clipBehavior: Clip.antiAlias,
-        child: InkWell(
-          onTap: () => _openThread(
-            t.threadId,
-            recipient: t.peerId == null ? null : _userForId(t.peerId!),
+    return _designRowShell(
+      rowKey: ValueKey('chat-thread-row-${t.threadId}'),
+      unread: unread > 0,
+      onTap: () => _openThread(
+        t.threadId,
+        recipient: t.peerId == null ? null : _userForId(t.peerId!),
+      ),
+      avatar: club != null
+          ? ClubAvatar(
+              clubId: club.id,
+              clubName: club.name,
+              color: _colorForClub(club.id),
+              imageUrl: club.logoUrl,
+              size: 44,
+              fontSize: 17,
+              shape: 'circle',
+            )
+          : t.isGroup
+          ? GroupAvatarStack(
+              memberIds: visibleGroupMembers,
+              nameForUser: _nameForUser,
+              photoPath: chatStore.groupForThread(t.threadId)?.photoUrl,
+              size: 44,
+            )
+          : UserAvatar(
+              userId: t.peerId ?? '',
+              name: title,
+              size: 44,
+              fontSize: 17,
+            ),
+      titleKey: ValueKey('chat-thread-profile-name-${t.threadId}'),
+      title: title,
+      subtitle: _threadSubtitle(t),
+      trailing: Column(
+        crossAxisAlignment: CrossAxisAlignment.end,
+        children: [
+          Text(
+            t.lastMessage == null ? '' : _rowTime(t.lastMessage!.createdAt),
+            style: figtree(
+              size: 11,
+              weight: unread > 0 ? FontWeight.w600 : FontWeight.w500,
+              color: unread > 0 ? ChatsColors.accentText : ChatsColors.muted,
+            ),
           ),
-          child: Container(
-            padding: const EdgeInsets.fromLTRB(12, 11, 13, 11),
+          const Spacer(),
+          if (unread > 0)
+            Container(
+              key: ValueKey('chat-thread-unread-${t.threadId}'),
+              constraints: const BoxConstraints(minWidth: 18),
+              height: 18,
+              padding: const EdgeInsets.symmetric(horizontal: 5),
+              decoration: BoxDecoration(
+                color: ChatsColors.accent,
+                borderRadius: BorderRadius.circular(9),
+              ),
+              // Align with both factors, not Container.alignment: a bare
+              // Align expands to the loose constraints the trailing column
+              // hands down, which stretched the badge into a 60pt pill.
+              child: Align(
+                widthFactor: 1,
+                heightFactor: 1,
+                child: Text(
+                  unread > 9 ? '9+' : '$unread',
+                  style: figtree(
+                    size: 10,
+                    weight: FontWeight.w700,
+                    color: ChatsColors.onAccent,
+                  ),
+                ),
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+
+  /// A directory hit with no thread yet. Same row, no time or badge.
+  Widget _designPersonRow(User user) {
+    final displayName = userState.displayNameFor(user.id, user.name);
+    final academicSummary = userState.academicSummaryFor(user.id);
+    return _designRowShell(
+      rowKey: ValueKey('chat-person-result-${user.id}'),
+      unread: false,
+      onTap: () => _openDmWith(user),
+      avatar: UserAvatar(
+        userId: user.id,
+        name: displayName,
+        size: 44,
+        fontSize: 17,
+      ),
+      title: displayName,
+      subtitle: academicSummary.isEmpty ? user.email : academicSummary,
+    );
+  }
+
+  Widget _designRowShell({
+    required Key rowKey,
+    required bool unread,
+    required VoidCallback onTap,
+    required Widget avatar,
+    required String title,
+    required String subtitle,
+    Key? titleKey,
+    Widget? trailing,
+  }) {
+    final titleText = Text(
+      title,
+      maxLines: 1,
+      overflow: TextOverflow.ellipsis,
+      style: figtree(
+        size: 14,
+        weight: unread ? FontWeight.w700 : FontWeight.w600,
+        color: ChatsColors.text,
+        letterSpacing: -0.1,
+      ),
+    );
+    return Material(
+      color: unread ? ChatsColors.unreadRow : Colors.transparent,
+      child: InkWell(
+        key: rowKey,
+        onTap: onTap,
+        child: DecoratedBox(
+          decoration: BoxDecoration(
+            border: Border(bottom: BorderSide(color: ChatsColors.border)),
+          ),
+          child: SizedBox(
+            height: 72,
             child: Row(
               children: [
-                if (showStudentInboxAvatar)
-                  UserAvatar(
-                    userId: inbox.profileId,
-                    name: title,
-                    size: 48,
-                    fontSize: 18,
-                  )
-                else if (club != null)
-                  ClubAvatar(
-                    clubId: club.id,
-                    clubName: club.name,
-                    color: _colorForClub(club.id),
-                    imageUrl: club.logoUrl,
-                    size: 48,
-                    fontSize: 18,
-                    borderRadius: 15,
-                  )
-                else if (t.isGroup)
-                  GroupAvatarStack(
-                    memberIds: visibleGroupMembers,
-                    nameForUser: _nameForUser,
-                    photoPath: chatStore.groupForThread(t.threadId)?.photoUrl,
-                    size: 48,
-                  )
-                else
-                  UserAvatar(
-                    userId: t.peerId ?? '',
-                    name: title,
-                    size: 48,
-                    fontSize: 18,
-                  ),
+                const SizedBox(width: 20),
+                SizedBox(width: 44, height: 44, child: avatar),
                 const SizedBox(width: 12),
                 Expanded(
                   child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Row(
-                        crossAxisAlignment: CrossAxisAlignment.baseline,
-                        textBaseline: TextBaseline.alphabetic,
-                        children: [
-                          Expanded(
-                            child: KeyedSubtree(
-                              key: ValueKey(
-                                'chat-thread-profile-name-${t.threadId}',
-                              ),
-                              child: Text(
-                                title,
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
-                                style: TextStyle(
-                                  fontSize: 14,
-                                  fontWeight: unread > 0
-                                      ? FontWeight.w800
-                                      : FontWeight.w700,
-                                  letterSpacing: -0.2,
-                                  color: AppColors.text,
-                                ),
-                              ),
-                            ),
-                          ),
-                          if (t.isClubInbox) ...[
-                            const SizedBox(width: 6),
-                            Semantics(
-                              label: S.privateSoloChat,
-                              child: Icon(
-                                Icons.lock_rounded,
-                                size: 14,
-                                color: AppColors.primaryRed,
-                              ),
-                            ),
-                          ],
-                          const SizedBox(width: 8),
-                          if (isPinnedClubRoom) ...[
-                            Tooltip(
-                              message: S.pinnedLabel,
-                              child: Icon(
-                                Icons.push_pin_rounded,
-                                key: const ValueKey('club-general-room-pinned'),
-                                size: 13,
-                                color: AppColors.primaryRed,
-                              ),
-                            ),
-                            const SizedBox(width: 6),
-                          ],
-                          Text(
-                            t.lastMessage == null
-                                ? ''
-                                : _rowTime(t.lastMessage!.createdAt),
-                            style: TextStyle(
-                              fontSize: 10,
-                              fontWeight: unread > 0
-                                  ? FontWeight.w700
-                                  : FontWeight.w500,
-                              color: unread > 0
-                                  ? AppColors.primaryRed
-                                  : AppColors.secondaryText,
-                            ),
-                          ),
-                        ],
-                      ),
+                      titleKey == null
+                          ? titleText
+                          : KeyedSubtree(key: titleKey, child: titleText),
                       const SizedBox(height: 4),
-                      Row(
-                        children: [
-                          Expanded(
-                            child: Text(
-                              _threadSubtitle(t),
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                              style: TextStyle(
-                                fontSize: 12,
-                                fontWeight: unread > 0
-                                    ? FontWeight.w600
-                                    : FontWeight.w400,
-                                color: unread > 0
-                                    ? AppColors.text
-                                    : AppColors.secondaryText,
-                              ),
-                            ),
-                          ),
-                          if (unread > 0) ...[
-                            const SizedBox(width: 8),
-                            Container(
-                              constraints: const BoxConstraints(minWidth: 18),
-                              height: 18,
-                              padding: const EdgeInsets.symmetric(
-                                horizontal: 5,
-                              ),
-                              decoration: BoxDecoration(
-                                color: AppColors.primaryRed,
-                                borderRadius: const BorderRadius.all(
-                                  Radius.circular(9),
-                                ),
-                              ),
-                              alignment: Alignment.center,
-                              child: Text(
-                                unread > 9 ? '9+' : '$unread',
-                                style: const TextStyle(
-                                  fontSize: 10,
-                                  fontWeight: FontWeight.w800,
-                                  color: Colors.white,
-                                ),
-                              ),
-                            ),
-                          ],
-                        ],
+                      Text(
+                        subtitle,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: figtree(
+                          size: 13,
+                          weight: unread ? FontWeight.w500 : FontWeight.w400,
+                          color: unread ? ChatsColors.text : ChatsColors.muted,
+                        ),
                       ),
                     ],
                   ),
                 ),
+                if (trailing != null) ...[
+                  const SizedBox(width: 12),
+                  SizedBox(width: 60, height: 37, child: trailing),
+                ],
+                const SizedBox(width: 20),
               ],
             ),
           ),
@@ -1032,81 +949,98 @@ class _ChatsScreenState extends State<ChatsScreen> {
     );
   }
 
-  Widget _buildPeopleSearchResults(List<User> people) {
-    if (people.isEmpty) {
-      return Center(
-        child: Text(
-          S.noOneMatches,
-          style: TextStyle(fontSize: 14, color: AppColors.secondaryText),
-        ),
-      );
-    }
-    return ListView.builder(
-      padding: const EdgeInsets.only(bottom: 120),
-      itemCount: people.length + 1,
-      itemBuilder: (context, index) {
-        if (index == 0) {
-          return Padding(
-            padding: const EdgeInsets.fromLTRB(16, 0, 16, 6),
-            child: _sectionLabel(S.messagesLabel),
-          );
-        }
-        return _personSearchResult(people[index - 1]);
-      },
+  // ── Clubs-tab search ───────────────────────────────────────────────────────
+  // `club-chats-search` 141:3 — the header collapses to a chevron, the tab
+  // pill and a Cancel; the results are club rows with the matched run picked
+  // out in the accent.
+
+  Widget _buildClubSearchHeader() {
+    return SizedBox(
+      height: 52,
+      child: Row(
+        children: [
+          const SizedBox(width: 16),
+          GestureDetector(
+            key: const ValueKey('club-search-back'),
+            behavior: HitTestBehavior.opaque,
+            onTap: () => setState(() => _query = ''),
+            child: SizedBox(
+              width: 24,
+              height: 52,
+              child: Icon(
+                Icons.chevron_left_rounded,
+                size: 24,
+                color: ChatsColors.accentText,
+              ),
+            ),
+          ),
+          Expanded(
+            child: Center(
+              child: Text(
+                _filterLabel,
+                style: figtree(
+                  size: 13,
+                  weight: FontWeight.w700,
+                  color: ChatsColors.accentText,
+                ),
+              ),
+            ),
+          ),
+          GestureDetector(
+            key: const ValueKey('club-search-cancel'),
+            behavior: HitTestBehavior.opaque,
+            onTap: () => setState(() => _query = ''),
+            child: Text(
+              S.cancel,
+              style: figtree(
+                size: 13,
+                weight: FontWeight.w600,
+                color: ChatsColors.accentText,
+              ),
+            ),
+          ),
+          const SizedBox(width: 16),
+        ],
+      ),
     );
   }
 
-  Widget _personSearchResult(User user) {
-    final displayName = userState.displayNameFor(user.id, user.name);
-    final academicSummary = userState.academicSummaryFor(user.id);
-    final subtitle = academicSummary.isEmpty ? user.email : academicSummary;
-    return InkWell(
-      key: ValueKey('chat-person-result-${user.id}'),
-      onTap: () => _openDmWith(user),
+  /// `search-field` 141:18 — same pill, now with a clear button.
+  Widget _buildClubSearchField() {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 4, 16, 8),
       child: Container(
-        padding: const EdgeInsets.fromLTRB(16, 11, 16, 11),
+        height: 38,
+        padding: const EdgeInsets.symmetric(horizontal: 14),
+        decoration: BoxDecoration(
+          color: ChatsColors.fill,
+          borderRadius: BorderRadius.circular(999),
+        ),
         child: Row(
           children: [
-            UserAvatar(
-              userId: user.id,
-              name: displayName,
-              size: 48,
-              fontSize: 18,
-            ),
-            const SizedBox(width: 12),
+            Icon(Icons.search_rounded, size: 16, color: ChatsColors.muted),
+            const SizedBox(width: 10),
             Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    displayName,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: TextStyle(
-                      fontSize: 14,
-                      fontWeight: FontWeight.w700,
-                      color: AppColors.text,
-                    ),
-                  ),
-                  if (subtitle.isNotEmpty) ...[
-                    const SizedBox(height: 4),
-                    Text(
-                      subtitle,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: TextStyle(
-                        fontSize: 12,
-                        color: AppColors.secondaryText,
-                      ),
-                    ),
-                  ],
-                ],
+              child: Text(
+                _query,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: figtree(
+                  size: 13,
+                  weight: FontWeight.w500,
+                  color: ChatsColors.text,
+                ),
               ),
             ),
-            Icon(
-              Icons.chevron_right_rounded,
-              size: 20,
-              color: AppColors.secondaryText,
+            GestureDetector(
+              key: const ValueKey('club-search-clear'),
+              behavior: HitTestBehavior.opaque,
+              onTap: () => setState(() => _query = ''),
+              child: Icon(
+                Icons.cancel_rounded,
+                size: 18,
+                color: ChatsColors.muted,
+              ),
             ),
           ],
         ),
@@ -1114,132 +1048,192 @@ class _ChatsScreenState extends State<ChatsScreen> {
     );
   }
 
-  // ── Empty state ─────────────────────────────────────────────────────────────
-  Widget _buildEmptyState() {
-    final showingClubs = _filter == _ChatInboxFilter.clubs;
-    return Center(
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(
-            showingClubs
-                ? Icons.groups_outlined
-                : Icons.chat_bubble_outline_rounded,
-            size: 52,
-            color: AppColors.secondaryText.withValues(alpha: 0.5),
+  /// `result-club` 141:34 — 64pt rows with the club logo, a member/unread line
+  /// and a chevron.
+  Widget _buildClubSearchResults(List<ChatThreadSummary> threads) {
+    if (threads.isEmpty) {
+      return Center(
+        child: Text(
+          S.noClubChats,
+          style: figtree(
+            size: 13,
+            weight: FontWeight.w400,
+            color: ChatsColors.muted,
           ),
-          const SizedBox(height: 14),
-          Text(
-            showingClubs ? S.noClubChats : S.noStudentChats,
-            style: TextStyle(
-              fontSize: 15.5,
-              fontWeight: FontWeight.w700,
-              color: AppColors.text,
+        ),
+      );
+    }
+    return ListView.builder(
+      padding: const EdgeInsets.only(bottom: 120),
+      itemCount: threads.length + 1,
+      itemBuilder: (context, index) {
+        if (index == 0) {
+          return Padding(
+            padding: const EdgeInsets.fromLTRB(16, 8, 16, 6),
+            child: Text(
+              S.clubSearchSectionLabel.toUpperCase(),
+              style: figtree(
+                size: 11,
+                weight: FontWeight.w700,
+                color: ChatsColors.muted,
+                letterSpacing: 0.7,
+              ),
+            ),
+          );
+        }
+        final thread = threads[index - 1];
+        final club = thread.clubId == null ? null : clubForId(thread.clubId!);
+        final title = _titleFor(thread);
+        final memberCount = club == null ? 0 : clubMemberCount(club.id);
+        return InkWell(
+          key: ValueKey('club-search-result-${thread.threadId}'),
+          onTap: () => _openThread(thread.threadId),
+          child: SizedBox(
+            height: 64,
+            child: Row(
+              children: [
+                const SizedBox(width: 16),
+                if (club != null)
+                  ClubAvatar(
+                    clubId: club.id,
+                    clubName: club.name,
+                    color: _colorForClub(club.id),
+                    imageUrl: club.logoUrl,
+                    size: 44,
+                    fontSize: 17,
+                    shape: 'circle',
+                  )
+                else
+                  const SizedBox(width: 44, height: 44),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      _highlightedTitle(title),
+                      const SizedBox(height: 3),
+                      Text(
+                        S.clubMembersAndUnread(memberCount, thread.unread),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: figtree(
+                          size: 11,
+                          weight: FontWeight.w500,
+                          color: ChatsColors.muted,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(width: 10),
+                Icon(
+                  Icons.chevron_right_rounded,
+                  size: 18,
+                  color: ChatsColors.muted,
+                ),
+                const SizedBox(width: 16),
+              ],
             ),
           ),
-          const SizedBox(height: 6),
-          Text(
-            showingClubs ? S.noClubChatsHint : S.noStudentChatsHint,
-            textAlign: TextAlign.center,
-            style: TextStyle(
-              fontSize: 12.5,
-              height: 1.5,
-              color: AppColors.secondaryText,
-            ),
-          ),
-        ],
-      ),
+        );
+      },
     );
   }
-}
 
-class _ChatBackdropPainter extends CustomPainter {
-  final bool clubs;
-  final Color burgundy;
-  final Color gold;
-  final bool isDark;
-
-  const _ChatBackdropPainter({
-    required this.clubs,
-    required this.burgundy,
-    required this.gold,
-    required this.isDark,
-  });
-
-  @override
-  void paint(Canvas canvas, Size size) {
-    final burgundyPaint = Paint()
-      ..color = burgundy.withValues(alpha: isDark ? 0.11 : 0.07)
-      ..style = PaintingStyle.stroke
-      ..strokeWidth = 1.1;
-    final goldPaint = Paint()
-      ..color = gold.withValues(alpha: isDark ? 0.12 : 0.09)
-      ..style = PaintingStyle.stroke
-      ..strokeWidth = 1;
-
-    if (clubs) {
-      // Interlocking arches echo campus colonnades and club communities.
-      for (var row = 0; row < 6; row++) {
-        final y = 205.0 + (row * 116);
-        final offset = row.isEven ? -34.0 : 24.0;
-        for (var column = 0; column < 4; column++) {
-          final x = offset + (column * 126);
-          canvas.drawArc(
-            Rect.fromLTWH(x, y, 92, 92),
-            3.14,
-            3.14,
-            false,
-            burgundyPaint,
-          );
-          canvas.drawCircle(Offset(x + 46, y + 47), 3.2, goldPaint);
-        }
-      }
-      final ribbon = Path()
-        ..moveTo(size.width * .68, 0)
-        ..quadraticBezierTo(size.width * .94, 150, size.width * .74, 310)
-        ..quadraticBezierTo(size.width * .56, 450, size.width, 590);
-      canvas.drawPath(ribbon, goldPaint..strokeWidth = 1.4);
-    } else {
-      // A sparse network of paths and meeting points for direct conversations.
-      final points = <Offset>[
-        Offset(-18, size.height * .28),
-        Offset(size.width * .22, size.height * .35),
-        Offset(size.width * .72, size.height * .27),
-        Offset(size.width + 18, size.height * .38),
-        Offset(size.width * .12, size.height * .68),
-        Offset(size.width * .55, size.height * .60),
-        Offset(size.width * .91, size.height * .76),
-      ];
-      final path = Path()..moveTo(points.first.dx, points.first.dy);
-      for (var i = 1; i < points.length; i++) {
-        final previous = points[i - 1];
-        final point = points[i];
-        path.quadraticBezierTo(
-          (previous.dx + point.dx) / 2,
-          previous.dy - 34,
-          point.dx,
-          point.dy,
-        );
-      }
-      canvas.drawPath(path, burgundyPaint);
-      for (var i = 1; i < points.length - 1; i++) {
-        canvas.drawCircle(points[i], i.isEven ? 5 : 3.5, goldPaint);
-        canvas.drawCircle(
-          points[i],
-          1.4,
-          burgundyPaint..style = PaintingStyle.fill,
-        );
-        burgundyPaint.style = PaintingStyle.stroke;
-      }
+  /// `141:37` — the part of the name that matched is accent-coloured.
+  Widget _highlightedTitle(String title) {
+    final needle = _query.trim().toLowerCase();
+    final base = figtree(
+      size: 14,
+      weight: FontWeight.w600,
+      color: ChatsColors.text,
+    );
+    final at = needle.isEmpty ? -1 : title.toLowerCase().indexOf(needle);
+    if (at < 0) {
+      return Text(
+        title,
+        maxLines: 1,
+        overflow: TextOverflow.ellipsis,
+        style: base,
+      );
     }
+    return Text.rich(
+      TextSpan(
+        children: [
+          if (at > 0) TextSpan(text: title.substring(0, at)),
+          TextSpan(
+            text: title.substring(at, at + needle.length),
+            style: base.copyWith(
+              color: ChatsColors.accentText,
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+          if (at + needle.length < title.length)
+            TextSpan(text: title.substring(at + needle.length)),
+        ],
+      ),
+      maxLines: 1,
+      overflow: TextOverflow.ellipsis,
+      style: base,
+    );
   }
 
-  @override
-  bool shouldRepaint(covariant _ChatBackdropPainter oldDelegate) {
-    return clubs != oldDelegate.clubs ||
-        burgundy != oldDelegate.burgundy ||
-        gold != oldDelegate.gold ||
-        isDark != oldDelegate.isDark;
+  // ── Empty state ────────────────────────────────────────────────────────────
+  // The CHATS section has no empty frame for the student inbox, so this is a
+  // quiet line in the area's own type and colors rather than an invention.
+  Widget _buildDesignEmpty(bool showingClubs) {
+    // `club-chats-empty` 140:31 — the Clubs tab has a designed empty state
+    // with two routes out of it. The Friends tab has none, so it keeps a
+    // quiet line.
+    if (showingClubs && _query.trim().isEmpty) {
+      return ClubChatsEmptyState(
+        onExploreClubs: widget.onSelectTab == null
+            ? null
+            : () => widget.onSelectTab!(2),
+        onBrowseEvents: widget.onSelectTab == null
+            ? null
+            : () => widget.onSelectTab!(1),
+      );
+    }
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 40),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(
+              showingClubs
+                  ? Icons.groups_outlined
+                  : Icons.chat_bubble_outline_rounded,
+              size: 40,
+              color: ChatsColors.muted,
+            ),
+            const SizedBox(height: 14),
+            Text(
+              showingClubs ? S.noClubChats : S.noStudentChats,
+              textAlign: TextAlign.center,
+              style: figtree(
+                size: 15,
+                weight: FontWeight.w700,
+                color: ChatsColors.text,
+              ),
+            ),
+            const SizedBox(height: 6),
+            Text(
+              showingClubs ? S.noClubChatsHint : S.noStudentChatsHint,
+              textAlign: TextAlign.center,
+              style: figtree(
+                size: 13,
+                weight: FontWeight.w400,
+                color: ChatsColors.muted,
+                height: 1.5,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
   }
 }
 
@@ -1275,6 +1269,9 @@ class _NewChatSheetState extends State<_NewChatSheet> {
     if (mounted) setState(() {});
   }
 
+  // The handoff has no compose sheet, so this keeps its own structure and
+  // borrows the area's palette, type and row shapes from `add-member`
+  // (`105:329`) rather than handing the compose flow off into the old chrome.
   @override
   Widget build(BuildContext context) {
     final query = _query.trim().toLowerCase();
@@ -1295,99 +1292,75 @@ class _NewChatSheetState extends State<_NewChatSheet> {
     return Container(
       height: MediaQuery.sizeOf(context).height * 0.82,
       decoration: BoxDecoration(
-        color: AppColors.card,
-        borderRadius: const BorderRadius.vertical(top: Radius.circular(22)),
+        color: ChatsColors.card,
+        borderRadius: const BorderRadius.vertical(
+          top: Radius.circular(kChatSheetRadius),
+        ),
       ),
       child: Column(
         children: [
           const SizedBox(height: 10),
           Container(
-            width: 38,
-            height: 4,
+            width: 36,
+            height: 5,
             decoration: BoxDecoration(
-              color: AppColors.divider,
-              borderRadius: BorderRadius.circular(2),
+              color: ChatsColors.border,
+              borderRadius: BorderRadius.circular(3),
             ),
           ),
-          const SizedBox(height: 14),
+          const SizedBox(height: 18),
           Text(
             S.newChat,
-            style: TextStyle(
-              fontSize: 16,
-              fontWeight: FontWeight.w800,
-              color: AppColors.text,
+            style: figtree(
+              size: 17,
+              weight: FontWeight.w700,
+              color: ChatsColors.text,
             ),
           ),
-          const SizedBox(height: 12),
+          const SizedBox(height: 16),
           AnimatedSize(
             duration: const Duration(milliseconds: 180),
             child: _selected.isEmpty
                 ? const SizedBox.shrink()
                 : SizedBox(
-                    height: 78,
+                    height: 41,
                     child: ListView.separated(
-                      padding: const EdgeInsets.symmetric(horizontal: 18),
+                      padding: const EdgeInsets.symmetric(horizontal: 16),
                       scrollDirection: Axis.horizontal,
                       itemCount: _selected.length,
-                      separatorBuilder: (_, _) => const SizedBox(width: 12),
+                      separatorBuilder: (_, _) => const SizedBox(width: 8),
                       itemBuilder: (context, index) {
                         final user = _selected.values.elementAt(index);
-                        return SizedBox(
-                          width: 54,
-                          child: Column(
+                        return Container(
+                          height: 29,
+                          padding: const EdgeInsets.only(left: 12, right: 6),
+                          decoration: BoxDecoration(
+                            color: ChatsColors.accent.withValues(alpha: 0.10),
+                            borderRadius: BorderRadius.circular(999),
+                          ),
+                          child: Row(
                             children: [
-                              Stack(
-                                clipBehavior: Clip.none,
-                                children: [
-                                  UserAvatar(
-                                    userId: user.id,
-                                    name: user.name,
-                                    size: 44,
-                                    fontSize: 16,
-                                  ),
-                                  Positioned(
-                                    right: -4,
-                                    top: -4,
-                                    child: InkWell(
-                                      key: ValueKey(
-                                        'remove-recipient-${user.id}',
-                                      ),
-                                      onTap: () => setState(
-                                        () => _selected.remove(user.id),
-                                      ),
-                                      child: Container(
-                                        width: 19,
-                                        height: 19,
-                                        decoration: BoxDecoration(
-                                          color: AppColors.text,
-                                          shape: BoxShape.circle,
-                                          border: Border.all(
-                                            color: AppColors.card,
-                                            width: 2,
-                                          ),
-                                        ),
-                                        child: Icon(
-                                          Icons.close_rounded,
-                                          size: 12,
-                                          color: AppColors.card,
-                                        ),
-                                      ),
-                                    ),
-                                  ),
-                                ],
-                              ),
-                              const SizedBox(height: 3),
                               Text(
                                 userState
                                     .displayNameFor(user.id, user.name)
                                     .split(' ')
                                     .first,
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
-                                style: TextStyle(
-                                  fontSize: 10.5,
-                                  fontWeight: FontWeight.w600,
-                                  color: AppColors.text,
+                                style: figtree(
+                                  size: 12,
+                                  weight: FontWeight.w600,
+                                  color: ChatsColors.accentText,
+                                ),
+                              ),
+                              const SizedBox(width: 6),
+                              GestureDetector(
+                                key: ValueKey('remove-recipient-${user.id}'),
+                                behavior: HitTestBehavior.opaque,
+                                onTap: () =>
+                                    setState(() => _selected.remove(user.id)),
+                                child: Icon(
+                                  Icons.cancel_rounded,
+                                  size: 14,
+                                  color: ChatsColors.accentText,
                                 ),
                               ),
                             ],
@@ -1398,43 +1371,50 @@ class _NewChatSheetState extends State<_NewChatSheet> {
                   ),
           ),
           Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 18),
-            child: TextField(
-              key: const ValueKey('new-chat-search'),
-              autofocus: false,
-              onChanged: (v) => setState(() => _query = v),
-              style: TextStyle(fontSize: 14, color: AppColors.text),
-              decoration: InputDecoration(
-                hintText: _query.isEmpty ? S.searchPeople : null,
-                hintStyle: TextStyle(
-                  fontSize: 14,
-                  color: AppColors.secondaryText,
-                ),
-                prefixIcon: Icon(
-                  Icons.search_rounded,
-                  size: 20,
-                  color: AppColors.secondaryText,
-                ),
-                filled: true,
-                fillColor: AppColors.surfaceAlt,
-                isDense: true,
-                contentPadding: const EdgeInsets.symmetric(vertical: 10),
-                border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(14),
-                  borderSide: BorderSide.none,
-                ),
-                enabledBorder: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(14),
-                  borderSide: BorderSide.none,
-                ),
-                focusedBorder: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(14),
-                  borderSide: BorderSide.none,
-                ),
-                disabledBorder: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(14),
-                  borderSide: BorderSide.none,
-                ),
+            padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
+            child: Container(
+              height: 38,
+              padding: const EdgeInsets.symmetric(horizontal: 14),
+              decoration: BoxDecoration(
+                color: ChatsColors.fill,
+                borderRadius: BorderRadius.circular(999),
+              ),
+              child: Row(
+                children: [
+                  Icon(
+                    Icons.search_rounded,
+                    size: 16,
+                    color: ChatsColors.muted,
+                  ),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: TextField(
+                      key: const ValueKey('new-chat-search'),
+                      autofocus: false,
+                      onChanged: (v) => setState(() => _query = v),
+                      style: figtree(
+                        size: 13,
+                        weight: FontWeight.w500,
+                        color: ChatsColors.text,
+                      ),
+                      decoration: InputDecoration(
+                        hintText: S.chatsSearchContacts,
+                        hintStyle: figtree(
+                          size: 13,
+                          weight: FontWeight.w400,
+                          color: ChatsColors.muted,
+                        ),
+                        isDense: true,
+                        filled: false,
+                        border: InputBorder.none,
+                        enabledBorder: InputBorder.none,
+                        focusedBorder: InputBorder.none,
+                        disabledBorder: InputBorder.none,
+                        contentPadding: EdgeInsets.zero,
+                      ),
+                    ),
+                  ),
+                ],
               ),
             ),
           ),
@@ -1444,9 +1424,10 @@ class _NewChatSheetState extends State<_NewChatSheet> {
                 ? Center(
                     child: Text(
                       S.noOneMatches,
-                      style: TextStyle(
-                        fontSize: 13,
-                        color: AppColors.secondaryText,
+                      style: figtree(
+                        size: 13,
+                        weight: FontWeight.w400,
+                        color: ChatsColors.muted,
                       ),
                     ),
                   )
@@ -1468,22 +1449,21 @@ class _NewChatSheetState extends State<_NewChatSheet> {
                             _selected[user.id] = user;
                           }
                         }),
-                        child: Padding(
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 18,
-                            vertical: 9,
-                          ),
+                        child: SizedBox(
+                          height: 54,
                           child: Row(
                             children: [
+                              const SizedBox(width: 16),
                               UserAvatar(
                                 userId: user.id,
                                 name: user.name,
-                                size: 40,
-                                fontSize: 15,
+                                size: 38,
+                                fontSize: 14,
                               ),
                               const SizedBox(width: 12),
                               Expanded(
                                 child: Column(
+                                  mainAxisAlignment: MainAxisAlignment.center,
                                   crossAxisAlignment: CrossAxisAlignment.start,
                                   children: [
                                     Text(
@@ -1493,50 +1473,55 @@ class _NewChatSheetState extends State<_NewChatSheet> {
                                       ),
                                       maxLines: 1,
                                       overflow: TextOverflow.ellipsis,
-                                      style: TextStyle(
-                                        fontSize: 14,
-                                        fontWeight: FontWeight.w600,
-                                        color: AppColors.text,
+                                      style: figtree(
+                                        size: 14,
+                                        weight: FontWeight.w600,
+                                        color: ChatsColors.text,
                                       ),
                                     ),
-                                    if (academicSummary.isNotEmpty)
+                                    if (academicSummary.isNotEmpty) ...[
+                                      const SizedBox(height: 2),
                                       Text(
                                         academicSummary,
                                         maxLines: 1,
                                         overflow: TextOverflow.ellipsis,
-                                        style: TextStyle(
-                                          fontSize: 10.5,
-                                          fontWeight: FontWeight.w500,
-                                          color: AppColors.secondaryText,
+                                        style: figtree(
+                                          size: 11,
+                                          weight: FontWeight.w400,
+                                          color: ChatsColors.muted,
                                         ),
                                       ),
+                                    ],
                                   ],
                                 ),
                               ),
+                              const SizedBox(width: 12),
                               AnimatedContainer(
                                 duration: const Duration(milliseconds: 140),
-                                width: 23,
-                                height: 23,
+                                width: 22,
+                                height: 22,
+                                alignment: Alignment.center,
                                 decoration: BoxDecoration(
                                   color: selected
-                                      ? AppColors.primaryRed
+                                      ? ChatsColors.accent
                                       : Colors.transparent,
                                   shape: BoxShape.circle,
                                   border: Border.all(
                                     color: selected
-                                        ? AppColors.primaryRed
-                                        : AppColors.secondaryText,
+                                        ? ChatsColors.accent
+                                        : ChatsColors.border,
                                     width: 1.5,
                                   ),
                                 ),
                                 child: selected
                                     ? const Icon(
                                         Icons.check_rounded,
-                                        size: 15,
-                                        color: Colors.white,
+                                        size: 14,
+                                        color: ChatsColors.onAccent,
                                       )
                                     : null,
                               ),
+                              const SizedBox(width: 16),
                             ],
                           ),
                         ),
@@ -1547,32 +1532,15 @@ class _NewChatSheetState extends State<_NewChatSheet> {
           SafeArea(
             top: false,
             child: Padding(
-              padding: const EdgeInsets.fromLTRB(18, 10, 18, 12),
-              child: SizedBox(
-                width: double.infinity,
-                height: 48,
-                child: FilledButton(
-                  key: const ValueKey('new-chat-continue'),
-                  onPressed: _selected.isEmpty
-                      ? null
-                      : () => widget.onContinue(_selected.values.toList()),
-                  style: FilledButton.styleFrom(
-                    backgroundColor: AppColors.primaryRed,
-                    disabledBackgroundColor: AppColors.divider,
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(14),
-                    ),
-                  ),
-                  child: Text(
-                    _selected.length <= 1
-                        ? AppLocalizations.of(context)!.startChat
-                        : AppLocalizations.of(context)!.next,
-                    style: const TextStyle(
-                      fontSize: 14,
-                      fontWeight: FontWeight.w800,
-                    ),
-                  ),
-                ),
+              padding: const EdgeInsets.fromLTRB(16, 10, 16, 12),
+              child: ChatsPrimaryButton(
+                key: const ValueKey('new-chat-continue'),
+                label: _selected.length <= 1
+                    ? AppLocalizations.of(context)!.startChat
+                    : AppLocalizations.of(context)!.next,
+                onTap: _selected.isEmpty
+                    ? null
+                    : () => widget.onContinue(_selected.values.toList()),
               ),
             ),
           ),

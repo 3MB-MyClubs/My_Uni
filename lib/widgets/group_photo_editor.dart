@@ -77,7 +77,7 @@ Future<String?> showGroupPhotoEditor(
 cropme.CropperThemeData groupPhotoTiltTheme() {
   final isTurkish = localeService.languageCode == 'tr';
   return cropme.CropperThemeData(
-    backgroundColor: const Color(0xFF0C0608),
+    backgroundColor: const Color(0xFF121212),
     accentColor: AppColors.primaryRed,
     cropButtonColor: AppColors.primaryRed,
     cropButtonTextColor: Colors.white,
@@ -93,7 +93,7 @@ ProImageEditorConfigs groupPhotoEditorConfigs() {
   final editorTheme = ThemeData(
     brightness: Brightness.dark,
     useMaterial3: true,
-    scaffoldBackgroundColor: const Color(0xFF0C0608),
+    scaffoldBackgroundColor: const Color(0xFF121212),
     colorScheme: ColorScheme.fromSeed(
       seedColor: AppColors.primaryRed,
       brightness: Brightness.dark,

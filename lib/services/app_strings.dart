@@ -1191,4 +1191,260 @@ class S {
       _t('No clubs yet. Find one to join!', 'Henüz kulüp yok. Birine katıl!');
   static String get noUpcomingEventsLine =>
       _t('Nothing on the calendar yet.', 'Takvimde henüz bir şey yok.');
+
+  // ── CHATS area (ClubUp-Desings handoff) ────────────────────────────────────
+  // The header dropdown on `chats-light` 243:475. `S.clubChats` /
+  // `S.studentChats` are the old segmented control's labels and say
+  // "Clubs" / "Students"; the handoff says "Clubs" / "Friends".
+  static String get chatsTabClubs => _t('Clubs', 'Kulüpler');
+  static String get chatsTabFriends => _t('Friends', 'Arkadaşlar');
+
+  /// `search-bar` placeholder on `chats-light` 243:489.
+  static String get searchConversations =>
+      _t('Search conversations…', 'Sohbetlerde ara…');
+
+  /// The three round quick actions on `group-info` 104:36.
+  static String get chatsMuteAction => _t('Mute', 'Sessize al');
+  static String get chatsUnmuteAction => _t('Unmute', 'Sesi aç');
+  static String get chatsMediaAction => _t('Media', 'Medya');
+
+  /// Card labels on `group-info` 104:50 / 104:53 and `edit-group-info`
+  /// 107:37 / 107:42.
+  static String get chatsDescriptionLabel => _t('Description', 'Açıklama');
+  static String get chatsMembersLabel => _t('Members', 'Üyeler');
+  static String get chatsGroupNameLabel => _t('Group Name', 'Grup Adı');
+  static String chatsMembersCount(int count) =>
+      _t('Members ($count)', 'Üyeler ($count)');
+  static String get chatsAddMemberRow => _t('Add member', 'Üye ekle');
+
+  /// A group description is **device-local** — `ChatGroup` has no such field,
+  /// so there is nothing to sync it with. See `chat_group_prefs.dart`.
+  static String get chatsDescriptionHint =>
+      _t('Add a description…', 'Bir açıklama ekle…');
+  static String get chatsDescriptionLocalNote =>
+      _t('Saved on this device only.', 'Yalnızca bu cihazda kaydedilir.');
+
+  /// `group-menu` sheet rows, 105:62.
+  static String get chatsEditGroupInfo =>
+      _t('Edit Group Info', 'Grup Bilgisini Düzenle');
+  static String get chatsAddToFavorites =>
+      _t('Add to Favorites', 'Favorilere Ekle');
+  static String get chatsRemoveFromFavorites =>
+      _t('Remove from Favorites', 'Favorilerden Çıkar');
+  static String get chatsMuteNotifications =>
+      _t('Mute Notifications', 'Bildirimleri Sessize Al');
+  static String get chatsUnmuteNotifications =>
+      _t('Unmute Notifications', 'Bildirimleri Aç');
+  static String get chatsReportGroup => _t('Report Group', 'Grubu Bildir');
+  static String get chatsLeaveGroup => _t('Leave Group', 'Gruptan Ayrıl');
+  static String get chatsExitGroup => _t('Exit Group', 'Gruptan Çık');
+
+  /// `leave-group` dialog, 105:474.
+  static String get chatsLeaveGroupQuestion =>
+      _t('Leave Group?', 'Gruptan ayrılınsın mı?');
+  static String chatsLeaveGroupBody(String name) => _t(
+    'You will no longer receive messages from $name. This action cannot be undone.',
+    '$name grubundan artık mesaj almayacaksın. Bu işlem geri alınamaz.',
+  );
+
+  /// `shared-media` 105:189.
+  static String get chatsSharedMedia => _t('Shared Media', 'Paylaşılan Medya');
+  static String get chatsMediaTab => _t('Media', 'Medya');
+  static String get chatsLinksTab => _t('Links', 'Bağlantılar');
+  static String get chatsDocsTab => _t('Docs', 'Belgeler');
+  static String get chatsNoSharedMedia =>
+      _t('No photos shared yet.', 'Henüz fotoğraf paylaşılmadı.');
+  static String get chatsNoSharedLinks =>
+      _t('No links shared yet.', 'Henüz bağlantı paylaşılmadı.');
+  static String get chatsNoSharedDocs =>
+      _t('No files shared yet.', 'Henüz dosya paylaşılmadı.');
+
+  /// `edit-group-info` 107:35 / 107:83.
+  static String get chatsChangeGroupPhoto =>
+      _t('Change Group Photo', 'Grup Fotoğrafını Değiştir');
+  static String get chatsSaveChanges =>
+      _t('Save Changes', 'Değişiklikleri Kaydet');
+
+  /// `add-member` 105:346 / 105:350 / 105:356.
+  static String get chatsSearchContacts =>
+      _t('Search contacts…', 'Kişilerde ara…');
+  static String get chatsSuggested => _t('Suggested', 'Önerilen');
+
+  /// `member-actions` sheet rows, 108:70.
+  static String get chatsMakeAdmin => _t('Make Admin', 'Yönetici Yap');
+  static String get chatsDismissAdmin =>
+      _t('Dismiss as Admin', 'Yöneticilikten Çıkar');
+  static String get chatsRemoveFromGroup =>
+      _t('Remove from Group', 'Gruptan Çıkar');
+  static String get chatsMemberRole => _t('Member', 'Üye');
+
+  /// `search-results` 110:105 — the in-thread message search.
+  static String get chatsSearchMessages =>
+      _t('Search messages…', 'Mesajlarda ara…');
+  static String chatsResultsFound(int count) => _t(
+    count == 1 ? '1 result found' : '$count results found',
+    '$count sonuç bulundu',
+  );
+  static String get chatsNoResultsFound => _t('No matches', 'Eşleşme yok');
+
+  /// `chats-clubs` 234:412 / 225:27 — the private lane a student shares with a
+  /// club's admins.
+  static String get chatsDirectLane => _t('Direct', 'Özel');
+  static String get chatsDmWithAdmins =>
+      _t('Direct message with admins', 'Yöneticilerle özel mesaj');
+
+  /// `chat-group` header subtitle, 102:144.
+  static String chatsFriendsCount(int count) =>
+      _t(count == 1 ? '1 friend' : '$count friends', '$count arkadaş');
+
+  /// The old create-group screen hard-coded this in English.
+  static String get chatsSelectAtLeastTwo =>
+      _t('Select at least 2', 'En az 2 kişi seç');
+
+  /// `time-ago` on an inbox row, 243:497.
+  static String chatsTimeAgo(String amount) =>
+      _t('$amount ago', '$amount önce');
+  static String get chatsJustNow => _t('now', 'şimdi');
+
+  // ── CLUB CHATS INSIDE area (ClubUp-Desings handoff) ────────────────────────
+  // The lane dropdown on `club-header` 221:363. `S.clubBoardTab` /
+  // `S.clubChatTab` / `S.clubSoloChatTab` are the old segmented control's
+  // labels ("Board" / "Chat" / "Solo Chat"); the handoff reads
+  // "Board" / "Chats" / "Direct".
+  static String get clubLaneBoard => _t('Board', 'Pano');
+  static String get clubLaneChats => _t('Chats', 'Sohbet');
+  static String get clubLaneDirect => _t('Direct', 'Özel');
+
+  /// `announcement-card` 143:240 — the notice's reply count.
+  static String clubReplyCount(int count) =>
+      _t(count == 1 ? '1 reply' : '$count replies', '$count yanıt');
+
+  /// `composer-locked` 143:279.
+  static String get clubOnlyAdminsPost => _t(
+    'Only admins can post in announcements',
+    'Duyurulara yalnızca yöneticiler yazabilir',
+  );
+
+  /// `system-message` 143:37 — the Chats lane's pinned notice.
+  static String clubPinnedByLine(String name) =>
+      _t('$name pinned a message', '$name bir mesaj sabitledi');
+
+  /// `143:66` — the receipt under an outgoing club message.
+  static String clubSeenBy(int count) =>
+      _t('Seen by $count', '$count kişi gördü');
+
+  /// `club-attachment-sheet` 146:298.
+  static String clubShareToTitle(String clubName) =>
+      _t('Share to $clubName', '$clubName ile paylaş');
+  static String clubShareVisibility(int members) => _t(
+    'Everything you send is visible to all $members members',
+    'Gönderdiğin her şey $members üyenin tamamına görünür',
+  );
+  static String get clubShareEvent => _t('Event', 'Etkinlik');
+
+  /// `club-message-actions` 146:3 rows that are not already in `S`.
+  static String get clubPinMessage => _t('Pin Message', 'Mesajı Sabitle');
+  static String get clubUnpinMessage =>
+      _t('Unpin Message', 'Sabitlemeyi Kaldır');
+  static String get clubSaveMessage => _t('Save Message', 'Mesajı Kaydet');
+  static String get clubUnsaveMessage =>
+      _t('Remove from Saved', 'Kayıtlılardan Çıkar');
+  static String get clubReportMessage => _t('Report Message', 'Mesajı Bildir');
+  static String get clubDeleteForEveryone =>
+      _t('Delete for Everyone', 'Herkesten Sil');
+  static String get clubMessageSaved =>
+      _t('Saved on this device.', 'Bu cihazda kaydedildi.');
+
+  /// `club-chats-empty` 140:31.
+  static String get clubChatsEmptyBody => _t(
+    'Join a club and its group chat shows up here. Say hello, plan events and '
+        'share photos.',
+    'Bir kulübe katıl, grup sohbeti burada görünsün. Selam ver, etkinlik '
+        'planla, fotoğraf paylaş.',
+  );
+  static String get clubChatsExploreClubs =>
+      _t('Explore Clubs', 'Kulüpleri Keşfet');
+  static String get clubChatsBrowseEvents =>
+      _t('Browse Events', 'Etkinliklere Bak');
+  static String get clubChatsFriendsHint => _t(
+    'Friends chats live in the Friends tab',
+    'Arkadaş sohbetleri Arkadaşlar sekmesinde',
+  );
+
+  /// `club-chats-search` 141:33 — the section label over club hits.
+  static String get clubSearchSectionLabel => _t('Clubs', 'Kulüpler');
+  static String clubMembersAndUnread(int members, int unread) => _t(
+    unread > 0 ? '$members members · $unread unread' : '$members members',
+    unread > 0 ? '$members üye · $unread okunmamış' : '$members üye',
+  );
+
+  /// `club-member-list` 142:231.
+  static String get clubMembersTitle => _t('Members', 'Üyeler');
+  static String get clubSearchMembers => _t('Search members', 'Üye ara');
+  static String get clubSectionAdmins => _t('Admins', 'Yöneticiler');
+  static String get clubSectionModerators => _t('Moderators', 'Moderatörler');
+  static String get clubSectionMembers => _t('Members', 'Üyeler');
+  static String get clubRoleMod => _t('Mod', 'Mod');
+  static String get clubRoleYou => _t('You', 'Sen');
+  static String get clubCreatedTheClub =>
+      _t('Created the club', 'Kulübü kurdu');
+  static String get clubMemberRole => _t('Member', 'Üye');
+  static String get clubNoMemberMatches =>
+      _t('No members match that name.', 'Bu ada uyan üye yok.');
+
+  /// The Chats lane before anyone has spoken — `club-chat-reply` has no empty
+  /// state of its own.
+  static String get clubChatEmptyLine => _t(
+    'No messages yet. Say hello to the club.',
+    'Henüz mesaj yok. Kulübe merhaba de.',
+  );
+
+  /// `club-chats-empty` 140:36. `S.noClubChats` says "No club conversations
+  /// yet"; the frame is shorter.
+  static String get clubChatsEmptyTitle =>
+      _t('No club chats yet', 'Henüz kulüp sohbeti yok');
+
+  // ── SETTINGS area (`profile-settings` 120:3 / 120:144)
+  /// Section labels. `Account` already exists on [AppLocalizations]; these
+  /// three do not.
+  static String get settingsPreferences => _t('Preferences', 'Tercihler');
+  static String get settingsSupport => _t('Support', 'Destek');
+  static String get settingsDangerZone => _t('Danger Zone', 'Tehlikeli Alan');
+
+  /// `row-edit-profile` reads "Name, username, bio and photo" in the frame;
+  /// students have no username field, so the line names what is really there.
+  static String get settingsEditProfileSubtitle =>
+      _t('Name, bio and photo', 'Ad, biyografi ve fotoğraf');
+
+  /// `row-privacy-security`. The frame's "Private account, blocking" promises a
+  /// private-account switch the app has no field for — blocking is what this
+  /// row actually opens.
+  static String get settingsPrivacy => _t('Privacy', 'Gizlilik');
+  static String get settingsPrivacySubtitle =>
+      _t('Blocked people and clubs', 'Engellenen kişiler ve kulüpler');
+
+  static String get settingsSavedItems => _t('Saved Items', 'Kaydedilenler');
+  static String get settingsReportProblem =>
+      _t('Report a Problem', 'Sorun Bildir');
+  static String get settingsAboutClubUp =>
+      _t('About ClubUp', 'ClubUp Hakkında');
+
+  /// `sec-support`, added on top of the frame: the browser build of ClubUp.
+  /// Title-only and link-glyphed like every other row in that section.
+  static String get settingsWebVersion => _t('Web Version', 'Web Sürümü');
+  static String get settingsLightOption => _t('Light', 'Açık');
+  static String get settingsDarkOption => _t('Dark', 'Koyu');
+
+  /// The footer under `sec-danger-zone`.
+  static String settingsVersionLine(String version, String build) =>
+      _t('ClubUp v$version (build $build)', 'ClubUp v$version (yapı $build)');
+
+  // ── FİRST LANDİNG PAGE (`login-screen` 495:5 / 485:5)
+  /// `divider` — between Log In and Sign Up.
+  static String get landingOr => _t('OR', 'VEYA');
+
+  /// `footer/admin-link`. One tap opens the club portal; five quick taps still
+  /// reveal the platform-admin entry.
+  static String get landingClubAdminPortal =>
+      _t('Club Admin Portal', 'Kulüp Yönetici Portalı');
 }

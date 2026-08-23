@@ -82,111 +82,100 @@ void main() {
     users.removeWhere((user) => user.id == peerId || user.id == userId);
   });
 
-  testWidgets(
-    'section badges show only unread activity and clear after opening',
-    (tester) async {
-      await tester.pumpWidget(
-        const ProviderScope(child: MaterialApp(home: ChatsScreen())),
-      );
+  testWidgets('row badges show only unread activity and clear after opening', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      const ProviderScope(child: MaterialApp(home: ChatsScreen())),
+    );
+    await tester.pump();
+
+    // `chats-light` 243:475 replaced the segmented Students/Clubs control
+    // with a header dropdown, and the per-tab unread counts it carried with
+    // the per-row badge at 243:498.
+    Future<void> selectTab(String name) async {
+      await tester.tap(find.byKey(const ValueKey('chats-filter-dropdown')));
       await tester.pump();
-
-      final studentFilter = find.byKey(const ValueKey('chat-filter-students'));
-      final clubFilter = find.byKey(const ValueKey('chat-filter-clubs'));
-
-      // Existing conversations are not badge-worthy until something new
-      // arrives.
-      expect(
-        find.descendant(of: studentFilter, matching: find.text('1')),
-        findsNothing,
-      );
-      expect(
-        find.descendant(of: clubFilter, matching: find.text('1')),
-        findsNothing,
-      );
-
-      chatStore.sendMessage(
-        threadId: directThreadId,
-        senderId: peerId,
-        content: 'A new student message',
-      );
-      chatStore.sendMessage(
-        threadId: ChatStore.clubThreadId(clubId),
-        senderId: boardMemberId,
-        content: 'The announcement body',
-        kind: ChatMessageKind.announcement,
-        title: 'A new club announcement',
-      );
-      await tester.pump();
-
-      expect(
-        find.byKey(const ValueKey('chat-filter-students-unread-badge')),
-        findsOneWidget,
-      );
-      expect(
-        find.byKey(const ValueKey('chat-filter-clubs-unread-badge')),
-        findsOneWidget,
-      );
-      expect(
-        find.descendant(of: studentFilter, matching: find.text('1')),
-        findsOneWidget,
-      );
-      expect(
-        find.descendant(of: clubFilter, matching: find.text('1')),
-        findsOneWidget,
-      );
-
-      await tester.tap(clubFilter);
+      await tester.tap(find.byKey(ValueKey('chats-filter-option-$name')));
       await tester.pumpAndSettle();
-      await tester.tap(
-        find.byKey(
-          const ValueKey('chat-thread-profile-name-club:unread-badge-club'),
-        ),
-      );
-      await tester.pumpAndSettle();
+    }
 
-      expect(
-        chatStore.unreadInClubLane(
-          ChatStore.clubThreadId(clubId),
-          userId,
-          ClubChatLane.board,
-        ),
-        0,
-      );
+    final directBadge = find.byKey(
+      ValueKey('chat-thread-unread-$directThreadId'),
+    );
+    final clubBadge = find.byKey(
+      ValueKey('chat-thread-unread-${ChatStore.clubThreadId(clubId)}'),
+    );
 
-      await tester.tap(find.byKey(const ValueKey('chat-thread-back')));
-      await tester.pumpAndSettle();
+    // Existing conversations are not badge-worthy until something new
+    // arrives.
+    expect(directBadge, findsNothing);
 
-      expect(
-        find.byKey(const ValueKey('chat-filter-clubs-unread-badge')),
-        findsNothing,
-      );
-      expect(
-        find.byKey(const ValueKey('chat-filter-students-unread-badge')),
-        findsOneWidget,
-      );
+    chatStore.sendMessage(
+      threadId: directThreadId,
+      senderId: peerId,
+      content: 'A new student message',
+    );
+    chatStore.sendMessage(
+      threadId: ChatStore.clubThreadId(clubId),
+      senderId: boardMemberId,
+      content: 'The announcement body',
+      kind: ChatMessageKind.announcement,
+      title: 'A new club announcement',
+    );
+    await tester.pump();
 
-      await tester.tap(studentFilter);
-      await tester.pumpAndSettle();
-      await tester.tap(
-        find.byKey(ValueKey('chat-thread-profile-name-$directThreadId')),
-      );
-      await tester.pumpAndSettle();
+    expect(directBadge, findsOneWidget);
+    expect(
+      find.descendant(of: directBadge, matching: find.text('1')),
+      findsOneWidget,
+    );
 
-      expect(chatStore.unreadCountFor(directThreadId, userId), 0);
+    await selectTab('clubs');
+    expect(clubBadge, findsOneWidget);
 
-      await tester.tap(find.byKey(const ValueKey('chat-thread-back')));
-      await tester.pumpAndSettle();
+    await tester.tap(
+      find.byKey(
+        const ValueKey('chat-thread-profile-name-club:unread-badge-club'),
+      ),
+    );
+    await tester.pumpAndSettle();
 
-      expect(
-        find.byKey(const ValueKey('chat-filter-students-unread-badge')),
-        findsNothing,
-      );
-      // Let the immediate read-receipt writes and the debounced store save
-      // complete before the test tears its temporary Hive directory down.
-      await tester.pump(const Duration(seconds: 1));
-      expect(tester.takeException(), isNull);
-    },
-  );
+    expect(
+      chatStore.unreadInClubLane(
+        ChatStore.clubThreadId(clubId),
+        userId,
+        ClubChatLane.board,
+      ),
+      0,
+    );
+
+    // The club room has its own back button — `club-header` 221:355. Student
+    // threads keep `chat-thread-back`.
+    await tester.tap(find.byKey(const ValueKey('club-room-back')));
+    await tester.pumpAndSettle();
+
+    expect(clubBadge, findsNothing);
+
+    await selectTab('students');
+    expect(directBadge, findsOneWidget);
+
+    await tester.tap(
+      find.byKey(ValueKey('chat-thread-profile-name-$directThreadId')),
+    );
+    await tester.pumpAndSettle();
+
+    expect(chatStore.unreadCountFor(directThreadId, userId), 0);
+
+    await tester.tap(find.byKey(const ValueKey('chat-thread-back')));
+    await tester.pumpAndSettle();
+
+    expect(directBadge, findsNothing);
+    // Let the immediate read-receipt writes and the debounced store save
+    // complete before the test tears its temporary Hive directory down.
+    await tester.pump(const Duration(seconds: 1));
+    expect(tester.takeException(), isNull);
+  });
 
   testWidgets('main nav badge counts unread messages, not conversations', (
     tester,

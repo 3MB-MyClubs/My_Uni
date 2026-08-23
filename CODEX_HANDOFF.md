@@ -21,7 +21,7 @@ forced-tap coach-mark tour. One warm first-person voice, full sentences,
 bilingual EN/TR via the existing `S._t(en, tr)` pattern.
 
 - **Act 1 — Welcome**: full-screen greeting over the app (dark base
-  `#0C0608` + burgundy `#8C1D40` radial wash + white "KU" seal — visual
+  `#121212` + burgundy `#8C1D40` radial wash + white "KU" seal — visual
   language borrowed from the dead `lib/screens/signup_steps/step_done.dart`,
   which still exists and is untouched). Greets by first name
   ("Hey Ayşe! 👋"). Buttons: primary "Show me around", quiet

@@ -1239,7 +1239,7 @@ class _FeedScreenState extends State<FeedScreen> {
       surfaceTintColor: Colors.transparent,
       scrolledUnderElevation: 0,
       elevation: 0,
-      toolbarHeight: 69,
+      toolbarHeight: 81,
       titleSpacing: 0,
       leading: const SizedBox.shrink(),
       leadingWidth: 0,

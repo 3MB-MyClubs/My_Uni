@@ -5,10 +5,12 @@ import 'package:flutter/material.dart';
 import '../l10n/app_localizations.dart';
 import '../models/chat_group.dart';
 import '../models/user.dart';
-import '../services/app_colors.dart';
+import '../services/app_strings.dart';
 import '../services/chat_store.dart';
 import '../services/people_service.dart';
 import '../services/user_state.dart';
+import '../widgets/chats_design.dart';
+import '../widgets/clubup_design.dart';
 import '../widgets/group_photo_picker.dart';
 import '../widgets/user_avatar.dart';
 
@@ -127,28 +129,26 @@ class _CreateGroupScreenState extends State<CreateGroupScreen> {
     if (threadId != null) Navigator.pop(context, threadId);
   }
 
+  // The handoff has no create-group frame — the CHATS section jumps straight
+  // from the inbox to a thread — so this screen keeps its own structure and
+  // borrows the area's type, palette and row shapes from `add-member`
+  // (`105:358`) and `edit-group-info` (`107:82`) so the compose flow does not
+  // hand off into the old chrome mid-way.
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context)!;
     final canCreate = _selected.length >= 2;
 
     return Scaffold(
-      backgroundColor: AppColors.background,
-      appBar: AppBar(
-        backgroundColor: AppColors.background,
-        surfaceTintColor: Colors.transparent,
-        foregroundColor: AppColors.text,
-        title: Text(
-          l10n.createGroupTitle,
-          style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w800),
-        ),
-      ),
+      backgroundColor: ChatsColors.background,
       body: SafeArea(
         top: false,
+        bottom: false,
         child: Column(
           children: [
+            ChatsTopBar(title: l10n.createGroupTitle),
             Padding(
-              padding: const EdgeInsets.fromLTRB(20, 12, 20, 14),
+              padding: const EdgeInsets.fromLTRB(16, 12, 16, 14),
               child: Column(
                 children: [
                   AnimatedSwitcher(
@@ -162,15 +162,15 @@ class _CreateGroupScreenState extends State<CreateGroupScreen> {
                       size: 82,
                     ),
                   ),
-                  const SizedBox(height: 7),
+                  const SizedBox(height: 10),
                   Text(
                     _photoPath == null
                         ? l10n.addGroupPhoto
                         : l10n.changeGroupPhoto,
-                    style: TextStyle(
-                      fontSize: 11.5,
-                      fontWeight: FontWeight.w600,
-                      color: AppColors.secondaryText,
+                    style: figtree(
+                      size: 13,
+                      weight: FontWeight.w600,
+                      color: ChatsColors.accentText,
                     ),
                   ),
                   const SizedBox(height: 12),
@@ -182,106 +182,85 @@ class _CreateGroupScreenState extends State<CreateGroupScreen> {
                       maxLines: 2,
                       overflow: TextOverflow.ellipsis,
                       textAlign: TextAlign.center,
-                      style: TextStyle(
-                        fontSize: 17,
-                        fontWeight: FontWeight.w800,
-                        color: AppColors.text,
+                      style: figtree(
+                        size: 20,
+                        weight: FontWeight.w800,
+                        color: ChatsColors.text,
+                        letterSpacing: -0.4,
                       ),
                     ),
                   ),
-                  const SizedBox(height: 14),
-                  TextField(
-                    key: const ValueKey('group-name-field'),
+                  const SizedBox(height: 18),
+                  ChatsInputField(
+                    label: S.chatsGroupNameLabel,
                     controller: _nameController,
+                    hint: l10n.groupNameHint,
                     maxLength: 100,
-                    textCapitalization: TextCapitalization.words,
-                    style: TextStyle(color: AppColors.text),
-                    decoration: InputDecoration(
-                      hintText: l10n.groupNameHint,
-                      counterText: '',
-                      prefixIcon: const Icon(Icons.edit_rounded, size: 20),
-                      filled: true,
-                      fillColor: AppColors.surfaceAlt,
-                      border: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(14),
-                        borderSide: BorderSide.none,
-                      ),
-                      enabledBorder: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(14),
-                        borderSide: BorderSide.none,
-                      ),
-                      focusedBorder: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(14),
-                        borderSide: BorderSide.none,
-                      ),
-                    ),
+                    trailingIcon: Icons.edit_outlined,
+                    fieldKey: const ValueKey('group-name-field'),
                   ),
-                  const SizedBox(height: 12),
+                  const SizedBox(height: 18),
                   Row(
                     children: [
-                      Text(
-                        'Members',
-                        style: TextStyle(
-                          fontSize: 14,
-                          fontWeight: FontWeight.w800,
-                          color: AppColors.text,
-                        ),
-                      ),
-                      const SizedBox(width: 7),
-                      AnimatedContainer(
-                        duration: const Duration(milliseconds: 160),
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 8,
-                          vertical: 3,
-                        ),
-                        decoration: BoxDecoration(
-                          color: AppColors.lightRed,
-                          borderRadius: BorderRadius.circular(999),
-                        ),
-                        child: Text(
-                          '${_selected.length}',
-                          style: TextStyle(
-                            fontSize: 11,
-                            fontWeight: FontWeight.w800,
-                            color: AppColors.primaryRed,
-                          ),
-                        ),
+                      ChatsSectionLabel(
+                        S.chatsMembersCount(_selected.length + 1),
                       ),
                       const Spacer(),
                       if (!canCreate)
                         Text(
-                          'Select at least 2',
-                          style: TextStyle(
-                            fontSize: 11,
-                            color: AppColors.secondaryText,
+                          S.chatsSelectAtLeastTwo,
+                          style: figtree(
+                            size: 11,
+                            weight: FontWeight.w500,
+                            color: ChatsColors.muted,
                           ),
                         ),
                     ],
                   ),
-                  const SizedBox(height: 9),
-                  TextField(
-                    key: const ValueKey('create-group-member-search'),
-                    controller: _searchController,
-                    onChanged: (value) => setState(() => _query = value),
-                    style: TextStyle(fontSize: 13.5, color: AppColors.text),
-                    decoration: InputDecoration(
-                      hintText: l10n.groupSearchPeopleHint,
-                      prefixIcon: const Icon(Icons.search_rounded, size: 19),
-                      isDense: true,
-                      filled: true,
-                      fillColor: AppColors.surfaceAlt,
-                      border: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(12),
-                        borderSide: BorderSide.none,
-                      ),
-                      enabledBorder: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(12),
-                        borderSide: BorderSide.none,
-                      ),
-                      focusedBorder: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(12),
-                        borderSide: BorderSide.none,
-                      ),
+                  const SizedBox(height: 10),
+                  Container(
+                    height: 38,
+                    padding: const EdgeInsets.symmetric(horizontal: 14),
+                    decoration: BoxDecoration(
+                      color: ChatsColors.fill,
+                      borderRadius: BorderRadius.circular(999),
+                    ),
+                    child: Row(
+                      children: [
+                        Icon(
+                          Icons.search_rounded,
+                          size: 16,
+                          color: ChatsColors.muted,
+                        ),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: TextField(
+                            key: const ValueKey('create-group-member-search'),
+                            controller: _searchController,
+                            onChanged: (value) =>
+                                setState(() => _query = value),
+                            style: figtree(
+                              size: 13,
+                              weight: FontWeight.w500,
+                              color: ChatsColors.text,
+                            ),
+                            decoration: InputDecoration(
+                              hintText: S.chatsSearchContacts,
+                              hintStyle: figtree(
+                                size: 13,
+                                weight: FontWeight.w400,
+                                color: ChatsColors.muted,
+                              ),
+                              isDense: true,
+                              filled: false,
+                              border: InputBorder.none,
+                              enabledBorder: InputBorder.none,
+                              focusedBorder: InputBorder.none,
+                              contentPadding: EdgeInsets.zero,
+                            ),
+                          ),
+                        ),
+                      ],
                     ),
                   ),
                 ],
@@ -297,18 +276,16 @@ class _CreateGroupScreenState extends State<CreateGroupScreen> {
                   return InkWell(
                     key: ValueKey('create-group-member-${user.id}'),
                     onTap: () => _toggle(user),
-                    child: Padding(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 20,
-                        vertical: 9,
-                      ),
+                    child: SizedBox(
+                      height: 54,
                       child: Row(
                         children: [
+                          const SizedBox(width: 16),
                           UserAvatar(
                             userId: user.id,
                             name: _nameFor(user.id, fallback: user.name),
-                            size: 42,
-                            fontSize: 15,
+                            size: 38,
+                            fontSize: 14,
                           ),
                           const SizedBox(width: 12),
                           Expanded(
@@ -316,39 +293,42 @@ class _CreateGroupScreenState extends State<CreateGroupScreen> {
                               _nameFor(user.id, fallback: user.name),
                               maxLines: 1,
                               overflow: TextOverflow.ellipsis,
-                              style: TextStyle(
-                                fontSize: 14,
-                                fontWeight: selected
+                              style: figtree(
+                                size: 14,
+                                weight: selected
                                     ? FontWeight.w700
                                     : FontWeight.w600,
-                                color: AppColors.text,
+                                color: ChatsColors.text,
                               ),
                             ),
                           ),
+                          const SizedBox(width: 12),
                           AnimatedContainer(
                             duration: const Duration(milliseconds: 160),
-                            width: 24,
-                            height: 24,
+                            width: 22,
+                            height: 22,
+                            alignment: Alignment.center,
                             decoration: BoxDecoration(
                               color: selected
-                                  ? AppColors.primaryRed
+                                  ? ChatsColors.accent
                                   : Colors.transparent,
                               shape: BoxShape.circle,
                               border: Border.all(
                                 color: selected
-                                    ? AppColors.primaryRed
-                                    : AppColors.divider,
+                                    ? ChatsColors.accent
+                                    : ChatsColors.border,
                                 width: 1.5,
                               ),
                             ),
                             child: selected
                                 ? const Icon(
                                     Icons.check_rounded,
-                                    color: Colors.white,
-                                    size: 16,
+                                    color: ChatsColors.onAccent,
+                                    size: 14,
                                   )
                                 : null,
                           ),
+                          const SizedBox(width: 16),
                         ],
                       ),
                     ),
@@ -356,25 +336,14 @@ class _CreateGroupScreenState extends State<CreateGroupScreen> {
                 },
               ),
             ),
-            Padding(
-              padding: const EdgeInsets.fromLTRB(20, 10, 20, 12),
-              child: SizedBox(
-                width: double.infinity,
-                height: 50,
-                child: FilledButton(
+            SafeArea(
+              top: false,
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(16, 10, 16, 12),
+                child: ChatsPrimaryButton(
                   key: const ValueKey('create-group-button'),
-                  onPressed: canCreate ? _createGroup : null,
-                  style: FilledButton.styleFrom(
-                    backgroundColor: AppColors.primaryRed,
-                    disabledBackgroundColor: AppColors.surfaceAlt,
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(14),
-                    ),
-                  ),
-                  child: Text(
-                    l10n.createGroupTitle,
-                    style: const TextStyle(fontWeight: FontWeight.w800),
-                  ),
+                  label: l10n.createGroupTitle,
+                  onTap: canCreate ? _createGroup : null,
                 ),
               ),
             ),
