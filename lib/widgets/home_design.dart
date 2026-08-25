@@ -38,12 +38,15 @@ import 'poll_card.dart';
 
 // ── header ───────────────────────────────────────────────────────────────────
 
-/// `premium-header-container` — the two-tone ClubUp wordmark, the feed-scope
+const double _homeScopeMenuWidth = 192;
+
+/// `premium-header-container` — the personalized greeting, the feed-scope
 /// dropdown that replaced the old segmented Following/For-You pill, and the
-/// notification bell chip, over a hairline.
+/// notification bell chip.
 class HomeFeedHeader extends StatelessWidget {
   const HomeFeedHeader({
     super.key,
+    required this.greetingName,
     required this.feedTab,
     required this.onSelectFeedTab,
     required this.unreadCount,
@@ -53,6 +56,8 @@ class HomeFeedHeader extends StatelessWidget {
     this.overlay,
     this.scopeAnchorKey,
   });
+
+  final String greetingName;
 
   /// 0 = Following, 1 = For You — the same tabs the old pill switched.
   final int feedTab;
@@ -79,11 +84,6 @@ class HomeFeedHeader extends StatelessWidget {
       curve: Curves.easeOutCubic,
       decoration: BoxDecoration(
         color: atTop ? ClubUpColors.background : Colors.transparent,
-        border: Border(
-          bottom: BorderSide(
-            color: atTop ? ClubUpColors.border : Colors.transparent,
-          ),
-        ),
       ),
       padding: const EdgeInsets.fromLTRB(20, 12, 20, 28),
       child: Stack(
@@ -101,55 +101,56 @@ class HomeFeedHeader extends StatelessWidget {
                 duration: const Duration(milliseconds: 280),
                 curve: Curves.easeOutCubic,
                 opacity: showControls ? 1 : 0,
-                child: Row(
+                child: Stack(
+                  alignment: Alignment.center,
+                  clipBehavior: Clip.none,
                   children: [
-                    Text.rich(
-                      key: const ValueKey('home-clubup-logo'),
-                      TextSpan(
-                        children: [
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Text.rich(
+                          key: const ValueKey('home-header-greeting'),
                           TextSpan(
-                            text: 'Club',
-                            style: figtree(
-                              size: 22,
-                              weight: FontWeight.w900,
-                              color: ClubUpColors.accent,
-                            ),
-                          ),
-                          TextSpan(
-                            text: 'Up',
-                            style: figtree(
-                              size: 22,
-                              weight: FontWeight.w900,
-                              color: ClubUpColors.text,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                    Expanded(
-                      child: Center(
-                        child: Stack(
-                          alignment: Alignment.center,
-                          clipBehavior: Clip.none,
-                          children: [
-                            _scopeDropdown(label),
-                            if (overlay != null)
-                              Positioned(
-                                top: 28,
-                                left: 0,
-                                right: 0,
-                                child: Center(
-                                  child: IgnorePointer(child: overlay),
+                            children: [
+                              TextSpan(
+                                text: '${S.hiPrefix} ',
+                                style: figtree(
+                                  size: 18,
+                                  weight: FontWeight.w600,
+                                  color: ClubUpColors.muted,
                                 ),
                               ),
-                          ],
+                              TextSpan(
+                                text: greetingName,
+                                style: figtree(
+                                  size: 18,
+                                  weight: FontWeight.w800,
+                                  color: ClubUpColors.text,
+                                ),
+                              ),
+                            ],
+                          ),
                         ),
-                      ),
+                        _HomeBellChip(
+                          unreadCount: unreadCount,
+                          onTap: onBellTap,
+                          simple: !atTop,
+                        ),
+                      ],
                     ),
-                    _HomeBellChip(
-                      unreadCount: unreadCount,
-                      onTap: onBellTap,
-                      simple: !atTop,
+                    Stack(
+                      alignment: Alignment.center,
+                      clipBehavior: Clip.none,
+                      children: [
+                        _scopeDropdown(label),
+                        if (overlay != null)
+                          Positioned(
+                            top: 28,
+                            left: 0,
+                            right: 0,
+                            child: Center(child: IgnorePointer(child: overlay)),
+                          ),
+                      ],
                     ),
                   ],
                 ),
@@ -171,6 +172,7 @@ class HomeFeedHeader extends StatelessWidget {
         tooltip: label,
         position: PopupMenuPosition.under,
         padding: EdgeInsets.zero,
+        constraints: const BoxConstraints.tightFor(width: _homeScopeMenuWidth),
         color: ClubUpColors.card,
         elevation: 8,
         shape: RoundedRectangleBorder(
@@ -182,28 +184,21 @@ class HomeFeedHeader extends StatelessWidget {
           _scopeItem(0, S.following),
           _scopeItem(1, S.forYou),
         ],
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Flexible(
-              child: Text(
-                label,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: figtree(
-                  size: 18,
-                  weight: FontWeight.w400,
-                  color: ClubUpColors.accentText,
-                ),
+        child: SizedBox(
+          width: _homeScopeMenuWidth,
+          child: Center(
+            child: Text(
+              label,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: figtree(
+                size: 18,
+                weight: FontWeight.w800,
+                color: feedTab == 1 ? Colors.white : ClubUpColors.accentText,
+                letterSpacing: -0.4,
               ),
             ),
-            const SizedBox(width: 6),
-            Icon(
-              Icons.keyboard_arrow_down_rounded,
-              size: 18,
-              color: ClubUpColors.accentText,
-            ),
-          ],
+          ),
         ),
       ),
     );
@@ -211,6 +206,7 @@ class HomeFeedHeader extends StatelessWidget {
 
   PopupMenuItem<int> _scopeItem(int value, String text) {
     return PopupMenuItem<int>(
+      key: ValueKey('home-feed-scope-option-$value'),
       value: value,
       height: 44,
       child: Row(
@@ -302,45 +298,6 @@ class _HomeBellChip extends StatelessWidget {
             ),
           ),
         ),
-      ),
-    );
-  }
-}
-
-/// `categories-horizontal-track` — "Hi, [name]".
-class HomeGreeting extends StatelessWidget {
-  const HomeGreeting({super.key, required this.name});
-
-  final String name;
-
-  @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(20, 14, 20, 10),
-      child: Row(
-        children: [
-          Text(
-            S.hiPrefix,
-            style: figtree(
-              size: 15,
-              weight: FontWeight.w500,
-              color: ClubUpColors.muted,
-            ),
-          ),
-          const SizedBox(width: 6),
-          Flexible(
-            child: Text(
-              name,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: figtree(
-                size: 16,
-                weight: FontWeight.w700,
-                color: ClubUpColors.text,
-              ),
-            ),
-          ),
-        ],
       ),
     );
   }

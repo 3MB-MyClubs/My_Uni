@@ -66,6 +66,13 @@ void main() {
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 400));
     expect(find.text('Takip'), findsOneWidget);
+    final followingOption = find.byKey(
+      const ValueKey('home-feed-scope-option-0'),
+    );
+    expect(
+      tester.getCenter(followingOption).dx,
+      moreOrLessEquals(tester.getCenter(dropdown).dx, epsilon: 0.1),
+    );
 
     await tester.tap(find.text('Takip'));
     await tester.pump();

@@ -157,6 +157,7 @@ class LandingField extends StatelessWidget {
     super.key,
     required this.controller,
     required this.hint,
+    this.semanticLabel,
     this.obscureText = false,
     this.suffixText,
     this.trailing,
@@ -168,6 +169,7 @@ class LandingField extends StatelessWidget {
 
   final TextEditingController controller;
   final String hint;
+  final String? semanticLabel;
   final bool obscureText;
 
   /// `@ku.edu.tr`. The frame's placeholder promises "Username, email, or phone
@@ -209,38 +211,41 @@ class LandingField extends StatelessWidget {
                   selectionHandleColor: LandingColors.placeholder,
                 ),
               ),
-              child: TextField(
-                controller: controller,
-                obscureText: obscureText,
-                keyboardType: keyboardType,
-                inputFormatters: inputFormatters,
-                onChanged: onChanged,
-                onSubmitted: onSubmitted,
-                cursorColor: LandingColors.text,
-                cursorErrorColor: LandingColors.text,
-                style: figtree(
-                  size: 14,
-                  weight: FontWeight.w500,
-                  color: LandingColors.text,
-                ),
-                decoration: InputDecoration(
-                  isDense: true,
-                  filled: false,
-                  fillColor: Colors.transparent,
-                  border: InputBorder.none,
-                  enabledBorder: InputBorder.none,
-                  focusedBorder: InputBorder.none,
-                  disabledBorder: InputBorder.none,
-                  errorBorder: InputBorder.none,
-                  focusedErrorBorder: InputBorder.none,
-                  focusColor: Colors.transparent,
-                  hoverColor: Colors.transparent,
-                  contentPadding: EdgeInsets.zero,
-                  hintText: hint,
-                  hintStyle: figtree(
+              child: Semantics(
+                label: semanticLabel,
+                child: TextField(
+                  controller: controller,
+                  obscureText: obscureText,
+                  keyboardType: keyboardType,
+                  inputFormatters: inputFormatters,
+                  onChanged: onChanged,
+                  onSubmitted: onSubmitted,
+                  cursorColor: LandingColors.text,
+                  cursorErrorColor: LandingColors.text,
+                  style: figtree(
                     size: 14,
-                    weight: FontWeight.w400,
-                    color: LandingColors.placeholder,
+                    weight: FontWeight.w500,
+                    color: LandingColors.text,
+                  ),
+                  decoration: InputDecoration(
+                    isDense: true,
+                    filled: false,
+                    fillColor: Colors.transparent,
+                    border: InputBorder.none,
+                    enabledBorder: InputBorder.none,
+                    focusedBorder: InputBorder.none,
+                    disabledBorder: InputBorder.none,
+                    errorBorder: InputBorder.none,
+                    focusedErrorBorder: InputBorder.none,
+                    focusColor: Colors.transparent,
+                    hoverColor: Colors.transparent,
+                    contentPadding: EdgeInsets.zero,
+                    hintText: controller.text.isEmpty ? hint : null,
+                    hintStyle: figtree(
+                      size: 14,
+                      weight: FontWeight.w400,
+                      color: LandingColors.placeholder,
+                    ),
                   ),
                 ),
               ),

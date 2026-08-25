@@ -332,6 +332,7 @@ class _LoginScreenState extends State<LoginScreen>
                                     LandingField(
                                       controller: _emailController,
                                       hint: l10n.campusEmailLabel,
+                                      semanticLabel: l10n.campusEmailLabel,
                                       suffixText: '@ku.edu.tr',
                                       keyboardType: TextInputType.text,
                                       inputFormatters: [_NoDomainFormatter()],

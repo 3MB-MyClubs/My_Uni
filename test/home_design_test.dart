@@ -15,6 +15,7 @@ import 'package:flutter_application_1/services/user_state.dart';
 import 'package:flutter_application_1/services/view_tracker.dart';
 import 'package:flutter_application_1/widgets/clubup_design.dart';
 import 'package:flutter_application_1/widgets/home_comments_sheet.dart';
+import 'package:flutter_application_1/widgets/home_design.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:hive/hive.dart';
@@ -99,39 +100,27 @@ void main() {
     await tester.pump(const Duration(milliseconds: 700));
   }
 
-  testWidgets('student Home draws the wordmark, greeting and one post card', (
+  testWidgets('student Home draws the header greeting and one post card', (
     tester,
   ) async {
     await pumpHome(tester);
 
     // `premium-header-container`
-    final wordmark = find.byKey(const ValueKey('home-clubup-logo'));
-    expect(wordmark, findsOneWidget);
-    expect(find.text('ClubUp'), findsOneWidget);
-    final wordmarkSpan = tester.widget<Text>(wordmark).textSpan! as TextSpan;
-    final wordmarkSpans = wordmarkSpan.children!;
-    expect((wordmarkSpans[0] as TextSpan).style!.color, ClubUpColors.accent);
-    expect((wordmarkSpans[1] as TextSpan).style!.color, ClubUpColors.text);
+    final greeting = find.byKey(const ValueKey('home-header-greeting'));
+    expect(greeting, findsOneWidget);
+    expect(find.text('${S.hiPrefix} Hakan'), findsOneWidget);
+    final greetingSpan = tester.widget<Text>(greeting).textSpan! as TextSpan;
+    final greetingSpans = greetingSpan.children!;
+    expect((greetingSpans[0] as TextSpan).style!.color, ClubUpColors.muted);
+    expect((greetingSpans[1] as TextSpan).style!.color, ClubUpColors.text);
     final feedScope = find.byKey(const ValueKey('home-feed-scope-dropdown'));
     expect(feedScope, findsOneWidget);
-    final logoRect = tester.getRect(
-      find.byKey(const ValueKey('home-clubup-logo')),
-    );
-    final bellRect = tester.getRect(
-      find.byKey(const ValueKey('home-notifications-bell')),
-    );
-    expect(
-      tester.getCenter(feedScope).dx,
-      closeTo((logoRect.right + bellRect.left) / 2, 0.5),
-    );
+    final headerRect = tester.getRect(find.byType(HomeFeedHeader));
+    expect(tester.getCenter(feedScope).dx, closeTo(headerRect.center.dx, 0.5));
     expect(
       find.byKey(const ValueKey('home-notifications-bell')),
       findsOneWidget,
     );
-
-    // `categories-horizontal-track`
-    expect(find.text(S.hiPrefix), findsOneWidget);
-    expect(find.text('Hakan'), findsOneWidget);
 
     // The stripped-down feed: no events rail, no segmented pill, no composer.
     expect(find.byKey(const ValueKey('home-feed-tab-0')), findsNothing);

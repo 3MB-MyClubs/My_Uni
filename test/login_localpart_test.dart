@@ -30,7 +30,7 @@ void main() {
     // labels are gone; the placeholders carry the copy now.
     expect(find.text('KOÇ ÜNİVERSİTESİ'), findsNothing);
     expect(find.text('KAMPÜS E-POSTASI'), findsNothing);
-    expect(find.text('Kampüs e-postası'), findsOneWidget);
+    expect(find.text('E-posta'), findsOneWidget);
     expect(find.text('Şifre'), findsOneWidget);
     expect(find.text('Giriş yap'), findsOneWidget);
     expect(find.text('Şifreni mi unuttun?'), findsOneWidget);
@@ -53,6 +53,7 @@ void main() {
 
     // The domain is presented for the user — they don't type it.
     expect(find.text('@ku.edu.tr'), findsOneWidget);
+    expect(find.text('Email'), findsOneWidget);
 
     final emailField = find.byType(TextField).first;
 
@@ -60,6 +61,8 @@ void main() {
     await tester.enterText(emailField, 'htuncay23');
     await tester.pump();
     expect(tester.widget<TextField>(emailField).controller!.text, 'htuncay23');
+    expect(find.text('Email'), findsNothing);
+    expect(find.text('@ku.edu.tr'), findsOneWidget);
 
     // Even if a full email is pasted, the domain is stripped automatically.
     await tester.enterText(emailField, 'htuncay23@ku.edu.tr');

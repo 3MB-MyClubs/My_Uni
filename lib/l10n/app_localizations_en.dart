@@ -1516,7 +1516,7 @@ class AppLocalizationsEn extends AppLocalizations {
   String get calendarYoursTapToEdit => 'Yours · tap to edit';
 
   @override
-  String get campusEmailLabel => 'Campus email';
+  String get campusEmailLabel => 'Email';
 
   @override
   String get campusEventFallback => 'Campus event';

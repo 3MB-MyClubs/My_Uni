@@ -676,7 +676,7 @@ void main() {
     await tester.pump(const Duration(milliseconds: 700));
 
     final header = find.byType(HomeFeedHeader);
-    final logo = find.byKey(const ValueKey('home-clubup-logo'));
+    final logo = find.byKey(const ValueKey('home-header-greeting'));
     final scope = find.byKey(const ValueKey('home-feed-scope-dropdown'));
     final refresh = find.byKey(const ValueKey('home-refresh-indicator'));
 
@@ -706,7 +706,7 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
-  testWidgets('the ClubUp header stays active over the scrolling feed', (
+  testWidgets('the Home header stays stable during a feed drag', (
     tester,
   ) async {
     tester.view.physicalSize = const Size(390, 520);
@@ -725,18 +725,12 @@ void main() {
     );
     await tester.pump(const Duration(milliseconds: 700));
 
-    final logo = find.byKey(const ValueKey('home-clubup-logo'));
-    final scrollable = find.descendant(
-      of: find.byType(CustomScrollView),
-      matching: find.byType(Scrollable),
-    );
+    final logo = find.byKey(const ValueKey('home-header-greeting'));
     final logoTop = tester.getTopLeft(logo).dy;
     final gesture = await tester.startGesture(tester.getCenter(logo));
-    await gesture.moveBy(const Offset(0, -180));
+    await gesture.moveBy(const Offset(0, 180));
     await tester.pump();
 
-    final position = tester.state<ScrollableState>(scrollable).position;
-    expect(position.pixels, greaterThan(1));
     expect(tester.getTopLeft(logo).dy, moreOrLessEquals(logoTop, epsilon: 0.1));
     expect(
       tester
@@ -779,7 +773,7 @@ void main() {
     await tester.pump(const Duration(milliseconds: 700));
 
     final header = find.byType(HomeFeedHeader);
-    final logo = find.byKey(const ValueKey('home-clubup-logo'));
+    final logo = find.byKey(const ValueKey('home-header-greeting'));
     final bell = find.byKey(const ValueKey('home-notifications-bell'));
 
     BoxDecoration band() =>
@@ -792,11 +786,11 @@ void main() {
                 .decoration!
             as BoxDecoration;
 
-    // `premium-header-container` — a flat band on the page background closed
-    // by a hairline. The old glass header's scrolled-under crossfade is gone,
-    // so the band must look identical parked and scrolled.
+    // `premium-header-container` — a flat band on the page background. The old
+    // glass header's scrolled-under crossfade is gone, so the band must look
+    // identical parked and scrolled.
     expect(band().color, ClubUpColors.background);
-    expect(band().border, isA<Border>());
+    expect(band().border, isNull);
     final logoRect = tester.getRect(logo);
     final bellRect = tester.getRect(bell);
 

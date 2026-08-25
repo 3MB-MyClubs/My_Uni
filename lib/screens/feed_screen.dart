@@ -900,7 +900,6 @@ class _FeedScreenState extends State<FeedScreen> {
             ),
             if (designHome) ...[
               _buildDesignTopBar(),
-              SliverToBoxAdapter(child: HomeGreeting(name: _greetingName)),
             ] else ...[
               _buildTopBar(),
               _buildGreeting(),
@@ -1227,7 +1226,7 @@ class _FeedScreenState extends State<FeedScreen> {
   // ── ClubUp top bar — redesigned student Home ──────────────────────────────
   /// `premium-header-container` of `home-feed-alt`. The old glass app bar and
   /// its scrolled-under crossfade are kept for club-admin sessions below; the
-  /// design's header is a flat band on the page background with a hairline.
+  /// design's header is a flat band on the page background.
   SliverAppBar _buildDesignTopBar() {
     return SliverAppBar(
       key: const ValueKey('home-active-feed-header'),
@@ -1246,6 +1245,7 @@ class _FeedScreenState extends State<FeedScreen> {
       title: ListenableBuilder(
         listenable: Listenable.merge([userState, notificationInboxService]),
         builder: (_, _) => HomeFeedHeader(
+          greetingName: _greetingName,
           feedTab: _feedTab,
           onSelectFeedTab: (tab) => setState(() => _selectFeedTab(tab)),
           unreadCount: _unreadNotificationCount(),

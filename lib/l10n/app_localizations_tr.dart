@@ -1514,7 +1514,7 @@ class AppLocalizationsTr extends AppLocalizations {
   String get calendarYoursTapToEdit => 'Senin · düzenlemek için dokun';
 
   @override
-  String get campusEmailLabel => 'Kampüs e-postası';
+  String get campusEmailLabel => 'E-posta';
 
   @override
   String get campusEventFallback => 'Kampüs etkinliği';

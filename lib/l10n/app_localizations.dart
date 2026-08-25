@@ -2621,7 +2621,7 @@ abstract class AppLocalizations {
   /// No description provided for @campusEmailLabel.
   ///
   /// In en, this message translates to:
-  /// **'Campus email'**
+  /// **'Email'**
   String get campusEmailLabel;
 
   /// No description provided for @campusEventFallback.
