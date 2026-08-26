@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+
+import '../../../widgets/clubup_design.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../l10n/app_localizations.dart';
 import '../../../models/event.dart' as app;
@@ -92,147 +94,6 @@ class _AddToCalendarButtonState extends ConsumerState<AddToCalendarButton> {
   void _add() {
     final model = CalendarEventModel.fromAppEvent(widget.event);
     ref.read(calendarEventProvider(widget.event.id).notifier).add(model);
-  }
-
-  Widget _buildLink(CalendarAddState state) {
-    final isSuccess = state is CalendarAddSuccess;
-    final isLoading = state is CalendarAddLoading;
-    final color = isSuccess ? _accent : AppColors.secondaryText;
-
-    return SizedBox(
-      height: 36,
-      child: Material(
-        color: Colors.transparent,
-        child: InkWell(
-          borderRadius: BorderRadius.all(Radius.circular(10)),
-          onTap: (isLoading || isSuccess) ? null : _add,
-          child: Row(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              if (isLoading)
-                SizedBox(
-                  width: 15,
-                  height: 15,
-                  child: CircularProgressIndicator(
-                    strokeWidth: 2,
-                    color: color,
-                    strokeCap: StrokeCap.round,
-                  ),
-                )
-              else
-                Icon(
-                  isSuccess
-                      ? Icons.check_circle_rounded
-                      : Icons.calendar_today_rounded,
-                  size: 15,
-                  color: color,
-                ),
-              const SizedBox(width: 7),
-              Flexible(
-                child: Text(
-                  isLoading
-                      ? AppLocalizations.of(context)!.addingEllipsis
-                      : isSuccess
-                      ? AppLocalizations.of(context)!.calendarAlreadyAdded
-                      : AppLocalizations.of(context)!.addToCalendarButton,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: TextStyle(
-                    fontSize: 13,
-                    fontWeight: FontWeight.w600,
-                    color: color,
-                    letterSpacing: -0.1,
-                  ),
-                ),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-
-  Widget _buildButton(CalendarAddState state) {
-    final isSuccess = state is CalendarAddSuccess;
-    final isLoading = state is CalendarAddLoading;
-    final successColor = const Color(0xFF2E7D32);
-    final successLight = const Color(0xFF4CAF50);
-
-    return SizedBox(
-      width: double.infinity,
-      child: AnimatedContainer(
-        duration: const Duration(milliseconds: 250),
-        curve: Curves.easeOut,
-        decoration: BoxDecoration(
-          color: isSuccess
-              ? successColor.withValues(alpha: 0.08)
-              : _accent.withValues(alpha: 0.07),
-          borderRadius: BorderRadius.all(Radius.circular(14)),
-          border: Border.all(
-            color: isSuccess
-                ? successLight.withValues(alpha: 0.5)
-                : _accent.withValues(alpha: 0.25),
-            width: 1.2,
-          ),
-        ),
-        child: Material(
-          color: Colors.transparent,
-          child: InkWell(
-            borderRadius: BorderRadius.all(Radius.circular(14)),
-            onTap: (isLoading || isSuccess)
-                ? null
-                : () {
-                    final model = CalendarEventModel.fromAppEvent(widget.event);
-                    ref
-                        .read(calendarEventProvider(widget.event.id).notifier)
-                        .add(model);
-                  },
-            child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 13),
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  if (isLoading)
-                    SizedBox(
-                      width: 16,
-                      height: 16,
-                      child: CircularProgressIndicator(
-                        strokeWidth: 2,
-                        color: _accent,
-                        strokeCap: StrokeCap.round,
-                      ),
-                    )
-                  else
-                    Icon(
-                      isSuccess
-                          ? Icons.check_circle_rounded
-                          : Icons.calendar_today_rounded,
-                      size: 16,
-                      color: isSuccess ? successLight : _accent,
-                    ),
-                  const SizedBox(width: 8),
-                  Text(
-                    isLoading
-                        ? AppLocalizations.of(context)!.addingEllipsis
-                        : isSuccess
-                        ? AppLocalizations.of(
-                            context,
-                          )!.calendarAddedToCalendarButton
-                        : AppLocalizations.of(context)!.addToCalendarButton,
-                    style: TextStyle(
-                      fontSize: 14,
-                      fontWeight: FontWeight.w700,
-                      color: isSuccess ? successLight : _accent,
-                      letterSpacing: 0.1,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ),
-        ),
-      ),
-    );
   }
 
   void _showPermissionDialog(CalendarPermissionState permission) {
@@ -363,6 +224,138 @@ class _AddToCalendarButtonState extends ConsumerState<AddToCalendarButton> {
             ],
           ),
         ],
+      ),
+    );
+  }
+
+  Widget _buildLink(CalendarAddState state) {
+    final isSuccess = state is CalendarAddSuccess;
+    final isLoading = state is CalendarAddLoading;
+    final color = isSuccess ? _accent : AppColors.secondaryText;
+
+    return SizedBox(
+      height: 36,
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          borderRadius: BorderRadius.all(Radius.circular(10)),
+          onTap: (isLoading || isSuccess) ? null : _add,
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              if (isLoading)
+                SizedBox(
+                  width: 15,
+                  height: 15,
+                  child: CircularProgressIndicator(
+                    strokeWidth: 2,
+                    color: color,
+                    strokeCap: StrokeCap.round,
+                  ),
+                )
+              else
+                Icon(
+                  isSuccess
+                      ? Icons.check_circle_rounded
+                      : Icons.calendar_today_rounded,
+                  size: 15,
+                  color: color,
+                ),
+              const SizedBox(width: 7),
+              Flexible(
+                child: Text(
+                  isLoading
+                      ? AppLocalizations.of(context)!.addingEllipsis
+                      : isSuccess
+                      ? AppLocalizations.of(context)!.calendarAlreadyAdded
+                      : AppLocalizations.of(context)!.addToCalendarButton,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    fontSize: 13,
+                    fontWeight: FontWeight.w600,
+                    color: color,
+                    letterSpacing: -0.1,
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  /// `btn-add-to-calendar` from the ClubUp-Desings event-detail handoff: a
+  /// Compact outlined pill that sits beside "Remind Me". Only used by the student
+  /// event detail screen, so it follows that area's tokens.
+  Widget _buildButton(CalendarAddState state) {
+    final isSuccess = state is CalendarAddSuccess;
+    final isLoading = state is CalendarAddLoading;
+
+    return GestureDetector(
+      onTap: (isLoading || isSuccess)
+          ? null
+          : () {
+              final model = CalendarEventModel.fromAppEvent(widget.event);
+              ref
+                  .read(calendarEventProvider(widget.event.id).notifier)
+                  .add(model);
+            },
+      child: Container(
+        constraints: const BoxConstraints(minHeight: 44),
+        alignment: Alignment.center,
+        padding: const EdgeInsets.symmetric(horizontal: 10),
+        decoration: BoxDecoration(
+          color: ClubUpColors.card,
+          borderRadius: BorderRadius.circular(22),
+          border: Border.all(
+            color: isSuccess ? ClubUpColors.accent : ClubUpColors.border,
+          ),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            if (isLoading)
+              SizedBox(
+                width: 18,
+                height: 18,
+                child: CircularProgressIndicator(
+                  strokeWidth: 2,
+                  color: ClubUpColors.accent,
+                  strokeCap: StrokeCap.round,
+                ),
+              )
+            else
+              Icon(
+                isSuccess
+                    ? Icons.check_circle_rounded
+                    : Icons.calendar_today_rounded,
+                size: 16,
+                color: isSuccess ? ClubUpColors.accentText : ClubUpColors.text,
+              ),
+            const SizedBox(width: 6),
+            Flexible(
+              child: Text(
+                isLoading
+                    ? AppLocalizations.of(context)!.addingEllipsis
+                    : isSuccess
+                    ? AppLocalizations.of(context)!.calendarAlreadyAdded
+                    : AppLocalizations.of(context)!.addToCalendarButton,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: figtree(
+                  size: 12,
+                  weight: FontWeight.w700,
+                  color: isSuccess
+                      ? ClubUpColors.accentText
+                      : ClubUpColors.text,
+                ),
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }

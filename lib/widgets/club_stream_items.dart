@@ -10,7 +10,10 @@ import '../l10n/app_localizations.dart';
 import '../services/club_chat_prefs.dart';
 import 'chat_video_player.dart';
 import '../services/image_cache_service.dart';
+import '../services/user_profile_link.dart';
 import 'club_chat_theme.dart';
+import 'shared_user_profile_message_card.dart';
+import 'user_profile_link_text.dart';
 
 /// One participant of a club community, as the stream and sheets need them.
 class ClubPerson {
@@ -197,22 +200,17 @@ class ClubMessageText extends StatelessWidget {
     required this.text,
     required this.t,
     required this.onDark,
+    required this.onUserLinkTap,
   });
 
   final String text;
   final ClubChatTheme t;
   final bool onDark;
+  final ValueChanged<String> onUserLinkTap;
 
   static final _mentionPattern = RegExp(r'@[\wçğıöşüÇĞİÖŞÜ]+');
 
-  @override
-  Widget build(BuildContext context) {
-    final base = TextStyle(
-      fontSize: 15,
-      height: 1.52,
-      letterSpacing: -0.15,
-      color: onDark ? Colors.white : t.textSoft,
-    );
+  InlineSpan _mentionSpans(String text, TextStyle base) {
     final spans = <InlineSpan>[];
     var index = 0;
     for (final match in _mentionPattern.allMatches(text)) {
@@ -242,7 +240,29 @@ class ClubMessageText extends StatelessWidget {
       index = match.end;
     }
     if (index < text.length) spans.add(TextSpan(text: text.substring(index)));
-    return Text.rich(TextSpan(style: base, children: spans));
+    return TextSpan(children: spans);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final base = TextStyle(
+      fontSize: 15,
+      height: 1.52,
+      letterSpacing: -0.15,
+      color: onDark ? Colors.white : t.textSoft,
+    );
+    return UserProfileLinkText(
+      text: text,
+      style: base,
+      linkStyle: base.copyWith(
+        fontWeight: FontWeight.w800,
+        decoration: TextDecoration.underline,
+        decorationColor: onDark ? Colors.white : t.red,
+        color: onDark ? Colors.white : t.red,
+      ),
+      onUserLinkTap: onUserLinkTap,
+      plainTextSpanBuilder: (value) => _mentionSpans(value, base),
+    );
   }
 }
 
@@ -1039,6 +1059,7 @@ class ClubMessageGroup extends StatelessWidget {
     this.statusLabel,
     this.attachments = const [],
     this.reactions,
+    required this.onUserLinkTap,
   });
 
   final ChatMessage message;
@@ -1061,18 +1082,41 @@ class ClubMessageGroup extends StatelessWidget {
   final String? statusLabel;
   final List<Widget> attachments;
   final Widget? reactions;
+  final ValueChanged<String> onUserLinkTap;
 
-  Widget _body({required bool onDark}) => Column(
-    crossAxisAlignment: CrossAxisAlignment.start,
-    mainAxisSize: MainAxisSize.min,
-    children: [
-      if (message.replyToMessageId != null) _replyQuote(onDark: onDark),
-      if (message.content.isNotEmpty)
-        ClubMessageText(text: message.content, t: t, onDark: onDark),
-      ...attachments,
-      ?reactions,
-    ],
-  );
+  Widget _body({required bool onDark}) {
+    final userLinks = UserProfileLink.matchesIn(message.content);
+    final sharedUserLink = userLinks.isEmpty ? null : userLinks.first;
+    final isStandaloneUserLink =
+        sharedUserLink != null &&
+        UserProfileLink.isStandalone(message.content, sharedUserLink);
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        if (message.replyToMessageId != null) _replyQuote(onDark: onDark),
+        if (message.content.isNotEmpty && !isStandaloneUserLink)
+          ClubMessageText(
+            text: message.content,
+            t: t,
+            onDark: onDark,
+            onUserLinkTap: onUserLinkTap,
+          ),
+        if (sharedUserLink != null)
+          Padding(
+            padding: EdgeInsets.only(top: isStandaloneUserLink ? 0 : 8),
+            child: SharedUserProfileMessageCard(
+              userIdentifier: sharedUserLink.userIdentifier,
+              onDarkBackground: onDark,
+              onOpenProfile: onUserLinkTap,
+            ),
+          ),
+        ...attachments,
+        ?reactions,
+      ],
+    );
+  }
 
   Widget _replyQuote({required bool onDark}) {
     final foreground = onDark ? Colors.white : t.text;

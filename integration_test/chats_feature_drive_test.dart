@@ -77,11 +77,13 @@ void main() {
     // ── Chats tab: only the locally registered contact is present ──
     await tester.tap(find.text('Chats'));
     await tester.pump(const Duration(milliseconds: 600));
-    expect(find.text(S.searchPeople), findsOneWidget);
+    expect(find.text(S.searchConversations), findsOneWidget);
     await binding.takeScreenshot('chats-02-inbox');
 
     // ── Club room: open KUACM, send a message ──
-    await tester.tap(find.byKey(const ValueKey('chat-filter-clubs')));
+    await tester.tap(find.byKey(const ValueKey('chats-filter-dropdown')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('chats-filter-option-clubs')));
     await tester.pump(const Duration(milliseconds: 300));
     await tester.tap(find.text('Bilgisayar Kulübü (KUACM)').first);
     await tester.pump(const Duration(milliseconds: 700));
@@ -101,7 +103,11 @@ void main() {
     await tester.pump(const Duration(milliseconds: 500));
 
     // ── DM: open the real local contact and send a persisted message ──
-    await tester.tap(find.byKey(const ValueKey('chat-filter-students')));
+    await tester.tap(find.byKey(const ValueKey('chats-filter-dropdown')));
+    await tester.pumpAndSettle();
+    await tester.tap(
+      find.byKey(const ValueKey('chats-filter-option-students')),
+    );
     await tester.pump(const Duration(milliseconds: 300));
     await tester.tap(find.text('Alice Local').first);
     await tester.pump(const Duration(milliseconds: 700));
@@ -165,7 +171,7 @@ void main() {
     expect(find.text('Bilgisayar Kulübü (KUACM)'), findsOneWidget);
     expect(find.byType(TextField), findsOneWidget);
     expect(find.text('Search students'), findsNothing);
-    expect(find.byIcon(Icons.edit_square), findsNothing);
+    expect(find.byIcon(Icons.edit_outlined), findsNothing);
     expect(find.byIcon(Icons.arrow_back_ios_new_rounded), findsNothing);
 
     const announcement = 'Admin community integration message';

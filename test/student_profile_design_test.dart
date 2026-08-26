@@ -7,10 +7,12 @@ import 'package:flutter_application_1/screens/profile_screen.dart';
 import 'package:flutter_application_1/screens/chat_thread_screen.dart';
 import 'package:flutter_application_1/screens/student_profile_screen.dart';
 import 'package:flutter_application_1/screens/user_profile_screen.dart';
+import 'package:flutter_application_1/services/app_strings.dart';
 import 'package:flutter_application_1/services/auth_service.dart';
 import 'package:flutter_application_1/services/mock_data.dart';
 import 'package:flutter_application_1/services/theme_service.dart';
 import 'package:flutter_application_1/services/user_state.dart';
+import 'package:flutter_application_1/widgets/profile_design.dart';
 import 'package:flutter_application_1/widgets/student_campus_profile.dart';
 
 void main() {
@@ -63,11 +65,16 @@ void main() {
     await tester.pumpWidget(
       ProviderScope(
         child: MaterialApp(
-          home: StudentCampusProfileView(
-            profile: const StudentCampusProfile(
+          localizationsDelegates: AppLocalizations.localizationsDelegates,
+          supportedLocales: AppLocalizations.supportedLocales,
+          home: StudentProfileScreen(
+            onSettings: () {},
+            data: const StudentProfileData(
               userId: 'blank-bio-test',
+              initials: 'S',
               name: 'Student',
               email: 'student@ku.edu.tr',
+              graduation: '',
               major: '',
               year: '',
               bio: '   ',
@@ -75,121 +82,181 @@ void main() {
               following: 0,
               followers: 0,
             ),
-            title: 'Student Profile',
-            leading: const SizedBox.shrink(),
-            trailing: const SizedBox.shrink(),
-            memberships: const [],
-            clubsTitle: 'Clubs',
           ),
         ),
       ),
     );
     await tester.pump();
 
+    // `profile-hero` drops the bio line entirely rather than printing a
+    // placeholder, so nothing sits between the name and the stats row.
+    expect(find.text('   '), findsNothing);
     expect(find.text('BIO'), findsNothing);
     expect(find.text('No bio yet.'), findsNothing);
     expect(find.text('Add a bio…'), findsNothing);
+    expect(find.text('Student'), findsOneWidget);
+    expect(find.text('@student'), findsNothing);
+    expect(tester.takeException(), isNull);
   });
 
-  testWidgets('student profile renders the Campus ID design at phone width', (
+  testWidgets('student profile keeps the club loading state visible', (
     tester,
   ) async {
-    tester.view.devicePixelRatio = 1;
-    tester.view.physicalSize = const Size(390, 844);
-    addTearDown(tester.view.resetDevicePixelRatio);
-    addTearDown(tester.view.resetPhysicalSize);
-
-    final robotics = Club(
-      id: 'robotics',
-      name: 'KU Robotics',
-      description: 'Student robotics club',
-      adminUserIds: const [],
-    );
-    final theatre = Club(
-      id: 'theatre',
-      name: 'Drama & Theatre',
-      description: 'Student theatre club',
-      adminUserIds: const [],
-    );
-    final music = Club(
-      id: 'music',
-      name: 'Music Collective',
-      description: 'Student music club',
-      adminUserIds: const [],
-    );
-    final astronomy = Club(
-      id: 'astronomy',
-      name: 'KU Astronomy',
-      description: 'Student astronomy club',
-      adminUserIds: const [],
-    );
-    var shared = false;
-    var openedSettings = false;
-
     await tester.pumpWidget(
       ProviderScope(
         child: MaterialApp(
           localizationsDelegates: AppLocalizations.localizationsDelegates,
           supportedLocales: AppLocalizations.supportedLocales,
           home: StudentProfileScreen(
-            onShare: () => shared = true,
-            onSettings: () => openedSettings = true,
-            data: StudentProfileData(
-              userId: 'student-design-test',
-              initials: 'HT',
-              name: 'Hakan Tuncay',
-              email: 'htuncay23@ku.edu.tr',
-              graduation: "Class of '27",
-              major: 'Computer Engineering',
-              year: "Class of '27",
-              bio: 'Robotics builder and occasional jazz listener.',
-              clubs: 4,
-              followers: 31,
-              following: 12,
-              minors: const ['Physics'],
-              clubDetails: [
-                StudentClubDetail(
-                  club: robotics,
-                  memberCount: 84,
-                  role: 'Member',
-                ),
-                StudentClubDetail(
-                  club: theatre,
-                  memberCount: 42,
-                  role: 'Founder',
-                ),
-                StudentClubDetail(club: music, memberCount: 68, role: 'Member'),
-                StudentClubDetail(
-                  club: astronomy,
-                  memberCount: 36,
-                  role: 'Member',
-                ),
-              ],
+            onSettings: () {},
+            clubsLoading: true,
+            data: const StudentProfileData(
+              userId: 'clubs-loading-test',
+              initials: 'S',
+              name: 'Student',
+              graduation: '',
+              major: '',
+              year: '',
+              bio: '',
+              clubs: 0,
+              following: 0,
+              followers: 0,
             ),
-            followedClubs: [robotics, theatre, music, astronomy],
           ),
         ),
       ),
     );
     await tester.pump();
 
-    expect(find.byType(StudentCampusIdCard), findsOneWidget);
-    expect(find.text('STUDENT ID'), findsOneWidget);
-    expect(find.text('Hakan Tuncay'), findsOneWidget);
-    expect(find.text('Minor in Physics'), findsOneWidget);
-    expect(find.text('MY CLUBS'), findsOneWidget);
-    expect(find.text('KU Robotics'), findsOneWidget);
-    expect(find.text('Drama & Theatre'), findsOneWidget);
-    expect(find.byType(StudentClubRoleBadge), findsNWidgets(4));
-    expect(find.text('Founder'), findsOneWidget);
-    expect(find.byIcon(Icons.auto_awesome_rounded), findsOneWidget);
-    expect(tester.takeException(), isNull);
-
-    await tester.tap(find.bySemanticsLabel('Share profile'));
-    await tester.tap(find.bySemanticsLabel('Settings'));
-    expect(shared, isTrue);
-    expect(openedSettings, isTrue);
+    expect(find.byKey(const ValueKey('profile-clubs-loading')), findsOneWidget);
+    expect(find.text(S.noClubsYetLine), findsNothing);
   });
+
+  testWidgets(
+    'student profile renders the profile-screen frame at phone width',
+    (tester) async {
+      tester.view.devicePixelRatio = 1;
+      tester.view.physicalSize = const Size(390, 844);
+      addTearDown(tester.view.resetDevicePixelRatio);
+      addTearDown(tester.view.resetPhysicalSize);
+
+      final robotics = Club(
+        id: 'robotics',
+        name: 'KU Robotics',
+        description: 'Student robotics club',
+        adminUserIds: const [],
+      );
+      final theatre = Club(
+        id: 'theatre',
+        name: 'Drama & Theatre',
+        description: 'Student theatre club',
+        adminUserIds: const [],
+      );
+      final music = Club(
+        id: 'music',
+        name: 'Music Collective',
+        description: 'Student music club',
+        adminUserIds: const [],
+      );
+      final astronomy = Club(
+        id: 'astronomy',
+        name: 'KU Astronomy',
+        description: 'Student astronomy club',
+        adminUserIds: const [],
+      );
+      var shared = false;
+      var openedSettings = false;
+
+      await tester.pumpWidget(
+        ProviderScope(
+          child: MaterialApp(
+            localizationsDelegates: AppLocalizations.localizationsDelegates,
+            supportedLocales: AppLocalizations.supportedLocales,
+            home: StudentProfileScreen(
+              onShare: () => shared = true,
+              onSettings: () => openedSettings = true,
+              data: StudentProfileData(
+                userId: 'student-design-test',
+                initials: 'HT',
+                name: 'Hakan Tuncay',
+                email: 'htuncay23@ku.edu.tr',
+                graduation: "Class of '27",
+                major: 'Computer Engineering',
+                year: "Class of '27",
+                bio: 'Robotics builder and occasional jazz listener.',
+                clubs: 4,
+                followers: 31,
+                following: 12,
+                minors: const ['Physics'],
+                clubDetails: [
+                  StudentClubDetail(
+                    club: robotics,
+                    memberCount: 84,
+                    role: 'Member',
+                  ),
+                  StudentClubDetail(
+                    club: theatre,
+                    memberCount: 42,
+                    role: 'Founder',
+                  ),
+                  StudentClubDetail(
+                    club: music,
+                    memberCount: 68,
+                    role: 'Member',
+                  ),
+                  StudentClubDetail(
+                    club: astronomy,
+                    memberCount: 36,
+                    role: 'Member',
+                  ),
+                ],
+              ),
+              followedClubs: [robotics, theatre, music, astronomy],
+            ),
+          ),
+        ),
+      );
+      await tester.pump();
+
+      // `header` + `profile-hero`.
+      final wordmark = find.byKey(const ValueKey('profile-clubup-logo'));
+      expect(wordmark, findsOneWidget);
+      expect(find.text('ClubUp'), findsOneWidget);
+      final wordmarkSpan = tester.widget<Text>(wordmark).textSpan! as TextSpan;
+      final wordmarkSpans = wordmarkSpan.children!;
+      expect((wordmarkSpans[0] as TextSpan).style!.color, ProfileColors.accent);
+      expect((wordmarkSpans[1] as TextSpan).style!.color, ProfileColors.text);
+      expect(find.text('Hakan Tuncay'), findsOneWidget);
+      expect(find.text('@htuncay23'), findsNothing);
+      expect(
+        find.text('Robotics builder and occasional jazz listener.'),
+        findsOneWidget,
+      );
+      expect(find.text('CLUBS'), findsOneWidget);
+      expect(find.text('FOLLOWING'), findsOneWidget);
+      expect(find.text('FOLLOWERS'), findsOneWidget);
+
+      // `my-clubs-section` + `events-section`.
+      expect(find.text('My Clubs'), findsOneWidget);
+      expect(find.text('KU Robotics'), findsOneWidget);
+      expect(find.text('Drama & Theatre'), findsOneWidget);
+      expect(find.text('84 members'), findsOneWidget);
+      expect(find.text('Upcoming events'), findsOneWidget);
+
+      // Stripped to the frame: no campus ID card, no role badges, no academic
+      // block — the handoff puts academic info on `profile-edit` instead.
+      expect(find.byType(StudentCampusIdCard), findsNothing);
+      expect(find.text('STUDENT ID'), findsNothing);
+      expect(find.text('Minor in Physics'), findsNothing);
+      expect(find.byType(StudentClubRoleBadge), findsNothing);
+      expect(tester.takeException(), isNull);
+
+      await tester.tap(find.bySemanticsLabel('Share profile'));
+      await tester.tap(find.bySemanticsLabel('Settings'));
+      expect(shared, isTrue);
+      expect(openedSettings, isTrue);
+    },
+  );
 
   testWidgets('visited student profile shares the design without overflow', (
     tester,
@@ -237,28 +304,19 @@ void main() {
     );
     await tester.pump(const Duration(milliseconds: 400));
 
-    expect(find.byType(StudentCampusIdCard), findsOneWidget);
-    expect(find.text('Student Profile'), findsOneWidget);
-    expect(find.text('STUDENT ID'), findsOneWidget);
-    expect(find.text('CLUBS · 6'), findsOneWidget);
-    expect(find.text('See all'), findsOneWidget);
+    // Stripped to `profile-menu`: no campus ID card, no role badges.
+    expect(find.byType(StudentCampusIdCard), findsNothing);
+    expect(find.text('STUDENT ID'), findsNothing);
+    expect(find.text(profileHandle(student.email)), findsWidgets);
+    expect(find.text('CLUBS'), findsOneWidget);
+    expect(find.text('6'), findsOneWidget);
     // Visited profiles show Follow + Message side by side.
-    expect(find.byType(StudentProfilePrimaryButton), findsNWidgets(2));
-    expect(find.text('Message'), findsOneWidget);
-    final profileView = tester.widget<StudentCampusProfileView>(
-      find.byType(StudentCampusProfileView),
-    );
-    expect(profileView.profile.clubs, 6);
-    expect(profileView.memberships.first.club.id, roleOnlyClub.id);
-    expect(profileView.memberships.first.role, 'President');
-    expect(find.text('President'), findsOneWidget);
-    expect(find.byIcon(Icons.workspace_premium_rounded), findsOneWidget);
-    expect(
-      profileView.memberships.where((item) => item.club.id == roleOnlyClub.id),
-      hasLength(1),
-    );
+    expect(find.byType(ProfileActionButton), findsNWidgets(2));
+    expect(find.text(S.message), findsOneWidget);
+    // The role-first club union still puts the board-role club first.
+    expect(find.text(roleOnlyClub.name), findsOneWidget);
 
-    await tester.tap(find.text('Message'));
+    await tester.tap(find.text(S.message));
     await tester.pumpAndSettle();
 
     final chat = tester.widget<ChatThreadScreen>(find.byType(ChatThreadScreen));
@@ -315,12 +373,124 @@ void main() {
     expect(profile.data.clubDetails.first.club.id, roleOnlyClub.id);
     expect(profile.data.clubDetails.first.role, 'President');
 
-    final profileView = tester.widget<StudentCampusProfileView>(
-      find.byType(StudentCampusProfileView),
+    // `my-clubs-section` renders that union; the role badge the old campus
+    // card carried is not part of the frame.
+    expect(find.text(roleOnlyClub.name), findsOneWidget);
+    expect(find.text('President'), findsNothing);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('the board badge opens the board-memberships overlay', (
+    tester,
+  ) async {
+    tester.view.devicePixelRatio = 1;
+    tester.view.physicalSize = const Size(390, 844);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    addTearDown(tester.view.resetPhysicalSize);
+
+    final rooftop = Club(
+      id: 'board-rooftop',
+      name: 'Rooftop Collective',
+      description: 'Sunset sessions every Thursday.',
+      adminUserIds: const [],
     );
-    expect(profileView.memberships.first.club.id, roleOnlyClub.id);
-    expect(profileView.memberships.first.role, 'President');
+    final arts = Club(
+      id: 'board-arts',
+      name: 'Underground Arts',
+      description: 'Basement gigs and gallery nights.',
+      adminUserIds: const [],
+    );
+    final followedOnly = Club(
+      id: 'board-zen',
+      name: 'Zen Movement',
+      description: 'Morning stretch on the lawn.',
+      adminUserIds: const [],
+    );
+    Club? openedClub;
+
+    Widget profile(List<StudentClubDetail> details) => ProviderScope(
+      child: MaterialApp(
+        localizationsDelegates: AppLocalizations.localizationsDelegates,
+        supportedLocales: AppLocalizations.supportedLocales,
+        home: StudentProfileScreen(
+          onSettings: () {},
+          onClubTap: (club) => openedClub = club,
+          data: StudentProfileData(
+            userId: 'board-badge-test',
+            initials: 'HE',
+            name: 'Hakan Erdogan',
+            email: 'hakan.erdogan@ku.edu.tr',
+            graduation: '',
+            major: '',
+            year: '',
+            bio: 'Adventure seeker.',
+            clubs: details.length,
+            followers: 89,
+            following: 156,
+            clubDetails: details,
+          ),
+        ),
+      ),
+    );
+
+    // A student with no board seat gets no badge at all.
+    await tester.pumpWidget(
+      profile([StudentClubDetail(club: followedOnly, memberCount: 89)]),
+    );
+    await tester.pump();
+    expect(find.byType(ProfileRolePill), findsNothing);
+
+    await tester.pumpWidget(
+      profile([
+        StudentClubDetail(
+          club: rooftop,
+          memberCount: 342,
+          role: 'President',
+          boardRole: 'President',
+        ),
+        StudentClubDetail(
+          club: arts,
+          memberCount: 128,
+          role: 'Treasurer',
+          boardRole: 'Treasurer',
+        ),
+        StudentClubDetail(club: followedOnly, memberCount: 89),
+      ]),
+    );
+    await tester.pump();
+
+    // `board-badge` sits between the name and the bio, and titles stay in the
+    // overlay rather than on the page.
+    expect(find.text('Board Member'), findsOneWidget);
+    expect(find.text('President'), findsNothing);
+
+    await tester.tap(find.text('Board Member'));
+    await tester.pumpAndSettle();
+
+    // `board-memberships-overlay`: one row per seat, follower-only clubs out.
+    expect(find.text('Board Memberships'), findsOneWidget);
+    expect(find.text('Rooftop Collective'), findsWidgets);
     expect(find.text('President'), findsOneWidget);
+    expect(find.text('Treasurer'), findsOneWidget);
+    expect(find.text('342 members'), findsWidgets);
+    expect(
+      find.descendant(
+        of: find.byType(BottomSheet),
+        matching: find.text('Zen Movement'),
+      ),
+      findsNothing,
+    );
+
+    await tester.tap(
+      find.descendant(
+        of: find.byType(BottomSheet),
+        matching: find.text('Underground Arts'),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(openedClub?.id, arts.id);
+    expect(find.text('Board Memberships'), findsNothing);
     expect(tester.takeException(), isNull);
   });
 }

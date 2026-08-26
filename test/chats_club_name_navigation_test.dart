@@ -71,7 +71,11 @@ void main() {
     );
     await tester.pump();
 
-    await tester.tap(find.byKey(const ValueKey('chat-filter-clubs')));
+    // The segmented Students/Clubs control became the header dropdown on
+    // `chats-light` 243:475.
+    await tester.tap(find.byKey(const ValueKey('chats-filter-dropdown')));
+    await tester.pump();
+    await tester.tap(find.byKey(const ValueKey('chats-filter-option-clubs')));
     await tester.pump();
     await tester.tap(
       find.byKey(const ValueKey('chat-thread-profile-name-club:$clubId')),

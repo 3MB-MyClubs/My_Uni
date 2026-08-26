@@ -31,6 +31,7 @@ Future<void> showBigPicturePostComposerSheet({
   required dynamic club,
   required Color color,
   required VoidCallback onPosted,
+  String initialText = '',
 }) {
   return showModalBottomSheet<void>(
     context: context,
@@ -41,6 +42,7 @@ Future<void> showBigPicturePostComposerSheet({
       club: club,
       color: color,
       onPosted: onPosted,
+      initialText: initialText,
     ),
   );
 }
@@ -50,10 +52,15 @@ class _BigPicturePostComposerSheet extends StatefulWidget {
   final Color color;
   final VoidCallback onPosted;
 
+  /// Carried over from the CLUB HOME compose card when the admin taps its
+  /// photo action mid-sentence.
+  final String initialText;
+
   const _BigPicturePostComposerSheet({
     required this.club,
     required this.color,
     required this.onPosted,
+    this.initialText = '',
   });
 
   @override
@@ -75,6 +82,7 @@ class _BigPicturePostComposerSheetState
   @override
   void initState() {
     super.initState();
+    _controller.text = widget.initialText;
     _controller.addListener(_onChanged);
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (mounted) _focusNode.requestFocus();

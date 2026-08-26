@@ -143,15 +143,17 @@ void main() {
 
     expect(find.text('First lifecycle regression post'), findsOneWidget);
     expect(find.text('Second lifecycle regression post'), findsOneWidget);
+    // A club-admin session now draws the CLUB HOME card (`home-feed-alt`
+    // 272:31), whose photo carries the area's own key.
     expect(
-      find.byKey(const ValueKey('home-feed-photo-feed-view-lifecycle-1')),
+      find.byKey(const ValueKey('club-home-post-photo-feed-view-lifecycle-1')),
       findsOneWidget,
     );
     final firstPhoto = find.byKey(
-      const ValueKey('home-feed-photo-feed-view-lifecycle-1'),
+      const ValueKey('club-home-post-photo-feed-view-lifecycle-1'),
     );
     final secondPhoto = find.byKey(
-      const ValueKey('home-feed-photo-feed-view-lifecycle-2'),
+      const ValueKey('club-home-post-photo-feed-view-lifecycle-2'),
     );
     expect(secondPhoto, findsOneWidget);
 

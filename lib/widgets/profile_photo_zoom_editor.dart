@@ -49,7 +49,7 @@ ThemeData profilePhotoEditorTheme(Brightness brightness) {
     brightness: brightness,
     useMaterial3: true,
     scaffoldBackgroundColor: brightness == Brightness.dark
-        ? const Color(0xFF0C0608)
+        ? const Color(0xFF121212)
         : const Color(0xFFF8F5F6),
     colorScheme: ColorScheme.fromSeed(
       seedColor: AppColors.primaryRed,

@@ -1,22 +1,25 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import '../l10n/app_localizations.dart';
-import '../services/app_strings.dart';
 import '../services/locale_service.dart';
 import '../services/theme_service.dart';
 import '../models/event.dart';
+import '../models/user.dart';
 import '../services/app_colors.dart';
 import '../services/auth_service.dart';
 import '../services/content_store.dart';
-import '../services/event_access.dart';
 import '../services/lazy_content_loader.dart';
 import '../services/mock_data.dart';
+import '../services/people_service.dart';
 import '../services/moderation_service.dart';
 import '../services/rsvp_store.dart';
 import '../services/user_state.dart';
 import '../services/view_tracker.dart';
 import '../onboarding/onboarding_anchors.dart';
+import '../widgets/club_avatar.dart';
+import '../widgets/clubup_design.dart';
 import '../widgets/event_cover_image.dart';
+import '../widgets/user_avatar.dart';
 import '../widgets/app_motion.dart';
 import '../widgets/instagram_refresh_control.dart';
 import 'event_detail_screen.dart';
@@ -59,29 +62,30 @@ Color _clubColor(String clubId) {
   return colors[(idx < 0 ? 0 : idx) % colors.length];
 }
 
+/// Best-known display name for an attendee id — checks the people directory
+/// and the seeded user list before falling back to the raw id, so the avatar
+/// always has an initial to draw.
+String _attendeeName(String userId) {
+  final person =
+      peopleService.cachedPeople.cast<User?>().firstWhere(
+        (u) => u?.id == userId,
+        orElse: () => null,
+      ) ??
+      users.cast<User?>().firstWhere(
+        (u) => u?.id == userId,
+        orElse: () => null,
+      );
+  return userState.displayNameFor(userId, person?.name ?? userId);
+}
+
 String _fmt2(int n) => n.toString().padLeft(2, '0');
 String _timeStr(DateTime dt) => '${_fmt2(dt.hour)}:${_fmt2(dt.minute)}';
-
-String _dayKey(DateTime d) => '${d.year}-${d.month}-${d.day}';
 
 String _shortDay(DateTime d, BuildContext context) {
   if (_isDateToday(d)) return AppLocalizations.of(context)!.today;
   if (_isDateTomorrow(d)) return AppLocalizations.of(context)!.tomorrow;
   return '${DateFormat.E(localeService.languageCode).format(d)} ${d.day}';
 }
-
-// ─────────────────────────────────────────────────────────────────────────────
-// Date result — differentiates explicit Done from sheet dismiss
-// ─────────────────────────────────────────────────────────────────────────────
-
-class _DateResult {
-  final Set<String> keys; // day-key strings yyyy-m-d
-  const _DateResult(this.keys);
-}
-
-// ─────────────────────────────────────────────────────────────────────────────
-// Week tab — "Discover events" search-style layout
-// ─────────────────────────────────────────────────────────────────────────────
 
 class ThisWeekScreen extends StatefulWidget {
   /// True only for the instance hosted in the main nav bar's IndexedStack, so
@@ -96,12 +100,17 @@ class ThisWeekScreen extends StatefulWidget {
 }
 
 class _ThisWeekScreenState extends State<ThisWeekScreen> {
-  String _audience = 'all'; // 'all' | 'following'
-  Set<String> _dateFilters =
-      {}; // empty = any date; else set of day-key strings
-  bool _showLive = false;
+  /// Selected category chip. Empty string is the design's "All" chip.
+  String _category = '';
   String _query = '';
   final _searchController = TextEditingController();
+
+  /// Bookmarked events. The `clubup-events` card has a bookmark control, but
+  /// there is no persisted saved-events state in the app yet (`userState` only
+  /// has `savedPostIds`) and adding one means a new synced prefs field. Kept in
+  /// memory for the session so the control behaves, and deliberately not
+  /// written anywhere — see the note in the handoff summary.
+  final Set<String> _bookmarked = {};
 
   @override
   void initState() {
@@ -184,19 +193,15 @@ class _ThisWeekScreenState extends State<ThisWeekScreen> {
     if (q.isNotEmpty) {
       // Search stays inside the two-year upcoming event window.
       list = list.where((e) => _matchesQuery(e, q)).toList();
-    } else {
-      if (_audience == 'following') {
-        final followed = userState.followedClubIds;
-        list = list.where((e) => followed.contains(e.clubId)).toList();
-      }
-      if (_dateFilters.isNotEmpty) {
-        list = list
-            .where((e) => _dateFilters.contains(_dayKey(e.dateTime)))
-            .toList();
-      }
-      if (_showLive) {
-        list = list.where((e) => _isLive(e)).toList();
-      }
+    }
+    if (_category.isNotEmpty) {
+      list = list
+          .where(
+            (e) => e.tags.any(
+              (tag) => tag.toLowerCase() == _category.toLowerCase(),
+            ),
+          )
+          .toList();
     }
     list.sort((a, b) => a.dateTime.compareTo(b.dateTime));
     return list;
@@ -262,40 +267,26 @@ class _ThisWeekScreenState extends State<ThisWeekScreen> {
 
   void _resetFilters() {
     setState(() {
-      _audience = 'all';
-      _dateFilters = {};
-      _showLive = false;
+      _category = '';
       _query = '';
       _searchController.clear();
     });
   }
 
-  // ── Filter sheets ──────────────────────────────────────────────────────────
-
-  Future<void> _showAudienceSheet() async {
-    await showModalBottomSheet<void>(
-      context: context,
-      backgroundColor: Colors.transparent,
-      builder: (_) => _AudienceSheet(
-        current: _audience,
-        onPick: (v) {
-          setState(() => _audience = v);
-          Navigator.pop(context);
-        },
-      ),
-    );
-  }
-
-  Future<void> _showDateSheet() async {
-    final result = await showModalBottomSheet<_DateResult>(
-      context: context,
-      backgroundColor: Colors.transparent,
-      isScrollControlled: true,
-      builder: (_) => _DatePickerSheet(selected: _dateFilters),
-    );
-    if (mounted && result != null) {
-      setState(() => _dateFilters = result.keys);
+  /// Category chips: the design's "All" plus every tag present on an event in
+  /// the pool, so the row only ever offers categories that match something.
+  List<String> get _categoryOptions {
+    final seen = <String, String>{};
+    for (final event in _eventPool) {
+      for (final tag in event.tags) {
+        final key = tag.trim().toLowerCase();
+        if (key.isEmpty) continue;
+        seen.putIfAbsent(key, () => tag.trim());
+      }
     }
+    final tags = seen.values.toList()
+      ..sort((a, b) => a.toLowerCase().compareTo(b.toLowerCase()));
+    return tags;
   }
 
   // ── Build ─────────────────────────────────────────────────────────────────
@@ -308,1306 +299,437 @@ class _ThisWeekScreenState extends State<ThisWeekScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final topPad = MediaQuery.paddingOf(context).top;
+    final l10n = AppLocalizations.of(context)!;
     final results = _results();
     final newEventCount = _newUnopenedEvents().length;
     final searching = _query.trim().isNotEmpty;
-    final hasFilter =
-        _audience != 'all' || _dateFilters.isNotEmpty || _showLive;
-    final contextLabel = _contextLabel();
+    final categories = _categoryOptions;
 
     return Scaffold(
-      backgroundColor: AppColors.background,
-      body: CustomScrollView(
-        physics: const BouncingScrollPhysics(
-          parent: AlwaysScrollableScrollPhysics(),
+      backgroundColor: ClubUpColors.background,
+      body: SafeArea(
+        bottom: false,
+        child: Column(
+          children: [
+            _header(l10n, newEventCount),
+            Expanded(
+              child: CustomScrollView(
+                physics: const BouncingScrollPhysics(
+                  parent: AlwaysScrollableScrollPhysics(),
+                ),
+                slivers: [
+                  InstagramRefreshControl(onRefresh: _onRefresh),
+                  SliverToBoxAdapter(
+                    child: Padding(
+                      padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
+                      child: _searchBar(l10n),
+                    ),
+                  ),
+                  if (categories.isNotEmpty)
+                    SliverToBoxAdapter(child: _categoryRow(l10n, categories)),
+                  if (results.isEmpty)
+                    SliverFillRemaining(
+                      hasScrollBody: false,
+                      child: _EmptyState(
+                        searching: searching,
+                        hasFilter: _category.isNotEmpty,
+                        onReset: _resetFilters,
+                      ),
+                    )
+                  else
+                    SliverPadding(
+                      padding: const EdgeInsets.fromLTRB(16, 16, 16, 0),
+                      sliver: SliverList(
+                        delegate: SliverChildBuilderDelegate((ctx, i) {
+                          final ev = results[i];
+                          return Padding(
+                            padding: EdgeInsets.only(
+                              bottom: i < results.length - 1 ? 12 : 0,
+                            ),
+                            child: _WeekEventRow(
+                              key: ValueKey(ev.id),
+                              event: ev,
+                              color: _clubColor(ev.clubId),
+                              bookmarked: _bookmarked.contains(ev.id),
+                              onBookmark: () => setState(() {
+                                if (!_bookmarked.add(ev.id)) {
+                                  _bookmarked.remove(ev.id);
+                                }
+                              }),
+                              onTap: () => _openEvent(ev),
+                              // Anchor the tour's "RSVP" step to the first
+                              // card — only on the nav-hosted instance.
+                              rsvpAnchorKey: (i == 0 && widget.isTutorialHost)
+                                  ? onboardingAnchors.keyFor(
+                                      OnboardingAnchors.eventsRsvp,
+                                    )
+                                  : null,
+                            ),
+                          );
+                        }, childCount: results.length),
+                      ),
+                    ),
+                  SliverToBoxAdapter(
+                    child: SizedBox(
+                      height: MediaQuery.paddingOf(context).bottom + 100,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
         ),
-        slivers: [
-          InstagramRefreshControl(onRefresh: _onRefresh),
-          // ── Header: title + subtitle + bell ──
-          SliverToBoxAdapter(
-            child: Padding(
-              padding: EdgeInsets.fromLTRB(20, topPad + 14, 16, 4),
-              child: Row(
-                crossAxisAlignment: CrossAxisAlignment.start,
+      ),
+    );
+  }
+
+  /// `header-container` — the ClubUp wordmark and the new-events bell, over a
+  /// hairline that separates it from the scroller.
+  Widget _header(AppLocalizations l10n, int newEventCount) {
+    return Container(
+      decoration: BoxDecoration(
+        border: Border(bottom: BorderSide(color: ClubUpColors.border)),
+      ),
+      padding: const EdgeInsets.fromLTRB(20, 8, 20, 12),
+      child: Row(
+        children: [
+          if (Navigator.canPop(context)) ...[
+            GestureDetector(
+              onTap: () => Navigator.pop(context),
+              child: Padding(
+                padding: const EdgeInsets.only(right: 12),
+                child: Icon(
+                  Icons.arrow_back_ios_new_rounded,
+                  size: 18,
+                  color: ClubUpColors.text,
+                ),
+              ),
+            ),
+          ],
+          Expanded(
+            child: Text.rich(
+              // Brand wordmark — intentionally not localized.
+              TextSpan(
                 children: [
-                  if (Navigator.canPop(context)) ...[
-                    GestureDetector(
-                      onTap: () => Navigator.pop(context),
-                      child: Container(
-                        width: 38,
-                        height: 38,
-                        margin: const EdgeInsets.only(right: 10, top: 2),
-                        decoration: BoxDecoration(
-                          color: AppColors.lightGray,
-                          borderRadius: BorderRadius.all(Radius.circular(12)),
-                        ),
-                        child: Icon(
-                          Icons.arrow_back_ios_new_rounded,
-                          size: 18,
-                          color: AppColors.text,
-                        ),
-                      ),
-                    ),
-                  ],
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          AppLocalizations.of(context)!.discoverEvents,
-                          style: TextStyle(
-                            fontSize: 27,
-                            fontWeight: FontWeight.w800,
-                            color: AppColors.text,
-                            letterSpacing: -0.9,
-                            height: 1.0,
-                          ),
-                        ),
-                        const SizedBox(height: 4),
-                        Text(
-                          S.upcomingEventsHint,
-                          style: TextStyle(
-                            fontSize: 13,
-                            color: AppColors.secondaryText,
-                            letterSpacing: -0.1,
-                          ),
-                        ),
-                      ],
+                  TextSpan(
+                    text: 'Club',
+                    style: figtree(
+                      size: 22,
+                      weight: FontWeight.w800,
+                      color: ClubUpColors.accent,
                     ),
                   ),
-                  if (authService.isStudentSession) ...[
-                    const SizedBox(width: 8),
-                    _HeaderIconBtn(
-                      icon: Icons.notifications_outlined,
-                      badgeCount: newEventCount,
-                      onTap: _openNewEventNotifications,
+                  TextSpan(
+                    text: 'Up',
+                    style: figtree(
+                      size: 22,
+                      weight: FontWeight.w800,
+                      color: ClubUpColors.text,
                     ),
-                  ],
+                  ),
                 ],
               ),
             ),
           ),
-
-          // ── Search bar ──
-          SliverToBoxAdapter(
-            child: Padding(
-              padding: const EdgeInsets.fromLTRB(20, 14, 20, 12),
-              child: _SearchBar(
-                controller: _searchController,
-                onChanged: (v) => setState(() => _query = v),
-                onClear: () => setState(() {
-                  _query = '';
-                  _searchController.clear();
-                }),
-              ),
+          if (authService.isStudentSession)
+            _HeaderIconBtn(
+              icon: Icons.notifications_none_rounded,
+              badgeCount: newEventCount,
+              onTap: _openNewEventNotifications,
             ),
-          ),
-
-          // ── Filter bar: audience · date (multi) · live · clear ──
-          SliverToBoxAdapter(
-            child: Padding(
-              padding: const EdgeInsets.fromLTRB(20, 0, 20, 0),
-              child: Row(
-                children: [
-                  // Audience
-                  Expanded(
-                    child: _FilterPillBtn(
-                      label: _audience == 'following'
-                          ? AppLocalizations.of(context)!.following
-                          : AppLocalizations.of(context)!.all,
-                      icon: _audience == 'following'
-                          ? Icons.favorite_outline_rounded
-                          : Icons.people_outline_rounded,
-                      active: _audience == 'following',
-                      onTap: _showAudienceSheet,
-                      expand: true,
-                    ),
-                  ),
-                  const SizedBox(width: 8),
-                  // Date (multi-select)
-                  Expanded(
-                    child: _FilterPillBtn(
-                      label: _dateFilters.isEmpty
-                          ? AppLocalizations.of(context)!.anyDate
-                          : _dateFilters.length == 1
-                          ? _shortDay(
-                              _dayKeyToDate(_dateFilters.first),
-                              context,
-                            )
-                          : AppLocalizations.of(
-                              context,
-                            )!.daysCount(_dateFilters.length),
-                      icon: Icons.calendar_today_outlined,
-                      active: _dateFilters.isNotEmpty,
-                      onTap: _showDateSheet,
-                      expand: true,
-                    ),
-                  ),
-                  const SizedBox(width: 8),
-                  // Live toggle
-                  _LiveToggleBtn(
-                    active: _showLive,
-                    onTap: () => setState(() => _showLive = !_showLive),
-                  ),
-                  // Clear all filters
-                  if (hasFilter && !searching) ...[
-                    const SizedBox(width: 8),
-                    GestureDetector(
-                      onTap: _resetFilters,
-                      child: Container(
-                        width: 34,
-                        height: 34,
-                        decoration: BoxDecoration(
-                          color: AppColors.primaryRed.withValues(alpha: 0.10),
-                          borderRadius: BorderRadius.all(Radius.circular(100)),
-                          border: Border.all(
-                            color: AppColors.primaryRed.withValues(alpha: 0.25),
-                          ),
-                        ),
-                        child: Icon(
-                          Icons.close_rounded,
-                          size: 15,
-                          color: AppColors.primaryRed,
-                        ),
-                      ),
-                    ),
-                  ],
-                ],
-              ),
-            ),
-          ),
-
-          // ── Count header ──
-          SliverToBoxAdapter(
-            child: Padding(
-              padding: const EdgeInsets.fromLTRB(20, 18, 20, 12),
-              child: Row(
-                crossAxisAlignment: CrossAxisAlignment.baseline,
-                textBaseline: TextBaseline.alphabetic,
-                children: [
-                  Text(
-                    AppLocalizations.of(context)!.eventsCount(results.length),
-                    style: TextStyle(
-                      fontSize: 16,
-                      fontWeight: FontWeight.w800,
-                      color: AppColors.text,
-                      letterSpacing: -0.3,
-                    ),
-                  ),
-                  if (contextLabel.isNotEmpty) ...[
-                    const SizedBox(width: 8),
-                    Expanded(
-                      child: Text(
-                        contextLabel,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: TextStyle(
-                          fontSize: 13,
-                          color: AppColors.secondaryText,
-                        ),
-                      ),
-                    ),
-                  ],
-                ],
-              ),
-            ),
-          ),
-
-          // ── Results / empty ──
-          if (results.isEmpty)
-            SliverFillRemaining(
-              hasScrollBody: false,
-              child: _EmptyState(
-                searching: searching,
-                hasFilter: hasFilter,
-                onReset: _resetFilters,
-              ),
-            )
-          else
-            SliverPadding(
-              padding: const EdgeInsets.fromLTRB(20, 0, 20, 0),
-              sliver: SliverList(
-                delegate: SliverChildBuilderDelegate((ctx, i) {
-                  final ev = results[i];
-                  return Padding(
-                    padding: EdgeInsets.only(
-                      bottom: i < results.length - 1 ? 12 : 0,
-                    ),
-                    child: _WeekEventRow(
-                      key: ValueKey(ev.id),
-                      event: ev,
-                      color: _clubColor(ev.clubId),
-                      onTap: () => _openEvent(ev),
-                      // Anchor the tour's "RSVP" step to the first event's
-                      // pill — only on the nav-hosted instance.
-                      rsvpAnchorKey: (i == 0 && widget.isTutorialHost)
-                          ? onboardingAnchors.keyFor(
-                              OnboardingAnchors.eventsRsvp,
-                            )
-                          : null,
-                    ),
-                  );
-                }, childCount: results.length),
-              ),
-            ),
-
-          SliverToBoxAdapter(
-            child: SizedBox(height: MediaQuery.paddingOf(context).bottom + 90),
-          ),
         ],
       ),
     );
   }
 
-  // Converts a stored day-key string (yyyy-m-d) back to a DateTime.
-  DateTime _dayKeyToDate(String key) {
-    final p = key.split('-');
-    return DateTime(int.parse(p[0]), int.parse(p[1]), int.parse(p[2]));
-  }
-
-  String _contextLabel() {
-    final q = _query.trim();
-    if (q.isNotEmpty) return AppLocalizations.of(context)!.filterQueryLabel(q);
-    final parts = <String>[];
-    if (_showLive) parts.add(AppLocalizations.of(context)!.liveNowFilterLabel);
-    if (_audience == 'following') {
-      parts.add(AppLocalizations.of(context)!.followingFilterLabel);
-    }
-    if (_dateFilters.isNotEmpty) {
-      parts.add(
-        _dateFilters.length == 1
-            ? _shortDay(_dayKeyToDate(_dateFilters.first), context)
-            : AppLocalizations.of(context)!.daysCount(_dateFilters.length),
-      );
-    }
-    if (parts.isEmpty) return '';
-    return '· ${parts.join(' · ')}';
-  }
-}
-
-// ─────────────────────────────────────────────────────────────────────────────
-// Search bar
-// ─────────────────────────────────────────────────────────────────────────────
-
-class _SearchBar extends StatefulWidget {
-  final TextEditingController controller;
-  final ValueChanged<String> onChanged;
-  final VoidCallback onClear;
-
-  const _SearchBar({
-    required this.controller,
-    required this.onChanged,
-    required this.onClear,
-  });
-
-  @override
-  State<_SearchBar> createState() => _SearchBarState();
-}
-
-class _SearchBarState extends State<_SearchBar> {
-  final _focusNode = FocusNode();
-
-  @override
-  void dispose() {
-    _focusNode.dispose();
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final hasText = widget.controller.text.isNotEmpty;
+  Widget _searchBar(AppLocalizations l10n) {
     return Container(
-      height: 46,
-      padding: const EdgeInsets.symmetric(horizontal: 14),
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
       decoration: BoxDecoration(
-        color: AppColors.card,
-        borderRadius: BorderRadius.all(Radius.circular(14)),
-        border: Border.all(color: AppColors.divider, width: 1.5),
+        color: ClubUpColors.field,
+        borderRadius: BorderRadius.circular(20),
       ),
       child: Row(
         children: [
-          Icon(Icons.search_rounded, size: 19, color: AppColors.secondaryText),
-          const SizedBox(width: 10),
+          Icon(Icons.search, size: 16, color: ClubUpColors.muted),
+          const SizedBox(width: 8),
           Expanded(
             child: TextField(
-              controller: widget.controller,
-              focusNode: _focusNode,
-              cursorColor: AppColors.text,
-              style: TextStyle(
-                fontSize: 15,
-                color: AppColors.text,
-                letterSpacing: -0.2,
+              controller: _searchController,
+              onChanged: (v) => setState(() => _query = v),
+              style: figtree(
+                size: 14,
+                weight: FontWeight.w400,
+                color: ClubUpColors.text,
               ),
               decoration: InputDecoration(
                 isCollapsed: true,
                 filled: false,
-                fillColor: Colors.transparent,
                 border: InputBorder.none,
                 enabledBorder: InputBorder.none,
                 focusedBorder: InputBorder.none,
-                disabledBorder: InputBorder.none,
-                errorBorder: InputBorder.none,
-                focusedErrorBorder: InputBorder.none,
-                hintText: AppLocalizations.of(context)!.searchEvents,
-                hintStyle: TextStyle(
-                  fontSize: 15,
-                  color: AppColors.secondaryText,
-                ),
-              ),
-              onChanged: (v) {
-                widget.onChanged(v);
-                setState(() {});
-              },
-            ),
-          ),
-          if (hasText)
-            GestureDetector(
-              onTap: () {
-                widget.onClear();
-                setState(() {});
-              },
-              child: Container(
-                width: 22,
-                height: 22,
-                decoration: BoxDecoration(
-                  color: AppColors.surfaceAlt,
-                  shape: BoxShape.circle,
-                ),
-                child: Icon(
-                  Icons.close_rounded,
+                contentPadding: EdgeInsets.zero,
+                hintText: l10n.searchEventsPosts,
+                hintStyle: figtree(
                   size: 14,
-                  color: AppColors.secondaryText,
+                  weight: FontWeight.w400,
+                  color: ClubUpColors.muted,
                 ),
               ),
             ),
-        ],
-      ),
-    );
-  }
-}
-
-// ─────────────────────────────────────────────────────────────────────────────
-// Filter pill button (used in the two-button filter bar)
-// ─────────────────────────────────────────────────────────────────────────────
-
-class _FilterPillBtn extends StatelessWidget {
-  final String label;
-  final IconData icon;
-  final bool active;
-  final VoidCallback onTap;
-  final bool expand;
-
-  const _FilterPillBtn({
-    required this.label,
-    required this.icon,
-    required this.active,
-    required this.onTap,
-    this.expand = false,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    final child = GestureDetector(
-      onTap: onTap,
-      child: AnimatedContainer(
-        duration: const Duration(milliseconds: 160),
-        height: 38,
-        padding: const EdgeInsets.symmetric(horizontal: 14),
-        decoration: BoxDecoration(
-          color: active ? AppColors.primaryRed : AppColors.card,
-          borderRadius: BorderRadius.all(Radius.circular(100)),
-          border: Border.all(
-            color: active ? AppColors.primaryRed : AppColors.divider,
-            width: 1.5,
           ),
-        ),
-        child: Row(
-          mainAxisSize: expand ? MainAxisSize.max : MainAxisSize.min,
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Icon(
-              icon,
-              size: 14,
-              color: active ? Colors.white : AppColors.secondaryText,
-            ),
-            const SizedBox(width: 6),
-            Flexible(
-              child: Text(
-                label,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: TextStyle(
-                  fontSize: 13,
-                  fontWeight: FontWeight.w600,
-                  letterSpacing: -0.1,
-                  color: active ? Colors.white : AppColors.text,
-                ),
-              ),
-            ),
-            const SizedBox(width: 4),
-            Icon(
-              Icons.keyboard_arrow_down_rounded,
-              size: 16,
-              color: active
-                  ? Colors.white.withValues(alpha: 0.8)
-                  : AppColors.secondaryText,
-            ),
-          ],
-        ),
-      ),
-    );
-    return expand ? child : child;
-  }
-}
-
-// ─────────────────────────────────────────────────────────────────────────────
-// Live toggle button (pulsing dot when active)
-// ─────────────────────────────────────────────────────────────────────────────
-
-class _LiveToggleBtn extends StatelessWidget {
-  final bool active;
-  final VoidCallback onTap;
-
-  const _LiveToggleBtn({required this.active, required this.onTap});
-
-  @override
-  Widget build(BuildContext context) {
-    return GestureDetector(
-      onTap: onTap,
-      child: AnimatedContainer(
-        duration: const Duration(milliseconds: 160),
-        height: 38,
-        padding: const EdgeInsets.symmetric(horizontal: 12),
-        decoration: BoxDecoration(
-          color: active ? AppColors.primaryRed : AppColors.card,
-          borderRadius: BorderRadius.all(Radius.circular(100)),
-          border: Border.all(
-            color: active ? AppColors.primaryRed : AppColors.divider,
-            width: 1.5,
-          ),
-        ),
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            _PulseDot(color: active ? Colors.white : AppColors.primaryRed),
-            const SizedBox(width: 6),
-            Text(
-              AppLocalizations.of(context)!.live,
-              style: TextStyle(
-                fontSize: 13,
-                fontWeight: FontWeight.w600,
-                letterSpacing: -0.1,
-                color: active ? Colors.white : AppColors.text,
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-// ─────────────────────────────────────────────────────────────────────────────
-// Audience bottom sheet (All / Following)
-// ─────────────────────────────────────────────────────────────────────────────
-
-class _AudienceSheet extends StatelessWidget {
-  final String current;
-  final ValueChanged<String> onPick;
-
-  const _AudienceSheet({required this.current, required this.onPick});
-
-  @override
-  Widget build(BuildContext context) {
-    final bottom = MediaQuery.paddingOf(context).bottom;
-    return Container(
-      padding: EdgeInsets.fromLTRB(20, 10, 20, bottom + 20),
-      decoration: BoxDecoration(
-        color: AppColors.background,
-        borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.12),
-            blurRadius: 30,
-            offset: const Offset(0, -8),
-          ),
-        ],
-      ),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Container(
-            width: 40,
-            height: 4,
-            decoration: BoxDecoration(
-              color: AppColors.divider,
-              borderRadius: BorderRadius.all(Radius.circular(999)),
-            ),
-          ),
-          const SizedBox(height: 18),
-          Text(
-            AppLocalizations.of(context)!.showEventsFrom,
-            style: TextStyle(
-              fontSize: 17,
-              fontWeight: FontWeight.w800,
-              color: AppColors.text,
-              letterSpacing: -0.5,
-            ),
-          ),
-          const SizedBox(height: 16),
-          _AudienceOption(
-            label: AppLocalizations.of(context)!.allEvents,
-            subtitle: AppLocalizations.of(context)!.everythingOnCampus,
-            icon: Icons.public_outlined,
-            selected: current == 'all',
-            onTap: () => onPick('all'),
-          ),
-          const SizedBox(height: 10),
-          _AudienceOption(
-            label: AppLocalizations.of(context)!.following,
-            subtitle: AppLocalizations.of(context)!.followingOnly,
-            icon: Icons.favorite_outline_rounded,
-            selected: current == 'following',
-            onTap: () => onPick('following'),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _AudienceOption extends StatelessWidget {
-  final String label;
-  final String subtitle;
-  final IconData icon;
-  final bool selected;
-  final VoidCallback onTap;
-
-  const _AudienceOption({
-    required this.label,
-    required this.subtitle,
-    required this.icon,
-    required this.selected,
-    required this.onTap,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return GestureDetector(
-      onTap: onTap,
-      child: AnimatedContainer(
-        duration: const Duration(milliseconds: 120),
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-        decoration: BoxDecoration(
-          color: selected
-              ? AppColors.primaryRed.withValues(alpha: 0.08)
-              : AppColors.card,
-          borderRadius: BorderRadius.all(Radius.circular(16)),
-          border: Border.all(
-            color: selected
-                ? AppColors.primaryRed.withValues(alpha: 0.4)
-                : AppColors.divider,
-            width: 1.5,
-          ),
-        ),
-        child: Row(
-          children: [
-            Container(
-              width: 38,
-              height: 38,
-              decoration: BoxDecoration(
-                color: selected
-                    ? AppColors.primaryRed.withValues(alpha: 0.15)
-                    : AppColors.surfaceAlt,
-                borderRadius: BorderRadius.all(Radius.circular(11)),
-              ),
+          if (_query.isNotEmpty)
+            GestureDetector(
+              onTap: () => setState(() {
+                _query = '';
+                _searchController.clear();
+              }),
               child: Icon(
-                icon,
-                size: 18,
-                color: selected
-                    ? AppColors.primaryRed
-                    : AppColors.secondaryText,
+                Icons.close_rounded,
+                size: 16,
+                color: ClubUpColors.muted,
               ),
             ),
-            const SizedBox(width: 12),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    label,
-                    style: TextStyle(
-                      fontSize: 15,
-                      fontWeight: FontWeight.w700,
-                      color: selected ? AppColors.primaryRed : AppColors.text,
-                      letterSpacing: -0.2,
-                    ),
-                  ),
-                  const SizedBox(height: 2),
-                  Text(
-                    subtitle,
-                    style: TextStyle(
-                      fontSize: 12,
-                      color: AppColors.secondaryText,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            if (selected)
-              Icon(
-                Icons.check_circle_rounded,
-                size: 20,
-                color: AppColors.primaryRed,
-              ),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-// ─────────────────────────────────────────────────────────────────────────────
-// Date picker bottom sheet — vertically scrolling two-year calendar
-// ─────────────────────────────────────────────────────────────────────────────
-
-class _DatePickerSheet extends StatefulWidget {
-  final Set<String> selected;
-
-  const _DatePickerSheet({required this.selected});
-
-  @override
-  State<_DatePickerSheet> createState() => _DatePickerSheetState();
-}
-
-class _DatePickerSheetState extends State<_DatePickerSheet> {
-  late Set<String> _temp;
-  final Map<String, GlobalKey> _cellKeys = {};
-  String? _pendingDragKey;
-  bool? _pendingDragAdding;
-  String? _lastDragKey;
-  bool? _dragAdding;
-
-  @override
-  void initState() {
-    super.initState();
-    _temp = {...widget.selected};
-  }
-
-  DateTime get _todayDate {
-    final n = DateTime.now();
-    return DateTime(n.year, n.month, n.day);
-  }
-
-  DateTime get _endDate =>
-      DateTime(_todayDate.year + 2, _todayDate.month, _todayDate.day);
-
-  List<DateTime> get _months {
-    final first = DateTime(_todayDate.year, _todayDate.month);
-    final last = DateTime(_endDate.year, _endDate.month);
-    final count = (last.year - first.year) * 12 + last.month - first.month + 1;
-    return List.generate(count, (index) {
-      return DateTime(first.year, first.month + index);
-    });
-  }
-
-  void _toggleDate(DateTime day) {
-    final key = _dayKey(day);
-    setState(() {
-      if (!_temp.add(key)) _temp.remove(key);
-    });
-  }
-
-  String? _dayKeyAt(Offset globalPosition) {
-    for (final entry in _cellKeys.entries) {
-      final renderObject = entry.value.currentContext?.findRenderObject();
-      if (renderObject is! RenderBox || !renderObject.attached) continue;
-      final local = renderObject.globalToLocal(globalPosition);
-      if (local.dx >= 0 &&
-          local.dy >= 0 &&
-          local.dx <= renderObject.size.width &&
-          local.dy <= renderObject.size.height) {
-        return entry.key;
-      }
-    }
-    return null;
-  }
-
-  bool _isSelectableKey(String key) {
-    final date = _dateForKey(key);
-    if (date == null) return false;
-    return !date.isBefore(_todayDate) && !date.isAfter(_endDate);
-  }
-
-  DateTime? _dateForKey(String key) {
-    final parts = key.split('-');
-    if (parts.length != 3) return null;
-    final year = int.tryParse(parts[0]);
-    final month = int.tryParse(parts[1]);
-    final day = int.tryParse(parts[2]);
-    if (year == null || month == null || day == null) return null;
-    return DateTime(year, month, day);
-  }
-
-  void _handleDateDragDown(Offset globalPosition) {
-    final key = _dayKeyAt(globalPosition);
-    if (key == null || !_isSelectableKey(key)) {
-      _pendingDragKey = null;
-      _pendingDragAdding = null;
-      return;
-    }
-    _pendingDragKey = key;
-    _pendingDragAdding = !_temp.contains(key);
-  }
-
-  void _handleDateDragStart(Offset globalPosition) {
-    final startKey = _pendingDragKey;
-    final adding = _pendingDragAdding;
-    if (startKey == null || adding == null) return;
-    _dragAdding = adding;
-    _lastDragKey = startKey;
-    _applyDragToKey(startKey);
-    _handleDateDragUpdate(globalPosition);
-  }
-
-  void _handleDateDragUpdate(Offset globalPosition) {
-    final key = _dayKeyAt(globalPosition);
-    if (_dragAdding == null ||
-        key == null ||
-        key == _lastDragKey ||
-        !_isSelectableKey(key)) {
-      return;
-    }
-    final previousKey = _lastDragKey!;
-    _lastDragKey = key;
-    _applyDragThroughKeys(previousKey, key);
-  }
-
-  void _applyDragToKey(String key) {
-    setState(() {
-      if (_dragAdding!) {
-        _temp.add(key);
-      } else {
-        _temp.remove(key);
-      }
-    });
-  }
-
-  void _applyDragThroughKeys(String fromKey, String toKey) {
-    final from = _dateForKey(fromKey);
-    final to = _dateForKey(toKey);
-    if (from == null || to == null) return;
-    final first = from.isBefore(to) ? from : to;
-    final last = from.isBefore(to) ? to : from;
-
-    setState(() {
-      for (
-        var day = first;
-        !day.isAfter(last);
-        day = day.add(const Duration(days: 1))
-      ) {
-        final key = _dayKey(day);
-        if (!_isSelectableKey(key)) continue;
-        if (_dragAdding!) {
-          _temp.add(key);
-        } else {
-          _temp.remove(key);
-        }
-      }
-    });
-  }
-
-  void _endDateDrag() {
-    _pendingDragKey = null;
-    _pendingDragAdding = null;
-    _lastDragKey = null;
-    _dragAdding = null;
-  }
-
-  String _monthName(BuildContext context, int month) {
-    final l10n = AppLocalizations.of(context)!;
-    return switch (month) {
-      1 => l10n.monthJanuary,
-      2 => l10n.monthFebruary,
-      3 => l10n.monthMarch,
-      4 => l10n.monthApril,
-      5 => l10n.monthMay,
-      6 => l10n.monthJune,
-      7 => l10n.monthJuly,
-      8 => l10n.monthAugust,
-      9 => l10n.monthSeptember,
-      10 => l10n.monthOctober,
-      11 => l10n.monthNovember,
-      12 => l10n.monthDecember,
-      _ => '',
-    };
-  }
-
-  Widget _buildMonth(BuildContext context, DateTime month) {
-    final today = _todayDate;
-    final endDate = _endDate;
-    final firstDay = DateTime(month.year, month.month);
-    final leadingSpaces = firstDay.weekday - 1;
-    final daysInMonth = DateTime(month.year, month.month + 1, 0).day;
-    final populatedCells = leadingSpaces + daysInMonth;
-    final cellCount = ((populatedCells + 6) ~/ 7) * 7;
-
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 20),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Padding(
-            padding: const EdgeInsets.fromLTRB(2, 8, 0, 8),
-            child: Text(
-              '${_monthName(context, month.month)} ${month.year}',
-              style: TextStyle(
-                fontSize: 16,
-                fontWeight: FontWeight.w800,
-                color: AppColors.text,
-                letterSpacing: -0.25,
-              ),
-            ),
-          ),
-          GridView.builder(
-            shrinkWrap: true,
-            physics: const NeverScrollableScrollPhysics(),
-            gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-              crossAxisCount: 7,
-              mainAxisExtent: 44,
-            ),
-            itemCount: cellCount,
-            itemBuilder: (context, index) {
-              final dayNumber = index - leadingSpaces + 1;
-              if (dayNumber < 1 || dayNumber > daysInMonth) {
-                return const SizedBox.shrink();
-              }
-
-              final day = DateTime(month.year, month.month, dayNumber);
-              final isToday = day == today;
-              final isDisabled = day.isBefore(today) || day.isAfter(endDate);
-              final dayKey = _dayKey(day);
-              final isSelected = _temp.contains(dayKey);
-
-              return Semantics(
-                label:
-                    '${_monthName(context, day.month)} ${day.day}, ${day.year}',
-                hint: 'Tap one date or drag horizontally to select a week',
-                selected: isSelected,
-                enabled: !isDisabled,
-                button: true,
-                child: GestureDetector(
-                  key: ValueKey('event-date-$dayKey'),
-                  behavior: HitTestBehavior.opaque,
-                  onTap: isDisabled ? null : () => _toggleDate(day),
-                  onHorizontalDragDown: isDisabled
-                      ? null
-                      : (details) =>
-                            _handleDateDragDown(details.globalPosition),
-                  onHorizontalDragStart: isDisabled
-                      ? null
-                      : (details) =>
-                            _handleDateDragStart(details.globalPosition),
-                  onHorizontalDragUpdate: isDisabled
-                      ? null
-                      : (details) =>
-                            _handleDateDragUpdate(details.globalPosition),
-                  onHorizontalDragEnd: isDisabled
-                      ? null
-                      : (_) => _endDateDrag(),
-                  onHorizontalDragCancel: isDisabled ? null : _endDateDrag,
-                  child: Center(
-                    child: AnimatedContainer(
-                      key: _cellKeys.putIfAbsent(dayKey, GlobalKey.new),
-                      duration: const Duration(milliseconds: 120),
-                      width: 38,
-                      height: 38,
-                      decoration: BoxDecoration(
-                        color: isSelected
-                            ? AppColors.primaryRed
-                            : Colors.transparent,
-                        shape: BoxShape.circle,
-                        border: isToday && !isSelected
-                            ? Border.all(
-                                color: AppColors.primaryRed,
-                                width: 1.5,
-                              )
-                            : null,
-                      ),
-                      alignment: Alignment.center,
-                      child: Text(
-                        '$dayNumber',
-                        style: TextStyle(
-                          fontSize: 14,
-                          fontWeight: isSelected || isToday
-                              ? FontWeight.w800
-                              : FontWeight.w500,
-                          color: isSelected
-                              ? Colors.white
-                              : isDisabled
-                              ? AppColors.divider
-                              : isToday
-                              ? AppColors.primaryRed
-                              : AppColors.text,
-                        ),
-                      ),
-                    ),
-                  ),
-                ),
-              );
-            },
-          ),
         ],
       ),
     );
   }
 
-  @override
-  Widget build(BuildContext context) {
-    final bottom = MediaQuery.paddingOf(context).bottom;
-    final months = _months;
-
-    return Container(
-      height: MediaQuery.sizeOf(context).height * 0.88,
-      padding: EdgeInsets.fromLTRB(20, 10, 20, bottom + 20),
-      decoration: BoxDecoration(
-        color: AppColors.background,
-        borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.12),
-            blurRadius: 30,
-            offset: const Offset(0, -8),
-          ),
-        ],
-      ),
-      child: Column(
-        children: [
-          // Drag handle
-          Container(
-            width: 40,
-            height: 4,
+  /// `categories-container` — "All" plus one chip per tag in the pool.
+  Widget _categoryRow(AppLocalizations l10n, List<String> categories) {
+    Widget chip(String label, bool selected, VoidCallback onTap) {
+      return Padding(
+        padding: const EdgeInsets.only(right: 8),
+        child: GestureDetector(
+          onTap: onTap,
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
             decoration: BoxDecoration(
-              color: AppColors.divider,
-              borderRadius: BorderRadius.all(Radius.circular(999)),
-            ),
-          ),
-          const SizedBox(height: 18),
-          // Title + Clear
-          Row(
-            children: [
-              Text(
-                AppLocalizations.of(context)!.pickDate,
-                style: TextStyle(
-                  fontSize: 17,
-                  fontWeight: FontWeight.w800,
-                  color: AppColors.text,
-                  letterSpacing: -0.5,
-                ),
+              color: selected ? ClubUpColors.accent : ClubUpColors.card,
+              borderRadius: BorderRadius.circular(20),
+              border: Border.all(
+                color: selected ? ClubUpColors.accent : ClubUpColors.border,
               ),
-              const Spacer(),
-              if (_temp.isNotEmpty)
-                GestureDetector(
-                  onTap: () => setState(_temp.clear),
-                  child: Text(
-                    AppLocalizations.of(context)!.clear,
-                    style: TextStyle(
-                      fontSize: 14,
-                      fontWeight: FontWeight.w600,
-                      color: AppColors.primaryRed,
-                    ),
-                  ),
-                ),
-            ],
-          ),
-          const SizedBox(height: 18),
-          // Day-of-week header
-          Row(
-            children: ['Mo', 'Tu', 'We', 'Th', 'Fr', 'Sa', 'Su']
-                .map(
-                  (d) => Expanded(
-                    child: Center(
-                      child: Text(
-                        d,
-                        style: TextStyle(
-                          fontSize: 11,
-                          fontWeight: FontWeight.w700,
-                          color: AppColors.secondaryText,
-                          letterSpacing: 0.3,
-                        ),
-                      ),
-                    ),
-                  ),
-                )
-                .toList(),
-          ),
-          const SizedBox(height: 8),
-          Expanded(
-            child: ListView.builder(
-              key: const PageStorageKey('two-year-event-date-picker'),
-              padding: const EdgeInsets.only(top: 2),
-              itemCount: months.length,
-              itemBuilder: (context, index) =>
-                  _buildMonth(context, months[index]),
             ),
-          ),
-          const SizedBox(height: 12),
-          // Done button
-          GestureDetector(
-            onTap: () => Navigator.pop(context, _DateResult({..._temp})),
-            child: Container(
-              height: 50,
-              alignment: Alignment.center,
-              decoration: BoxDecoration(
-                gradient: LinearGradient(
-                  colors: [AppColors.primaryRed, AppColors.darkRed],
-                  begin: Alignment.topLeft,
-                  end: Alignment.bottomRight,
-                ),
-                borderRadius: BorderRadius.all(Radius.circular(14)),
-                boxShadow: [
-                  BoxShadow(
-                    color: AppColors.primaryRed.withValues(alpha: 0.30),
-                    blurRadius: 14,
-                    offset: const Offset(0, 6),
-                  ),
-                ],
-              ),
-              child: Text(
-                _temp.isEmpty
-                    ? AppLocalizations.of(context)!.showAllDates
-                    : AppLocalizations.of(
-                        context,
-                      )!.showEventsForSelectedDates(_temp.length),
-                style: const TextStyle(
-                  fontSize: 15,
-                  fontWeight: FontWeight.w700,
-                  color: Colors.white,
-                  letterSpacing: -0.2,
-                ),
+            child: Text(
+              label,
+              style: figtree(
+                size: 13,
+                weight: selected ? FontWeight.w700 : FontWeight.w500,
+                color: selected ? Colors.white : ClubUpColors.text,
               ),
             ),
           ),
+        ),
+      );
+    }
+
+    return SingleChildScrollView(
+      scrollDirection: Axis.horizontal,
+      padding: const EdgeInsets.fromLTRB(16, 4, 8, 4),
+      child: Row(
+        children: [
+          chip(
+            l10n.all,
+            _category.isEmpty,
+            () => setState(() => _category = ''),
+          ),
+          for (final tag in categories)
+            chip(
+              tag,
+              _category.toLowerCase() == tag.toLowerCase(),
+              () => setState(
+                () => _category = _category.toLowerCase() == tag.toLowerCase()
+                    ? ''
+                    : tag,
+              ),
+            ),
         ],
       ),
     );
   }
 }
-
-// ─────────────────────────────────────────────────────────────────────────────
-// Compact event result card (design: EventResultRow)
-// ─────────────────────────────────────────────────────────────────────────────
 
 class _WeekEventRow extends StatelessWidget {
   final Event event;
   final Color color;
+  final bool bookmarked;
+  final VoidCallback onBookmark;
   final VoidCallback onTap;
-
-  /// When set, wraps this row's RSVP pill so the app tour can highlight it.
   final Key? rsvpAnchorKey;
 
   const _WeekEventRow({
     super.key,
     required this.event,
     required this.color,
+    required this.bookmarked,
+    required this.onBookmark,
     required this.onTap,
     this.rsvpAnchorKey,
   });
 
-  String _dateTimeChipLabel(BuildContext context) {
+  /// The `time-pill` caption — the design's "Tonight · 7 PM" / "Sat · All Day".
+  /// Day wording and clock format come from the app's own locale helpers so
+  /// this stays correct in Turkish, where the mockup's 12-hour "7 PM" is wrong.
+  String _whenLabel(BuildContext context) {
+    final day = _shortDay(event.dateTime, context);
     if (_isLive(event)) {
-      return '${AppLocalizations.of(context)!.liveNowLabel} · ${_timeStr(event.dateTime)}';
+      return '$day · ${AppLocalizations.of(context)!.liveNowFilterLabel}';
     }
-    if (_isDateToday(event.dateTime)) {
-      return '${AppLocalizations.of(context)!.today} · ${_timeStr(event.dateTime)}';
-    }
-    if (_isDateTomorrow(event.dateTime)) {
-      return '${AppLocalizations.of(context)!.tomorrow} · ${_timeStr(event.dateTime)}';
-    }
-    return '${DateFormat.E(localeService.languageCode).format(event.dateTime)}. ${_timeStr(event.dateTime)}';
+    return '$day · ${_timeStr(event.dateTime)}';
   }
 
   @override
   Widget build(BuildContext context) {
-    final live = _isLive(event);
-    final canSeeAttendance = canViewEventAttendance(event);
-    final rsvpPill = rsvpAnchorKey == null
-        ? _WeekRsvpPill(event: event)
-        : KeyedSubtree(
-            key: rsvpAnchorKey,
-            child: _WeekRsvpPill(event: event),
-          );
+    final club = clubForId(event.clubId);
+    final going = event.attendeeUserIds.length;
 
     return GestureDetector(
+      key: rsvpAnchorKey,
       onTap: onTap,
       child: Container(
+        padding: const EdgeInsets.all(12),
         decoration: BoxDecoration(
-          color: AppColors.card,
-          borderRadius: BorderRadius.all(Radius.circular(22)),
-          border: Border.all(
-            color: live
-                ? AppColors.primaryRed.withValues(alpha: 0.5)
-                : AppColors.primaryRed.withValues(
-                    alpha: themeService.isDark ? 0.34 : 0.18,
-                  ),
-          ),
-          boxShadow: [
+          color: ClubUpColors.card,
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(color: ClubUpColors.border),
+          boxShadow: const [
             BoxShadow(
-              color: Colors.black.withValues(
-                alpha: themeService.isDark ? 0.22 : 0.06,
-              ),
-              blurRadius: 18,
-              offset: const Offset(0, 10),
+              color: Color(0x08000000),
+              offset: Offset(0, 4),
+              blurRadius: 4,
             ),
           ],
         ),
-        clipBehavior: Clip.antiAlias,
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
+        child: Stack(
           children: [
-            SizedBox(
-              height: 150,
-              child: Stack(
-                fit: StackFit.expand,
-                children: [
-                  EventCoverImage(
-                    event: event,
-                    color: color,
-                    width: double.infinity,
-                    height: 150,
-                    cacheWidth: 700,
-                    cacheHeight: 300,
-                  ),
-                  DecoratedBox(
-                    decoration: BoxDecoration(
-                      gradient: LinearGradient(
-                        begin: Alignment.topCenter,
-                        end: Alignment.bottomCenter,
-                        colors: [
-                          Colors.black.withValues(alpha: 0.04),
-                          Colors.black.withValues(alpha: 0.46),
-                        ],
-                      ),
-                    ),
-                  ),
-                  Positioned(
-                    left: 12,
-                    top: 11,
-                    child: Container(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 10,
-                        vertical: 5,
-                      ),
-                      decoration: BoxDecoration(
-                        color: Colors.black.withValues(alpha: 0.68),
-                        borderRadius: BorderRadius.all(Radius.circular(999)),
-                        border: Border.all(
-                          color: Colors.white.withValues(alpha: 0.16),
-                        ),
-                      ),
-                      child: Text(
-                        _dateTimeChipLabel(context),
-                        style: TextStyle(
-                          color: Colors.white.withValues(alpha: 0.94),
-                          fontSize: 11,
-                          fontWeight: FontWeight.w800,
-                          letterSpacing: -0.1,
-                        ),
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            Padding(
-              padding: const EdgeInsets.fromLTRB(14, 12, 14, 13),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    event.title,
-                    maxLines: 2,
-                    overflow: TextOverflow.ellipsis,
-                    style: TextStyle(
-                      fontSize: 16,
-                      fontWeight: FontWeight.w900,
-                      color: AppColors.text,
-                      letterSpacing: -0.42,
-                      height: 1.15,
-                    ),
-                  ),
-                  const SizedBox(height: 9),
-                  Row(
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                EventCoverImage(
+                  event: event,
+                  color: color,
+                  width: 100,
+                  height: 100,
+                  cacheWidth: 200,
+                  cacheHeight: 200,
+                  borderRadius: const BorderRadius.all(Radius.circular(12)),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Icon(
-                        Icons.location_on_outlined,
-                        size: 14,
-                        color: AppColors.secondaryText,
-                      ),
-                      const SizedBox(width: 5),
-                      Expanded(
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 8,
+                          vertical: 2,
+                        ),
+                        decoration: BoxDecoration(
+                          color: ClubUpColors.accent.withValues(alpha: 0.1),
+                          borderRadius: BorderRadius.circular(6),
+                        ),
                         child: Text(
-                          event.location,
+                          _whenLabel(context),
+                          style: figtree(
+                            size: 11,
+                            weight: FontWeight.w700,
+                            color: ClubUpColors.accentText,
+                          ),
+                        ),
+                      ),
+                      const SizedBox(height: 6),
+                      // Leave room for the bookmark control on the title line.
+                      Padding(
+                        padding: const EdgeInsets.only(right: 28),
+                        child: Text(
+                          event.title,
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
-                          style: TextStyle(
-                            fontSize: 12.5,
-                            fontWeight: FontWeight.w600,
-                            color: AppColors.secondaryText,
-                            letterSpacing: -0.1,
+                          style: figtree(
+                            size: 15,
+                            weight: FontWeight.w700,
+                            color: ClubUpColors.text,
                           ),
                         ),
                       ),
-                      if (authService.isStudentSession) ...[
-                        const SizedBox(width: 12),
-                        SizedBox(
-                          width: 92,
-                          height: 34,
-                          child: Align(
-                            alignment: Alignment.centerRight,
-                            child: rsvpPill,
-                          ),
+                      if (club != null) ...[
+                        const SizedBox(height: 6),
+                        Row(
+                          children: [
+                            ClubAvatar(
+                              clubId: club.id,
+                              clubName: club.name,
+                              color: color,
+                              imageUrl: club.logoUrl,
+                              size: 16,
+                              fontSize: 8,
+                              shape: 'circle',
+                            ),
+                            const SizedBox(width: 6),
+                            Flexible(
+                              child: Text(
+                                AppLocalizations.of(
+                                  context,
+                                )!.hostedByClub(club.name),
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: figtree(
+                                  size: 11,
+                                  weight: FontWeight.w600,
+                                  color: ClubUpColors.accentText,
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ],
+                      if (going > 0) ...[
+                        const SizedBox(height: 6),
+                        Row(
+                          children: [
+                            _AttendeeStack(userIds: event.attendeeUserIds),
+                            const SizedBox(width: 4),
+                            Text(
+                              AppLocalizations.of(context)!.goingCount(going),
+                              style: figtree(
+                                size: 11,
+                                weight: FontWeight.w600,
+                                color: ClubUpColors.muted,
+                              ),
+                            ),
+                          ],
                         ),
                       ],
                     ],
                   ),
-                  if (canSeeAttendance) ...[
-                    const SizedBox(height: 9),
-                    Container(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 10,
-                        vertical: 5,
-                      ),
-                      decoration: BoxDecoration(
-                        color: color.withValues(alpha: 0.10),
-                        borderRadius: BorderRadius.all(Radius.circular(999)),
-                        border: Border.all(color: color.withValues(alpha: 0.2)),
-                      ),
-                      child: Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          Icon(
-                            Icons.people_outline,
-                            size: 13,
-                            color: color.withValues(alpha: 0.9),
-                          ),
-                          const SizedBox(width: 5),
-                          Text(
-                            AppLocalizations.of(
-                              context,
-                            )!.attendingCount(event.attendeeUserIds.length),
-                            style: TextStyle(
-                              fontSize: 11.5,
-                              fontWeight: FontWeight.w700,
-                              color: color.withValues(alpha: 0.9),
-                            ),
-                          ),
-                        ],
-                      ),
+                ),
+              ],
+            ),
+            Positioned(
+              top: -1,
+              right: -1,
+              child: Semantics(
+                button: true,
+                selected: bookmarked,
+                label: AppLocalizations.of(context)!.save,
+                child: GestureDetector(
+                  onTap: onBookmark,
+                  behavior: HitTestBehavior.opaque,
+                  child: SizedBox(
+                    width: 24,
+                    height: 24,
+                    child: Icon(
+                      bookmarked
+                          ? Icons.bookmark_rounded
+                          : Icons.bookmark_border_rounded,
+                      size: 18,
+                      color: bookmarked
+                          ? ClubUpColors.accentText
+                          : ClubUpColors.muted,
                     ),
-                  ],
-                ],
+                  ),
+                ),
               ),
             ),
           ],
@@ -1617,108 +739,43 @@ class _WeekEventRow extends StatelessWidget {
   }
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// RSVP pill (design style)
-// ─────────────────────────────────────────────────────────────────────────────
+/// The card's overlapping attendee avatars — three at 18px, each pulled 6px
+/// over the one before it, matching `avatar-stack` in the handoff.
+class _AttendeeStack extends StatelessWidget {
+  final List<String> userIds;
 
-class _WeekRsvpPill extends StatelessWidget {
-  final Event event;
-  const _WeekRsvpPill({required this.event});
+  const _AttendeeStack({required this.userIds});
 
   @override
   Widget build(BuildContext context) {
-    if (!authService.isStudentSession) return const SizedBox.shrink();
-
-    if (!event.endTime.isAfter(DateTime.now())) {
-      return Container(
-        width: 92,
-        height: 34,
-        padding: const EdgeInsets.symmetric(horizontal: 10),
-        alignment: Alignment.center,
-        decoration: BoxDecoration(
-          color: AppColors.surfaceAlt,
-          borderRadius: BorderRadius.all(Radius.circular(100)),
-          border: Border.all(color: AppColors.divider),
-        ),
-        child: Text(
-          AppLocalizations.of(context)!.ended,
-          style: TextStyle(
-            fontSize: 13,
-            fontWeight: FontWeight.w600,
-            color: AppColors.secondaryText,
-            letterSpacing: -0.1,
-          ),
-        ),
-      );
-    }
-
-    return ListenableBuilder(
-      listenable: rsvpStore,
-      builder: (context, _) {
-        final userId = authService.currentUser?.id ?? '';
-        final attending = rsvpStore.isAttending(event.id);
-        return GestureDetector(
-          onTap: userId.isEmpty
-              ? null
-              : () => rsvpStore.toggle(event.id, userId),
-          child: AnimatedContainer(
-            duration: const Duration(milliseconds: 160),
-            width: 92,
-            height: 34,
-            padding: const EdgeInsets.symmetric(horizontal: 10),
-            alignment: Alignment.center,
-            decoration: BoxDecoration(
-              color: attending
-                  ? AppColors.primaryRed.withValues(alpha: 0.10)
-                  : AppColors.primaryRed,
-              borderRadius: BorderRadius.all(Radius.circular(100)),
-              border: Border.all(
-                color: attending
-                    ? AppColors.primaryRed.withValues(alpha: 0.3)
-                    : AppColors.primaryRed,
-                width: 1.5,
+    final shown = userIds.take(3).toList();
+    if (shown.isEmpty) return const SizedBox.shrink();
+    return SizedBox(
+      height: 18,
+      width: 18 + (shown.length - 1) * 12,
+      child: Stack(
+        children: [
+          for (var i = 0; i < shown.length; i++)
+            Positioned(
+              left: i * 12,
+              child: Container(
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  border: Border.all(color: ClubUpColors.card, width: 1.5),
+                ),
+                child: UserAvatar(
+                  userId: shown[i],
+                  name: _attendeeName(shown[i]),
+                  size: 18,
+                  fontSize: 8,
+                ),
               ),
             ),
-            child: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                if (attending) ...[
-                  Icon(
-                    Icons.check_rounded,
-                    size: 13,
-                    color: AppColors.primaryRed,
-                  ),
-                  const SizedBox(width: 4),
-                ],
-                Flexible(
-                  child: FittedBox(
-                    fit: BoxFit.scaleDown,
-                    child: Text(
-                      attending
-                          ? AppLocalizations.of(context)!.going
-                          : AppLocalizations.of(context)!.rsvp,
-                      maxLines: 1,
-                      style: TextStyle(
-                        fontSize: 13,
-                        fontWeight: FontWeight.w600,
-                        letterSpacing: -0.1,
-                        color: attending ? AppColors.primaryRed : Colors.white,
-                      ),
-                    ),
-                  ),
-                ),
-              ],
-            ),
-          ),
-        );
-      },
+        ],
+      ),
     );
   }
 }
-
-// ─────────────────────────────────────────────────────────────────────────────
-// Empty state
-// ─────────────────────────────────────────────────────────────────────────────
 
 class _EmptyState extends StatelessWidget {
   final bool searching;

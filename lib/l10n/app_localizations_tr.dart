@@ -1387,6 +1387,9 @@ class AppLocalizationsTr extends AppLocalizations {
       'Buraya eklenen takipçiler Kurul sekmesinde herkese açık şekilde gösterilir.';
 
   @override
+  String get boardMemberships => 'Yönetim Kurulu Üyelikleri';
+
+  @override
   String bothInClub(String club) {
     return 'İkiniz de $club kulübündesiniz';
   }
@@ -1511,7 +1514,7 @@ class AppLocalizationsTr extends AppLocalizations {
   String get calendarYoursTapToEdit => 'Senin · düzenlemek için dokun';
 
   @override
-  String get campusEmailLabel => 'Kampüs e-postası';
+  String get campusEmailLabel => 'E-posta';
 
   @override
   String get campusEventFallback => 'Kampüs etkinliği';
@@ -4031,4 +4034,79 @@ class AppLocalizationsTr extends AppLocalizations {
 
   @override
   String get academicYearGraduate => 'Mezun';
+
+  @override
+  String get trendingClubs => 'Yükselen Kulüpler';
+
+  @override
+  String get suggestedClubs => 'Önerilen Kulüpler';
+
+  @override
+  String get suggestedProfiles => 'Önerilen Profiller';
+
+  @override
+  String get searchEverythingHint => 'Kulüp, kişi, etkinlik ara...';
+
+  @override
+  String get filtersTitle => 'Filtreler';
+
+  @override
+  String get searchInLabel => 'Arama Alanı';
+
+  @override
+  String get sortByLabel => 'Sırala';
+
+  @override
+  String get categoriesLabel => 'Kategoriler';
+
+  @override
+  String get sortMostMembers => 'En Çok Üye';
+
+  @override
+  String get sortRecentlyActive => 'Son Aktif';
+
+  @override
+  String get applyLabel => 'Uygula';
+
+  @override
+  String get selectMajorTitle => 'Bölüm Seç';
+
+  @override
+  String get clearAll => 'Tümünü Temizle';
+
+  @override
+  String doneCount(int n) {
+    return 'Bitti ($n)';
+  }
+
+  @override
+  String hostedByClub(String club) {
+    return '$club düzenliyor';
+  }
+
+  @override
+  String get shareAction => 'Paylaş';
+
+  @override
+  String get imGoing => 'Katılıyorum';
+
+  @override
+  String get remindMe => 'Hatırlat';
+
+  @override
+  String get shareWithFriends => 'Arkadaşlarınla paylaş';
+
+  @override
+  String get sendToMoreFriends => 'Daha fazla arkadaşa gönder';
+
+  @override
+  String peopleYouFollowCount(int n) {
+    String _temp0 = intl.Intl.pluralLogic(
+      n,
+      locale: localeName,
+      other: 'takip ettiğin $n kişi',
+      one: 'takip ettiğin 1 kişi',
+    );
+    return '$_temp0';
+  }
 }

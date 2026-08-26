@@ -1,5 +1,6 @@
-import 'dart:async' show unawaited;
+import 'dart:async' show Timer, unawaited;
 import 'package:flutter/material.dart';
+import 'package:intl/intl.dart';
 import 'package:flutter/services.dart';
 import 'package:image_picker/image_picker.dart';
 
@@ -10,6 +11,9 @@ import '../models/club.dart';
 import '../models/event.dart';
 import '../models/user.dart';
 import '../navigation/chat_page_route.dart';
+import '../services/account_switcher_service.dart';
+import '../services/admin_moderation_service.dart';
+import '../services/chat_group_prefs.dart';
 import '../services/app_colors.dart';
 import '../services/app_strings.dart';
 import '../services/auth_service.dart';
@@ -20,15 +24,22 @@ import '../services/club_admin_access.dart';
 import '../services/club_chat_prefs.dart';
 import '../services/club_community_info_controller.dart';
 import '../services/locale_service.dart';
+import '../services/mock_clubup_profile.dart';
 import '../services/mock_data.dart';
 import '../services/people_service.dart';
+import '../services/photo_orientation.dart';
 import '../services/rsvp_store.dart';
 import '../services/student_club_role_service.dart';
 import '../services/theme_service.dart';
+import '../services/user_profile_link.dart';
 import '../services/user_state.dart';
 import '../widgets/chat_campus_backdrop.dart';
 import '../widgets/club_avatar.dart';
+import '../widgets/chats_design.dart';
 import '../widgets/club_board_lane.dart';
+import '../widgets/club_chat_design.dart';
+import '../widgets/clubup_design.dart';
+import '../widgets/moderation_reason_sheet.dart';
 import '../widgets/club_chat_theme.dart';
 import '../widgets/club_community_header.dart';
 import '../widgets/club_community_sheet.dart';
@@ -41,6 +52,7 @@ import '../widgets/sent_message_entrance.dart';
 import 'chat_thread_screen.dart';
 import 'club_profile_screen.dart';
 import 'event_detail_screen.dart';
+import 'club_members_screen.dart';
 import 'media_preview_screen.dart';
 import 'user_profile_screen.dart';
 
@@ -78,6 +90,25 @@ class ClubCommunityScreen extends StatefulWidget {
 class _ClubCommunityScreenState extends State<ClubCommunityScreen>
     with WidgetsBindingObserver {
   final _inputController = TextEditingController();
+
+  /// The Board lane's inline composer — `admin-chats-list` 331:136. Kept
+  /// apart from [_inputController] so a half-written announcement and a
+  /// half-written chat message do not overwrite each other across lanes.
+  final _noticeController = TextEditingController();
+
+  /// The Direct lane's inbox filter — `admin-dm-list` 335:36.
+  final _directSearchController = TextEditingController();
+  String _directQuery = '';
+
+  /// Stable anchors let the pinned banner navigate back to the original item
+  /// instead of opening its action sheet.
+  final Map<String, GlobalKey> _designMessageAnchors = {};
+  final Map<String, GlobalKey> _designNoticeAnchors = {};
+  String? _flashingPinnedMessageId;
+  Timer? _pinnedFlashTimer;
+
+  /// Which lane the Direct header's chevron returns to.
+  ClubCommunityTab _laneBeforeDirect = ClubCommunityTab.board;
   final _scrollController = ScrollController();
   final _unreadDividerKey = GlobalKey();
   final Set<String> _requestedParticipantProfileIds = {};
@@ -211,6 +242,9 @@ class _ClubCommunityScreenState extends State<ClubCommunityScreen>
     _communityInfo?.dispose();
     _memberDirectoryRevision.dispose();
     _inputController.dispose();
+    _noticeController.dispose();
+    _directSearchController.dispose();
+    _pinnedFlashTimer?.cancel();
     _scrollController.dispose();
     super.dispose();
   }
@@ -302,7 +336,14 @@ class _ClubCommunityScreenState extends State<ClubCommunityScreen>
   void _switchTab(ClubCommunityTab tab) {
     if (_tab == tab) return;
     if (tab == ClubCommunityTab.solo) {
-      setState(() => _tab = tab);
+      // `admin-dm-list` 335:6 puts a chevron beside "Messages"; the lane it
+      // goes back to is the one the reader left.
+      setState(() {
+        _laneBeforeDirect = _tab;
+        _tab = tab;
+        _directSearchController.clear();
+        _directQuery = '';
+      });
       return;
     }
     final lane = tab == ClubCommunityTab.board
@@ -644,7 +685,22 @@ class _ClubCommunityScreenState extends State<ClubCommunityScreen>
     _hydrateVisibleParticipants();
   }
 
-  List<ClubSoloChatEntry> _soloChatEntries() {
+  /// Direct is an inbox for every student-facing private conversation visible
+  /// to this viewer. A regular student normally has one row with this club;
+  /// board members see every student inquiry for the club.
+  void _openDirectSelection() => _switchTab(ClubCommunityTab.solo);
+
+  /// [avatarSize] is 44 everywhere except the board-side inbox, where
+  /// `conversation-row` 335:52 draws a 48pt avatar.
+  ///
+  /// [plainPeerPreview] drops the "Name: " prefix when the last message came
+  /// from the student the row is already named after — 335:73 draws the message
+  /// alone. Anything from the club's own side keeps its prefix, so the board
+  /// can see at a glance which inquiries have been answered.
+  List<ClubSoloChatEntry> _soloChatEntries({
+    double avatarSize = 44,
+    bool plainPeerPreview = false,
+  }) {
     final club = _club;
     if (club == null) return const [];
     final entries = <ClubSoloChatEntry>[];
@@ -667,13 +723,16 @@ class _ClubCommunityScreenState extends State<ClubCommunityScreen>
                 ? person!.name
                 : S.studentProfile);
       final last = summary.lastMessage;
-      final preview = _soloChatPreview(last);
+      final preview = _soloChatPreview(
+        last,
+        plainForSenderId: plainPeerPreview ? conversation.profileId : null,
+      );
       entries.add(
         ClubSoloChatEntry(
           threadId: summary.threadId,
           title: title,
           preview: preview,
-          whenLabel: last == null ? '' : _timeLabel(last.createdAt),
+          whenLabel: last == null ? '' : _directRowTime(last.createdAt),
           unread: summary.unread,
           avatar: isOwnConversation
               ? ClubAvatar(
@@ -681,15 +740,15 @@ class _ClubCommunityScreenState extends State<ClubCommunityScreen>
                   clubName: club.name,
                   color: _accent,
                   imageUrl: club.logoUrl,
-                  size: 46,
-                  fontSize: 17,
+                  size: avatarSize,
+                  fontSize: avatarSize * 0.385,
                   shape: 'circle',
                 )
               : UserAvatar(
                   userId: conversation.profileId,
                   name: title,
-                  size: 46,
-                  fontSize: 17,
+                  size: avatarSize,
+                  fontSize: avatarSize * 0.385,
                 ),
         ),
       );
@@ -697,7 +756,7 @@ class _ClubCommunityScreenState extends State<ClubCommunityScreen>
     return entries;
   }
 
-  String _soloChatPreview(ChatMessage? message) {
+  String _soloChatPreview(ChatMessage? message, {String? plainForSenderId}) {
     if (message == null) return S.chatNoMessagesYet;
     final body = switch (message.kind) {
       ChatMessageKind.postShare => S.sharedPost,
@@ -708,8 +767,18 @@ class _ClubCommunityScreenState extends State<ClubCommunityScreen>
       _ => message.content,
     };
     final senderId = chatStore.senderIdForViewer(message, _myId);
+    if (plainForSenderId != null && senderId == plainForSenderId) return body;
     final sender = senderId == _myId ? S.you : _personFor(senderId).name;
     return sender.trim().isEmpty ? body : '$sender: $body';
+  }
+
+  String _directRowTime(DateTime value) {
+    final diff = DateTime.now().difference(value);
+    if (diff.inMinutes < 1) return S.chatsJustNow;
+    if (diff.inMinutes < 60) return S.chatsTimeAgo('${diff.inMinutes}m');
+    if (diff.inHours < 24) return S.chatsTimeAgo('${diff.inHours}h');
+    if (diff.inDays < 7) return S.chatsTimeAgo('${diff.inDays}d');
+    return S.chatsTimeAgo('${(diff.inDays / 7).floor()}w');
   }
 
   void _scrollToLatest() {
@@ -733,49 +802,75 @@ class _ClubCommunityScreenState extends State<ClubCommunityScreen>
   Future<void> _handleAttachment(ClubAttachment attachment) async {
     switch (attachment) {
       case ClubAttachment.photo:
-        late final List<XFile> picked;
-        try {
-          picked = await ImagePicker().pickMultipleMedia(
-            maxWidth: 2048,
-            maxHeight: 2048,
-            imageQuality: 88,
-            limit: 30,
-          );
-        } catch (_) {
-          if (mounted) {
-            ScaffoldMessenger.of(
-              context,
-            ).showSnackBar(SnackBar(content: Text(S.mediaSelectionFailed)));
-          }
-          return;
-        }
-        if (picked.isEmpty) return;
-        final inspected = await inspectChatMediaFiles(picked);
-        if (!mounted) return;
-        if (inspected.rejectedCount > 0) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text(S.mediaSelectionRejected(inspected.rejectedCount)),
-            ),
-          );
-        }
-        if (inspected.items.isEmpty) return;
-        final result = await Navigator.of(context).push<MediaPreviewResult>(
-          ChatPageRoute(
-            builder: (_) => MediaPreviewScreen(
-              initialMedia: inspected.items,
-              initialCaption: _inputController.text.trim(),
-            ),
-          ),
-        );
-        if (!mounted || result == null) return;
-        await _sendAttachments(result);
+        await _pickMediaAttachment(useCamera: false);
       case ClubAttachment.poll:
         await _composePoll();
     }
   }
 
-  Future<void> _sendAttachments(MediaPreviewResult result) async {
+  Future<void> _pickMediaAttachment({
+    required bool useCamera,
+    bool asAnnouncement = false,
+  }) async {
+    late final List<XFile> picked;
+    try {
+      if (useCamera) {
+        final captured = await ImagePicker().pickImage(
+          source: ImageSource.camera,
+          maxWidth: 2048,
+          maxHeight: 2048,
+          imageQuality: 88,
+        );
+        picked = [?captured];
+      } else {
+        picked = await ImagePicker().pickMultipleMedia(
+          maxWidth: 2048,
+          maxHeight: 2048,
+          imageQuality: 88,
+          limit: 30,
+        );
+      }
+    } catch (_) {
+      if (mounted) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text(S.mediaSelectionFailed)));
+      }
+      return;
+    }
+    if (picked.isEmpty) return;
+    if (useCamera) await unmirrorPhotoFile(picked.single.path);
+    if (!mounted) return;
+
+    final inspected = await inspectChatMediaFiles(picked);
+    if (!mounted) return;
+    if (inspected.rejectedCount > 0) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(S.mediaSelectionRejected(inspected.rejectedCount)),
+        ),
+      );
+    }
+    if (inspected.items.isEmpty) return;
+
+    final result = await Navigator.of(context).push<MediaPreviewResult>(
+      ChatPageRoute(
+        builder: (_) => MediaPreviewScreen(
+          initialMedia: inspected.items,
+          initialCaption: asAnnouncement
+              ? _noticeController.text.trim()
+              : _inputController.text.trim(),
+        ),
+      ),
+    );
+    if (!mounted || result == null) return;
+    await _sendAttachments(result, asAnnouncement: asAnnouncement);
+  }
+
+  Future<void> _sendAttachments(
+    MediaPreviewResult result, {
+    bool asAnnouncement = false,
+  }) async {
     final sentMessages = <ChatMessage>[];
     var stagingFailed = false;
     for (final media in result.items) {
@@ -795,16 +890,18 @@ class _ClubCommunityScreenState extends State<ClubCommunityScreen>
         threadId: widget.threadId,
         senderId: _myId,
         content: caption,
-        kind: media.type == ChatMediaType.image
+        kind: asAnnouncement
+            ? ChatMessageKind.announcement
+            : media.type == ChatMediaType.image
             ? ChatMessageKind.photo
             : ChatMessageKind.file,
-        mentions: isFirst
+        mentions: !asAnnouncement && isFirst
             ? ClubComposer.resolveMentions(caption, _members)
             : const [],
         attachmentPath: stagedPath,
         attachmentName: media.file.name,
         attachmentSize: media.sizeBytes,
-        replyToMessageId: isFirst ? _replyingTo?.id : null,
+        replyToMessageId: !asAnnouncement && isFirst ? _replyingTo?.id : null,
       );
       if (sent != null) sentMessages.add(sent);
     }
@@ -817,6 +914,10 @@ class _ClubCommunityScreenState extends State<ClubCommunityScreen>
           ),
         ),
       );
+      return;
+    }
+    if (asAnnouncement) {
+      _noticeController.clear();
       return;
     }
     _inputController.clear();
@@ -1008,13 +1109,12 @@ class _ClubCommunityScreenState extends State<ClubCommunityScreen>
           padding: EdgeInsets.only(
             bottom: MediaQuery.viewInsetsOf(sheetContext).bottom,
           ),
-          child: Container(
-            decoration: BoxDecoration(
-              color: t.sheet,
-              borderRadius: const BorderRadius.vertical(
-                top: Radius.circular(22),
-              ),
-            ),
+          // A Material, not a decorated Container: the sheet holds a
+          // `SwitchListTile`, whose ink has nothing to paint on without one
+          // ("ListTile background color or ink splashes may be invisible").
+          child: Material(
+            color: t.sheet,
+            borderRadius: const BorderRadius.vertical(top: Radius.circular(22)),
             child: SingleChildScrollView(
               padding: const EdgeInsets.fromLTRB(18, 14, 18, 20),
               child: Column(
@@ -1286,6 +1386,16 @@ class _ClubCommunityScreenState extends State<ClubCommunityScreen>
       context,
       ChatPageRoute(builder: (_) => UserProfileScreen(user: user!)),
     ).then((_) => _markVisibleMessagesSeen());
+  }
+
+  Future<void> _openSharedUserProfile(String userIdentifier) async {
+    final user = await resolveUserProfileLink(userIdentifier);
+    if (!mounted || user == null) return;
+    await Navigator.push(
+      context,
+      ChatPageRoute<void>(builder: (_) => UserProfileScreen(user: user)),
+    );
+    if (mounted) _markVisibleMessagesSeen();
   }
 
   void _openParticipantProfile(ClubPerson person) {
@@ -1752,11 +1862,1232 @@ class _ClubCommunityScreenState extends State<ClubCommunityScreen>
     );
   }
 
+  // ── CLUB CHATS INSIDE: the student club room ────────────────────────────────
+  // `club-announcements` 143:188 (Board), `club-chat-reply` 143:3 (Chats),
+  // `club-detail-dropdown` 219:6 (the lane menu) and the two sheets at
+  // `146:3` / `146:298`. Direct routes out to the club-inbox thread, which is
+  // `chats-clubs` 225:5 and already drawn by ChatThreadScreen.
+  //
+  // The `CLUB CHATS` section (label `543:32`) then drew the same room from the
+  // club's side — `admin-chats-list` 331:136 (Board), `admin-board-chat` 331:10
+  // (Chats), `admin-dm-list` 335:6 (Direct) — so a club login takes this path
+  // too, including the room embedded in its Chats tab. The ClubUp platform
+  // moderator is the one session left on the previous chrome (the segmented
+  // lane switch, the campus wallpaper, the club-themed accents): no frame has
+  // been drawn for it.
+
+  /// A club account reading its own room. Two shapes count, the same pair
+  /// CLUB HOME branches on: a dedicated club login, and a student who has
+  /// switched to the linked club account **for this club**. The ClubUp
+  /// platform moderator does not — it administers every club and has no room
+  /// of its own.
+  bool get _isClubSideSession {
+    final admin = authService.currentAdmin;
+    if (admin != null) return !isClubUpAdmin(admin);
+    final active = accountSwitcherService.activeClub;
+    return active != null && active.id == _club?.id;
+  }
+
+  bool get _designClubRoom =>
+      _isClubSideSession || (authService.isStudentSession && !widget.embedded);
+
+  final GlobalKey _laneAnchorKey = GlobalKey();
+
+  ClubRoomLane get _designLane => switch (_tab) {
+    ClubCommunityTab.board => ClubRoomLane.board,
+    ClubCommunityTab.chat => ClubRoomLane.chats,
+    ClubCommunityTab.solo => ClubRoomLane.direct,
+  };
+
+  Future<void> _openLaneMenu() async {
+    final selected = await showClubLaneMenu(
+      context: context,
+      anchorKey: _laneAnchorKey,
+      current: _designLane,
+      badges: {
+        ClubRoomLane.board: _laneUnread(ClubChatLane.board),
+        ClubRoomLane.chats: _laneUnread(ClubChatLane.chat),
+        ClubRoomLane.direct: _soloChatEntries().fold<int>(
+          0,
+          (total, entry) => total + entry.unread,
+        ),
+      },
+    );
+    if (selected == null || !mounted) return;
+    switch (selected) {
+      case ClubRoomLane.board:
+        _switchTab(ClubCommunityTab.board);
+      case ClubRoomLane.chats:
+        _switchTab(ClubCommunityTab.chat);
+      case ClubRoomLane.direct:
+        _openDirectSelection();
+    }
+  }
+
+  /// `UserAvatar` falls back to an **infinite** shimmer when it is handed an
+  /// empty name (`user_avatar.dart:118`), and a club stream can carry a sender
+  /// whose profile never resolved. Give those a readable placeholder instead —
+  /// otherwise the room shimmers for good and `pumpAndSettle` never returns.
+  ClubPerson _designPerson(ClubPerson person) => person.name.trim().isNotEmpty
+      ? person
+      : ClubPerson(
+          id: person.id,
+          name: S.studentProfile,
+          role: person.role,
+          isClubAccount: person.isClubAccount,
+        );
+
+  Widget _designAvatar(ClubPerson person, double size) =>
+      _avatarFor(_designPerson(person), size);
+
+  /// `admin-dm-list` 335:6 turns the Direct lane into an inbox: a "Messages"
+  /// title where the other two lanes name the club, and a search field.
+  ///
+  /// Club side only. A student board member also sees every student's thread,
+  /// but their lane was drawn by CLUB CHATS INSIDE and approved as it is —
+  /// this section only reviewed the club's own view of it.
+  bool get _designDirectInbox =>
+      _tab == ClubCommunityTab.solo && _isClubSideSession;
+
+  Widget _buildDesignRoom(Club club) {
+    final memberCount =
+        supabaseClubMemberCounts[club.id] ??
+        _communityInfo?.memberCount ??
+        clubMemberCount(club.id);
+    if (_designDirectInbox) {
+      return Column(
+        children: [
+          ClubDirectInboxHeader(
+            title: S.clubDirectInboxTitle,
+            laneAnchorKey: _laneAnchorKey,
+            onLaneTap: () => unawaited(_openLaneMenu()),
+            onBack: () => _switchTab(_laneBeforeDirect),
+          ),
+          ClubDirectSearchField(
+            controller: _directSearchController,
+            hint: S.chatsSearchMessages,
+            onChanged: (value) => setState(() => _directQuery = value),
+          ),
+          Expanded(child: _buildDesignDirectInbox()),
+        ],
+      );
+    }
+    return Column(
+      children: [
+        ClubRoomHeader(
+          avatar: ClubAvatar(
+            clubId: club.id,
+            clubName: club.name,
+            color: _accent,
+            imageUrl: club.logoUrl,
+            size: 38,
+            fontSize: 15,
+            shape: 'circle',
+          ),
+          clubName: club.name,
+          memberLine: S.clubMembersAndUnread(memberCount, 0),
+          lane: _designLane,
+          laneAnchorKey: _laneAnchorKey,
+          onLaneTap: () => unawaited(_openLaneMenu()),
+          onBack: widget.embedded ? null : () => Navigator.maybePop(context),
+          onOpenClub: _openDesignMembers,
+        ),
+        Expanded(
+          child: switch (_tab) {
+            ClubCommunityTab.board => _buildDesignBoardLane(),
+            ClubCommunityTab.chat => _buildDesignChatLane(),
+            ClubCommunityTab.solo => _buildDesignDirectLane(),
+          },
+        ),
+      ],
+    );
+  }
+
+  void _openDesignMembers() {
+    final club = _club;
+    if (club == null) return;
+    Navigator.push(
+      context,
+      ChatPageRoute(
+        builder: (_) => ClubMembersScreen(club: club, myId: _myId),
+      ),
+    );
+  }
+
+  // ── Board lane ─────────────────────────────────────────────────────────────
+
+  /// `club-announcements` 143:215 — one card per notice, pinned first, and the
+  /// locked footer when the reader cannot post one.
+  Widget _buildDesignBoardLane() {
+    final notices = chatStore.noticesIn(widget.threadId);
+    return Column(
+      children: [
+        Expanded(
+          child: notices.isEmpty
+              ? Center(
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 40),
+                    child: Text(
+                      S.boardEmptyTitle,
+                      textAlign: TextAlign.center,
+                      style: figtree(
+                        size: 14,
+                        weight: FontWeight.w500,
+                        color: ChatsColors.muted,
+                      ),
+                    ),
+                  ),
+                )
+              : ListView.builder(
+                  padding: const EdgeInsets.fromLTRB(16, 12, 16, 24),
+                  itemCount: notices.length,
+                  itemBuilder: (context, index) {
+                    final notice = notices[index];
+                    final person = _designPerson(
+                      _personFor(chatStore.senderIdForViewer(notice, _myId)),
+                    );
+                    final title = (notice.title ?? '').trim();
+                    final body = notice.content.trim();
+                    return KeyedSubtree(
+                      key: _designNoticeAnchors.putIfAbsent(
+                        notice.id,
+                        GlobalKey.new,
+                      ),
+                      child: ClubNoticeCard(
+                        key: ValueKey('club-notice-card-${notice.id}'),
+                        avatar: _designAvatar(person, 28),
+                        authorName: person.name,
+                        roleLabel: person.role,
+                        whenLabel: _designNoticeWhen(notice.createdAt),
+                        title: title.isEmpty || title == body ? null : title,
+                        body: body,
+                        attachment: _designNoticeAttachment(notice),
+                        pinned: notice.pinned,
+                        reactions: {
+                          for (final entry in notice.reactions.entries)
+                            entry.key: entry.value.length,
+                        },
+                        myReactions: {
+                          for (final entry in notice.reactions.entries)
+                            if (entry.value.contains(_myId)) entry.key,
+                        },
+                        replyCount: chatStore.replyCountFor(notice.id),
+                        onToggleReaction: _canWrite
+                            ? (emoji) => chatStore.toggleReaction(
+                                messageId: notice.id,
+                                userId: _myId,
+                                emoji: emoji,
+                              )
+                            : null,
+                        onLongPress: () => _showDesignMessageActions(notice),
+                        onOpenReplies: () => _replyInChat(notice),
+                      ),
+                    );
+                  },
+                ),
+        ),
+        if (!_canPostNotice)
+          ClubLockedStrip(label: S.clubOnlyAdminsPost)
+        else
+          _buildDesignNoticeComposerStrip(),
+      ],
+    );
+  }
+
+  Widget? _designNoticeAttachment(ChatMessage notice) {
+    final path = notice.attachmentPath?.trim() ?? '';
+    if (path.isEmpty) return null;
+    final name = notice.attachmentName ?? path;
+    final Widget attachment = isVideoMediaPath(name)
+        ? ClubVideoAttachment(path: path, t: _t)
+        : isImageMediaPath(name)
+        ? ClubPhotoAttachment(path: path, t: _t)
+        : ClubFileChip(
+            message: notice,
+            t: _t,
+            onOpen: () => _showDesignMessageActions(notice),
+          );
+    return KeyedSubtree(
+      key: ValueKey('club-notice-attachment-${notice.id}'),
+      child: attachment,
+    );
+  }
+
+  /// `admin-chats-list` 331:136 — "Write an announcement…" with a paperclip and
+  /// the accent send button, in place of the primary button the student pass
+  /// invented for this footer (the student frame draws only the locked strip,
+  /// since it is a plain member's view).
+  ///
+  /// On the club side the paperclip follows the same media flow as Chats:
+  /// library or live camera, then preview/caption. The details tile preserves
+  /// the existing headline-and-pin editor. Student board members retain their
+  /// established attachment behavior.
+  Widget _buildDesignNoticeComposerStrip() {
+    return ChatComposerBar(
+      key: const ValueKey('club-design-notice-composer'),
+      controller: _noticeController,
+      enabled: true,
+      hint: S.clubBoardComposerHint,
+      onAttach: () => unawaited(
+        _isClubSideSession
+            ? _openAnnouncementAttachSheet()
+            : _composeAnnouncement(),
+      ),
+      onSend: _sendInlineNotice,
+    );
+  }
+
+  Future<void> _openAnnouncementAttachSheet() async {
+    final club = _club;
+    if (club == null) return;
+    final memberCount =
+        supabaseClubMemberCounts[club.id] ??
+        _communityInfo?.memberCount ??
+        clubMemberCount(club.id);
+    await showClubShareSheet(
+      context,
+      clubName: club.name,
+      visibilityLine: S.clubShareVisibility(memberCount),
+      options: [
+        ClubShareOption(
+          tileKey: const ValueKey('club-announcement-share-media'),
+          icon: Icons.photo_library_outlined,
+          label: S.attachMedia,
+          onTap: () => unawaited(
+            _pickMediaAttachment(useCamera: false, asAnnouncement: true),
+          ),
+        ),
+        ClubShareOption(
+          tileKey: const ValueKey('club-announcement-share-camera'),
+          icon: Icons.photo_camera_outlined,
+          label: S.takePhoto,
+          onTap: () => unawaited(
+            _pickMediaAttachment(useCamera: true, asAnnouncement: true),
+          ),
+        ),
+        ClubShareOption(
+          tileKey: const ValueKey('club-announcement-details'),
+          icon: Icons.campaign_outlined,
+          label: S.postAsAnnouncement,
+          onTap: () => unawaited(_composeAnnouncement()),
+        ),
+      ],
+    );
+  }
+
+  /// A notice with no headline of its own: `title` and `content` carry the same
+  /// text, which is what [ClubNoticeCard] draws as a plain card — exactly the
+  /// cards on 331:136, none of which has a bold headline.
+  void _sendInlineNotice() {
+    final body = _noticeController.text.trim();
+    if (body.isEmpty) return;
+    chatStore.sendMessage(
+      threadId: widget.threadId,
+      senderId: _myId,
+      content: body,
+      kind: ChatMessageKind.announcement,
+      title: body,
+      pinned: false,
+    );
+    _noticeController.clear();
+  }
+
+  /// `143:230` — "Monday · 09:12": the weekday inside the last week, a date
+  /// before that, then the clock.
+  String _designNoticeWhen(DateTime value) {
+    final now = DateTime.now();
+    final diff = now.difference(value);
+    final clock = _timeLabel(value);
+    if (diff.inDays == 0) return '${S.today} · $clock';
+    if (diff.inDays == 1) return '${S.yesterday} · $clock';
+    if (diff.inDays < 7) {
+      return '${DateFormat.EEEE(localeService.languageCode).format(value)} · $clock';
+    }
+    return '${DateFormat.MMMd(localeService.languageCode).format(value)} · $clock';
+  }
+
+  // ── Chats lane ─────────────────────────────────────────────────────────────
+
+  /// `club-chat-reply` 143:30 — the group-thread language from the CHATS area
+  /// plus what only a club room has: announcement cards, a pinned strip, a
+  /// seen count and typing.
+  Widget _buildDesignChatLane() {
+    final messages = chatStore
+        .messagesFor(widget.threadId, viewerId: _myId)
+        .toList();
+    final typing = chatStore
+        .typingUserIds(widget.threadId, excluding: _myId)
+        .map(_personFor)
+        .toList();
+    final pinned = chatStore.pinnedMessageIn(widget.threadId);
+
+    final items = <Widget>[];
+    for (var i = 0; i < messages.length; i++) {
+      final message = messages[i];
+      final previous = i == 0 ? null : messages[i - 1];
+      if (previous == null ||
+          !_sameDesignDay(previous.createdAt, message.createdAt)) {
+        items.add(ChatDayDivider(label: _designDayLabel(message.createdAt)));
+      }
+      items.add(
+        message.kind == ChatMessageKind.announcement
+            ? _buildDesignChatAnnouncement(message)
+            : _buildDesignClubBubble(message),
+      );
+    }
+    for (final person in typing) {
+      items.add(
+        ClubTypingBubble(
+          key: ValueKey('club-typing-${person.id}'),
+          avatar: _designAvatar(person, 28),
+        ),
+      );
+    }
+
+    return Column(
+      children: [
+        Expanded(
+          child: Stack(
+            key: const ValueKey('club-chat-history-stack'),
+            children: [
+              Positioned.fill(
+                child: messages.isEmpty && typing.isEmpty
+                    ? Center(
+                        child: Padding(
+                          padding: const EdgeInsets.symmetric(horizontal: 40),
+                          child: Text(
+                            S.clubChatEmptyLine,
+                            textAlign: TextAlign.center,
+                            style: figtree(
+                              size: 14,
+                              weight: FontWeight.w500,
+                              color: ChatsColors.muted,
+                            ),
+                          ),
+                        ),
+                      )
+                    : ListView.builder(
+                        controller: _scrollController,
+                        reverse: true,
+                        padding: const EdgeInsets.fromLTRB(16, 12, 16, 12),
+                        itemCount: items.length,
+                        itemBuilder: (context, i) =>
+                            items[items.length - 1 - i],
+                      ),
+              ),
+              if (pinned != null)
+                Positioned(
+                  top: 0,
+                  left: 16,
+                  right: 16,
+                  child: ClubSystemStrip(
+                    key: const ValueKey('club-pinned-strip'),
+                    icon: Icons.bookmark_rounded,
+                    label: S.clubPinnedByLine(
+                      _designPerson(
+                        _personFor(chatStore.senderIdForViewer(pinned, _myId)),
+                      ).name,
+                    ),
+                    onTap: () => unawaited(_jumpToPinnedItem(pinned, messages)),
+                  ),
+                ),
+            ],
+          ),
+        ),
+        if (_canWrite)
+          ChatComposerBar(
+            controller: _inputController,
+            enabled: true,
+            hint: S.communityComposerHint,
+            onAttach: () => unawaited(_openDesignShareSheet()),
+            onSend: () => _send(_inputController.text, const []),
+            banner: _replyingTo == null
+                ? null
+                : _buildDesignReplyBanner(_replyingTo!),
+          )
+        else
+          ClubLockedStrip(label: S.clubChannelReadOnly),
+      ],
+    );
+  }
+
+  Future<void> _jumpToPinnedItem(
+    ChatMessage pinned,
+    List<ChatMessage> chatMessages,
+  ) async {
+    final targetContext = _designMessageAnchors[pinned.id]?.currentContext;
+    if (targetContext != null) {
+      await Scrollable.ensureVisible(
+        targetContext,
+        alignment: 0.3,
+        duration: const Duration(milliseconds: 260),
+        curve: Curves.easeOutCubic,
+      );
+      if (mounted) _startPinnedMessageFlash(pinned.id);
+      return;
+    }
+    if (!_scrollController.hasClients) return;
+
+    final messageIndex = chatMessages.indexWhere(
+      (message) => message.id == pinned.id,
+    );
+    if (messageIndex == -1) return;
+    final distanceFromNewest = chatMessages.length - 1 - messageIndex;
+    final fraction = chatMessages.length <= 1
+        ? 0.0
+        : distanceFromNewest / (chatMessages.length - 1);
+    final estimatedOffset =
+        _scrollController.position.maxScrollExtent * fraction;
+    await _scrollController.animateTo(
+      estimatedOffset,
+      duration: const Duration(milliseconds: 260),
+      curve: Curves.easeOutCubic,
+    );
+    await WidgetsBinding.instance.endOfFrame;
+    if (!mounted) return;
+
+    final resolvedContext = _designMessageAnchors[pinned.id]?.currentContext;
+    if (resolvedContext != null && resolvedContext.mounted) {
+      await Scrollable.ensureVisible(
+        resolvedContext,
+        alignment: 0.3,
+        duration: const Duration(milliseconds: 180),
+        curve: Curves.easeOut,
+      );
+      if (mounted) _startPinnedMessageFlash(pinned.id);
+    }
+  }
+
+  void _startPinnedMessageFlash(String messageId) {
+    _pinnedFlashTimer?.cancel();
+    if (!mounted) return;
+
+    void activate() {
+      if (!mounted) return;
+      setState(() => _flashingPinnedMessageId = messageId);
+      _pinnedFlashTimer = Timer(const Duration(milliseconds: 700), () {
+        if (!mounted || _flashingPinnedMessageId != messageId) return;
+        setState(() => _flashingPinnedMessageId = null);
+      });
+    }
+
+    if (_flashingPinnedMessageId == messageId) {
+      setState(() => _flashingPinnedMessageId = null);
+      WidgetsBinding.instance.addPostFrameCallback((_) => activate());
+    } else {
+      activate();
+    }
+  }
+
+  Widget _pinnedMessageFlash(String messageId, Widget child) {
+    final active = _flashingPinnedMessageId == messageId;
+    return AnimatedContainer(
+      key: ValueKey('club-pinned-flash-$messageId'),
+      duration: const Duration(milliseconds: 180),
+      curve: Curves.easeInOut,
+      foregroundDecoration: BoxDecoration(
+        color: active
+            ? ChatsColors.fill.withValues(alpha: 0.48)
+            : Colors.transparent,
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(
+          color: active
+              ? ChatsColors.muted.withValues(alpha: 0.28)
+              : Colors.transparent,
+        ),
+      ),
+      child: child,
+    );
+  }
+
+  /// The Board remains the sortable notice archive, while Chat shows the same
+  /// announcement at the point it was posted. Keeping one message object in
+  /// both views means pin, reaction and reply state can never drift apart.
+  Widget _buildDesignChatAnnouncement(ChatMessage message) {
+    final person = _designPerson(
+      _personFor(chatStore.senderIdForViewer(message, _myId)),
+    );
+    final title = (message.title ?? '').trim();
+    final body = message.content.trim();
+    return KeyedSubtree(
+      key: _designMessageAnchors.putIfAbsent(message.id, GlobalKey.new),
+      child: _pinnedMessageFlash(
+        message.id,
+        ClubNoticeCard(
+          key: ValueKey('club-chat-announcement-${message.id}'),
+          avatar: _designAvatar(person, 28),
+          authorName: person.name,
+          roleLabel: person.role,
+          whenLabel: _designNoticeWhen(message.createdAt),
+          title: title.isEmpty || title == body ? null : title,
+          body: body,
+          attachment: _designNoticeAttachment(message),
+          pinned: message.pinned,
+          reactions: {
+            for (final entry in message.reactions.entries)
+              entry.key: entry.value.length,
+          },
+          myReactions: {
+            for (final entry in message.reactions.entries)
+              if (entry.value.contains(_myId)) entry.key,
+          },
+          replyCount: chatStore.replyCountFor(message.id),
+          onToggleReaction: _canWrite
+              ? (emoji) => chatStore.toggleReaction(
+                  messageId: message.id,
+                  userId: _myId,
+                  emoji: emoji,
+                )
+              : null,
+          onLongPress: () => _showDesignMessageActions(message),
+          onOpenReplies: _canWrite ? () => _replyInChat(message) : null,
+        ),
+      ),
+    );
+  }
+
+  Widget _buildDesignClubBubble(ChatMessage message) {
+    final mine = chatStore.isMessageOwner(message, _myId);
+    final senderId = chatStore.senderIdForViewer(message, _myId);
+    final person = _designPerson(_personFor(senderId));
+    final available = MediaQuery.sizeOf(context).width - 32;
+    final maxWidth = mine ? available * 0.776 : (available - 36) * 0.83;
+    final seen = mine ? chatStore.seenCountFor(message) : 0;
+
+    final bubble = ChatBubbleShell(
+      key: ValueKey('club-message-bubble-${message.id}'),
+      mine: mine,
+      maxWidth: maxWidth,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          if (message.replyToMessageId != null)
+            _buildDesignQuote(message, mine: mine),
+          if (message.content.trim().isNotEmpty)
+            Text(message.content, style: chatBubbleTextStyle(mine: mine)),
+          if (message.kind == ChatMessageKind.poll)
+            ClubBubblePoll(
+              key: ValueKey('club-bubble-poll-${message.id}'),
+              question: (message.title ?? '').trim(),
+              options: message.pollOptions,
+              counts: [
+                for (var i = 0; i < message.pollOptions.length; i++)
+                  message.votesForOption(i),
+              ],
+              total: message.totalPollVotes,
+              myChoice: message.pollViewerOption ?? message.pollVotes[_myId],
+              closesLabel: _pollClosesLabel(message),
+              mine: mine,
+              closed: message.pollIsClosed,
+              onVote: _canWrite
+                  ? (index) => chatStore.votePoll(
+                      messageId: message.id,
+                      userId: _myId,
+                      optionIndex: index,
+                    )
+                  : null,
+            ),
+        ],
+      ),
+    );
+
+    return KeyedSubtree(
+      key: _designMessageAnchors.putIfAbsent(message.id, GlobalKey.new),
+      child: Padding(
+        padding: const EdgeInsets.only(top: 8),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.end,
+          mainAxisAlignment: mine
+              ? MainAxisAlignment.end
+              : MainAxisAlignment.start,
+          children: [
+            if (!mine)
+              Padding(
+                padding: const EdgeInsets.only(right: 8),
+                child: GestureDetector(
+                  key: ValueKey('club-message-avatar-${message.id}'),
+                  behavior: HitTestBehavior.opaque,
+                  onTap: () => _openProfile(message.senderId),
+                  child: _designAvatar(person, 28),
+                ),
+              ),
+            Flexible(
+              child: Column(
+                crossAxisAlignment: mine
+                    ? CrossAxisAlignment.end
+                    : CrossAxisAlignment.start,
+                children: [
+                  if (!mine)
+                    Padding(
+                      padding: const EdgeInsets.only(bottom: 3),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Flexible(
+                            child: Text(
+                              person.name,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: figtree(
+                                size: 11,
+                                weight: FontWeight.w600,
+                                color: person.isClubAccount
+                                    ? ChatsColors.accentText
+                                    : chatSenderAccent(person.id),
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  GestureDetector(
+                    key: ValueKey('club-message-${message.id}'),
+                    behavior: HitTestBehavior.opaque,
+                    onLongPress: () => _showDesignMessageActions(message),
+                    child: _pinnedMessageFlash(message.id, bubble),
+                  ),
+                  if (message.reactions.isNotEmpty)
+                    Padding(
+                      padding: const EdgeInsets.only(top: 4),
+                      child: Wrap(
+                        spacing: 5,
+                        alignment: mine
+                            ? WrapAlignment.end
+                            : WrapAlignment.start,
+                        children: [
+                          for (final entry in message.reactions.entries)
+                            GestureDetector(
+                              key: ValueKey(
+                                'club-bubble-reaction-${message.id}-${entry.key}',
+                              ),
+                              onTap: () => chatStore.toggleReaction(
+                                messageId: message.id,
+                                userId: _myId,
+                                emoji: entry.key,
+                              ),
+                              child: Container(
+                                height: 22,
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 8,
+                                ),
+                                decoration: BoxDecoration(
+                                  color: entry.value.contains(_myId)
+                                      ? ChatsColors.accent.withValues(
+                                          alpha: 0.10,
+                                        )
+                                      : ChatsColors.card,
+                                  borderRadius: BorderRadius.circular(999),
+                                  border: Border.all(
+                                    color: entry.value.contains(_myId)
+                                        ? ChatsColors.accent
+                                        : ChatsColors.border,
+                                  ),
+                                ),
+                                // Align with both factors, not
+                                // Container.alignment: a bare Align expands to
+                                // the Wrap's loose width.
+                                child: Align(
+                                  widthFactor: 1,
+                                  heightFactor: 1,
+                                  child: Text(
+                                    '${entry.key} ${entry.value.length}',
+                                    style: figtree(
+                                      size: 11,
+                                      weight: FontWeight.w600,
+                                      color: ChatsColors.muted,
+                                    ),
+                                  ),
+                                ),
+                              ),
+                            ),
+                        ],
+                      ),
+                    ),
+                  if (mine && seen > 0)
+                    Padding(
+                      padding: const EdgeInsets.only(top: 4),
+                      child: Text(
+                        S.clubSeenBy(seen),
+                        style: figtree(
+                          size: 10,
+                          weight: FontWeight.w500,
+                          color: ChatsColors.muted,
+                        ),
+                      ),
+                    ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildDesignQuote(ChatMessage message, {required bool mine}) {
+    final senderId = message.replyToSenderId ?? '';
+    final name = senderId == _myId
+        ? S.you
+        : _designPerson(_personFor(senderId)).name;
+    return Container(
+      width: double.infinity,
+      margin: EdgeInsets.only(bottom: message.content.trim().isEmpty ? 0 : 7),
+      padding: const EdgeInsets.fromLTRB(10, 7, 9, 7),
+      decoration: BoxDecoration(
+        color: mine
+            ? Colors.black.withValues(alpha: 0.18)
+            : ChatsColors.card.withValues(alpha: 0.7),
+        borderRadius: BorderRadius.circular(10),
+        border: Border(
+          left: BorderSide(
+            color: mine ? ChatsColors.onAccent : ChatsColors.accent,
+            width: 3,
+          ),
+        ),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            name,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: figtree(
+              size: 11,
+              weight: FontWeight.w700,
+              color: mine ? ChatsColors.onAccent : ChatsColors.accentText,
+            ),
+          ),
+          const SizedBox(height: 2),
+          Text(
+            message.replyToPreview ?? S.message,
+            maxLines: 2,
+            overflow: TextOverflow.ellipsis,
+            style: figtree(
+              size: 11,
+              weight: FontWeight.w400,
+              color: (mine ? ChatsColors.onAccent : ChatsColors.text)
+                  .withValues(alpha: 0.82),
+              height: 1.3,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  /// `reply-preview` 143:75 — the banner above the composer.
+  Widget _buildDesignReplyBanner(ChatMessage message) {
+    final name = message.senderId == _myId
+        ? S.you
+        : _designPerson(_personFor(message.senderId)).name;
+    return Container(
+      key: const ValueKey('club-design-reply-banner'),
+      padding: const EdgeInsets.fromLTRB(12, 8, 6, 8),
+      decoration: BoxDecoration(
+        color: ChatsColors.fill,
+        borderRadius: BorderRadius.circular(kChatCardRadius),
+        border: Border(left: BorderSide(color: ChatsColors.accent, width: 3)),
+      ),
+      child: Row(
+        children: [
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  S.replyingTo(name),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: figtree(
+                    size: 11,
+                    weight: FontWeight.w700,
+                    color: ChatsColors.accentText,
+                  ),
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  ChatStore.replyPreviewFor(message),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: figtree(
+                    size: 12,
+                    weight: FontWeight.w400,
+                    color: ChatsColors.muted,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          GestureDetector(
+            key: const ValueKey('club-design-cancel-reply'),
+            behavior: HitTestBehavior.opaque,
+            onTap: () => setState(() => _replyingTo = null),
+            child: Padding(
+              padding: const EdgeInsets.all(6),
+              child: Icon(
+                Icons.close_rounded,
+                size: 16,
+                color: ChatsColors.muted,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  bool _sameDesignDay(DateTime a, DateTime b) =>
+      a.year == b.year && a.month == b.month && a.day == b.day;
+
+  String _designDayLabel(DateTime value) {
+    final now = DateTime.now();
+    if (_sameDesignDay(now, value)) return S.today;
+    if (_sameDesignDay(now.subtract(const Duration(days: 1)), value)) {
+      return S.yesterday;
+    }
+    return DateFormat.MMMd(localeService.languageCode).format(value);
+  }
+
+  // ── Direct lane ────────────────────────────────────────────────────────────
+
+  /// The Direct lane uses the same flat conversation rows as the Friends
+  /// inbox. Access has already been reduced by [_soloChatEntries]: regular
+  /// students see their own club thread, while board viewers see all inquiries.
+  Widget _buildDesignDirectLane() {
+    final entries = _soloChatEntries();
+    if (entries.isEmpty) return _buildSoloChatLane(_t);
+    return ListView.builder(
+      key: const ValueKey('club-direct-chat-list'),
+      padding: const EdgeInsets.only(bottom: 24),
+      itemCount: entries.length,
+      itemBuilder: (context, index) => _buildDesignDirectRow(entries[index]),
+    );
+  }
+
+  /// `conversation-list` 335:39 — the board side of the same lane: every
+  /// student thread, filtered by the header's search field.
+  Widget _buildDesignDirectInbox() {
+    final entries = _soloChatEntries(avatarSize: 48, plainPeerPreview: true);
+    final query = _directQuery.trim().toLowerCase();
+    final visible = query.isEmpty
+        ? entries
+        : entries
+              .where(
+                (entry) =>
+                    entry.title.toLowerCase().contains(query) ||
+                    entry.preview.toLowerCase().contains(query),
+              )
+              .toList();
+    if (visible.isEmpty) {
+      return Center(
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 40),
+          child: Text(
+            entries.isEmpty ? S.clubDirectInboxEmpty : S.clubDirectNoMatches,
+            textAlign: TextAlign.center,
+            style: figtree(
+              size: 14,
+              weight: FontWeight.w500,
+              color: ChatsColors.muted,
+            ),
+          ),
+        ),
+      );
+    }
+    return ListView.builder(
+      key: const ValueKey('club-direct-inbox-list'),
+      padding: const EdgeInsets.only(top: 8, bottom: 24),
+      itemCount: visible.length,
+      itemBuilder: (context, index) {
+        final entry = visible[index];
+        return ClubDirectInboxRow(
+          key: ValueKey('club-direct-inbox-row-${entry.threadId}'),
+          avatar: entry.avatar,
+          name: entry.title,
+          whenLabel: entry.whenLabel,
+          preview: entry.preview,
+          unread: entry.unread > 0,
+          onTap: () => unawaited(_openSoloChatThread(entry.threadId)),
+        );
+      },
+    );
+  }
+
+  Widget _buildDesignDirectRow(ClubSoloChatEntry entry) {
+    final unread = entry.unread > 0;
+    return Material(
+      color: unread ? ChatsColors.unreadRow : Colors.transparent,
+      child: InkWell(
+        key: ValueKey('club-solo-chat-row-${entry.threadId}'),
+        onTap: () => unawaited(_openSoloChatThread(entry.threadId)),
+        child: DecoratedBox(
+          decoration: BoxDecoration(
+            border: Border(bottom: BorderSide(color: ChatsColors.border)),
+          ),
+          child: SizedBox(
+            height: 72,
+            child: Row(
+              children: [
+                const SizedBox(width: 20),
+                SizedBox(width: 44, height: 44, child: entry.avatar),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        entry.title,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: figtree(
+                          size: 14,
+                          weight: unread ? FontWeight.w700 : FontWeight.w600,
+                          color: ChatsColors.text,
+                          letterSpacing: -0.1,
+                        ),
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        entry.preview,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: figtree(
+                          size: 13,
+                          weight: unread ? FontWeight.w500 : FontWeight.w400,
+                          color: unread ? ChatsColors.text : ChatsColors.muted,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(width: 12),
+                SizedBox(
+                  width: 60,
+                  height: 37,
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.end,
+                    children: [
+                      Text(
+                        entry.whenLabel,
+                        style: figtree(
+                          size: 11,
+                          weight: unread ? FontWeight.w600 : FontWeight.w500,
+                          color: unread
+                              ? ChatsColors.accentText
+                              : ChatsColors.muted,
+                        ),
+                      ),
+                      const Spacer(),
+                      if (unread)
+                        Container(
+                          key: ValueKey(
+                            'club-direct-chat-unread-${entry.threadId}',
+                          ),
+                          constraints: const BoxConstraints(minWidth: 18),
+                          height: 18,
+                          padding: const EdgeInsets.symmetric(horizontal: 5),
+                          decoration: BoxDecoration(
+                            color: ChatsColors.accent,
+                            borderRadius: BorderRadius.circular(9),
+                          ),
+                          child: Align(
+                            widthFactor: 1,
+                            heightFactor: 1,
+                            child: Text(
+                              entry.unread > 9 ? '9+' : '${entry.unread}',
+                              style: figtree(
+                                size: 10,
+                                weight: FontWeight.w700,
+                                color: ChatsColors.onAccent,
+                              ),
+                            ),
+                          ),
+                        ),
+                    ],
+                  ),
+                ),
+                const SizedBox(width: 20),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  // ── sheets ─────────────────────────────────────────────────────────────────
+
+  /// `club-message-actions` 146:3. Edit Message and Forward are on the frame
+  /// but not here: nothing in the app can rewrite a sent message, and
+  /// forwarding needs a thread picker the handoff does not draw. Save Message
+  /// is device-local — see `chat_group_prefs.dart`.
+  void _showDesignMessageActions(ChatMessage message) {
+    final saved = chatGroupPrefs.isMessageSaved(message.id);
+    showClubMessageActions(
+      context,
+      quickEmojis: _quickReactions.take(5).toList(),
+      myReactions: {
+        for (final entry in message.reactions.entries)
+          if (entry.value.contains(_myId)) entry.key,
+      },
+      onReact: (emoji) => chatStore.toggleReaction(
+        messageId: message.id,
+        userId: _myId,
+        emoji: emoji,
+      ),
+      onMoreEmoji: () => _showDesignMessageActions(message),
+      actions: [
+        if (_canWrite)
+          ClubMessageAction(
+            rowKey: ValueKey('club-reply-message-${message.id}'),
+            icon: Icons.reply_rounded,
+            label: message.kind == ChatMessageKind.announcement
+                ? S.boardReplyInChat
+                : S.replyAction,
+            onTap: () => _replyInChat(message),
+          ),
+        if (_canModerate)
+          ClubMessageAction(
+            rowKey: ValueKey('club-pin-message-${message.id}'),
+            icon: message.pinned
+                ? Icons.push_pin
+                : Icons.bookmark_border_rounded,
+            label: message.pinned ? S.clubUnpinMessage : S.clubPinMessage,
+            onTap: () => chatStore.setPinned(message.id, !message.pinned),
+          ),
+        ClubMessageAction(
+          rowKey: ValueKey('club-save-message-${message.id}'),
+          icon: saved ? Icons.star_rounded : Icons.star_outline_rounded,
+          label: saved ? S.clubUnsaveMessage : S.clubSaveMessage,
+          onTap: () {
+            chatGroupPrefs.setMessageSaved(message.id, !saved);
+            if (!saved && mounted) {
+              ScaffoldMessenger.of(context)
+                ..hideCurrentSnackBar()
+                ..showSnackBar(
+                  SnackBar(
+                    content: Text(S.clubMessageSaved),
+                    behavior: SnackBarBehavior.floating,
+                  ),
+                );
+            }
+          },
+        ),
+        if (message.content.isNotEmpty)
+          ClubMessageAction(
+            rowKey: ValueKey('club-copy-message-${message.id}'),
+            icon: Icons.copy_rounded,
+            label: S.copyText,
+            onTap: () {
+              Clipboard.setData(ClipboardData(text: message.content));
+              if (!mounted) return;
+              ScaffoldMessenger.of(
+                context,
+              ).showSnackBar(SnackBar(content: Text(S.copied)));
+            },
+          ),
+        ClubMessageAction(
+          rowKey: ValueKey('club-profile-message-${message.id}'),
+          icon: Icons.person_outline_rounded,
+          label: S.viewProfile,
+          onTap: () => _openProfile(message.senderId),
+        ),
+        if (!chatStore.isMessageOwner(message, _myId))
+          ClubMessageAction(
+            rowKey: ValueKey('club-report-message-${message.id}'),
+            icon: Icons.flag_outlined,
+            label: S.clubReportMessage,
+            destructive: true,
+            onTap: () => unawaited(_reportDesignMessage(message)),
+          ),
+        if (chatStore.isMessageOwner(message, _myId))
+          ClubMessageAction(
+            rowKey: ValueKey('club-delete-message-${message.id}'),
+            icon: Icons.delete_outline_rounded,
+            label: S.clubDeleteForEveryone,
+            destructive: true,
+            onTap: () => unawaited(_confirmDeleteMessage(message)),
+          ),
+      ],
+    );
+  }
+
+  /// Reported to the **local** moderation log, like the group report: there is
+  /// no `club_message` target in the remote schema.
+  Future<void> _reportDesignMessage(ChatMessage message) async {
+    final reason = await showModerationReasonSheet(
+      context,
+      title: S.clubReportMessage,
+    );
+    if (reason == null || !mounted) return;
+    await adminModerationService.recordReport(
+      reporterId: _myId,
+      targetType: 'club_message',
+      targetId: message.id,
+      reason: reason,
+      reportedUserId: message.senderId,
+      reportedClubId: _club?.id,
+      contentSnapshot: message.content,
+    );
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(AppLocalizations.of(context)!.userReported),
+        behavior: SnackBarBehavior.floating,
+      ),
+    );
+  }
+
+  /// `club-attachment-sheet` 146:298. The frame offers six tiles; three of them
+  /// have nowhere to go in this app and are left off rather than faked — File
+  /// (no file-picker dependency), Event (events deliberately left this surface
+  /// with the Board + Chat design) and Location (no such field on a message).
+  Future<void> _openDesignShareSheet() async {
+    final club = _club;
+    if (club == null) return;
+    final clubSide = _isClubSideSession;
+    final memberCount =
+        supabaseClubMemberCounts[club.id] ??
+        _communityInfo?.memberCount ??
+        clubMemberCount(club.id);
+    await showClubShareSheet(
+      context,
+      clubName: club.name,
+      visibilityLine: S.clubShareVisibility(memberCount),
+      options: [
+        ClubShareOption(
+          tileKey: const ValueKey('club-share-photo'),
+          icon: Icons.image_outlined,
+          label: clubSide ? S.attachMedia : S.attachPhoto,
+          onTap: () => unawaited(_handleAttachment(ClubAttachment.photo)),
+        ),
+        ClubShareOption(
+          tileKey: const ValueKey('club-share-camera'),
+          icon: Icons.photo_camera_outlined,
+          label: S.takePhoto,
+          onTap: () => unawaited(
+            clubSide
+                ? _pickMediaAttachment(useCamera: true)
+                : _handleAttachment(ClubAttachment.photo),
+          ),
+        ),
+        ClubShareOption(
+          tileKey: const ValueKey('club-share-poll'),
+          icon: Icons.bar_chart_rounded,
+          label: S.attachPoll,
+          onTap: () => unawaited(_handleAttachment(ClubAttachment.poll)),
+        ),
+      ],
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final t = _t;
     return Scaffold(
-      backgroundColor: t.body,
+      backgroundColor: _designClubRoom ? ChatsColors.background : t.body,
       body: ListenableBuilder(
         listenable: Listenable.merge([
           chatStore,
@@ -1784,6 +3115,13 @@ class _ClubCommunityScreenState extends State<ClubCommunityScreen>
                   Expanded(child: _buildJoinPrompt(club, t)),
                 ],
               ),
+            );
+          }
+          if (_designClubRoom) {
+            return SafeArea(
+              top: false,
+              bottom: false,
+              child: _buildDesignRoom(club),
             );
           }
           return SafeArea(
@@ -1969,6 +3307,10 @@ class _ClubCommunityScreenState extends State<ClubCommunityScreen>
           notice.attachmentName != null &&
                   _looksLikeImage(notice.attachmentName!)
               ? ClubPhotoAttachment(path: notice.attachmentPath!, t: t)
+              : isVideoMediaPath(
+                  notice.attachmentName ?? notice.attachmentPath!,
+                )
+              ? ClubVideoAttachment(path: notice.attachmentPath!, t: t)
               : ClubFileChip(
                   message: notice,
                   t: t,
@@ -2377,6 +3719,7 @@ class _ClubCommunityScreenState extends State<ClubCommunityScreen>
             : _personFor(message.replyToSenderId!).name,
         onLongPress: () => _showMessageActions(message),
         onOpenSender: () => _openParticipantProfile(sender),
+        onUserLinkTap: _openSharedUserProfile,
         statusLabel: mine
             ? (chatStore.seenCountFor(message) > 1 ? S.seen : S.delivered)
             : null,

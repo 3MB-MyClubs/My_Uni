@@ -7,6 +7,7 @@ import 'package:path_provider/path_provider.dart';
 
 import '../services/academic_year_options.dart';
 import '../services/app_colors.dart';
+import '../services/auth_service.dart';
 import '../services/personalization_service.dart' show kAcademicPrograms;
 import '../services/student_profile_service.dart';
 import '../services/user_prefs_service.dart';
@@ -34,6 +35,10 @@ class EditProfileScreen extends StatefulWidget {
 }
 
 class _EditProfileScreenState extends State<EditProfileScreen> {
+  /// The account's real name. `profile-settings` promises "Name, bio and photo"
+  /// behind Edit Profile, so the name lives here now instead of in the Settings
+  /// sheet the redesigned frame has no row for.
+  late final TextEditingController _nameCtrl;
   late final TextEditingController _bioCtrl;
 
   String? _year;
@@ -71,6 +76,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
   @override
   void initState() {
     super.initState();
+    _nameCtrl = TextEditingController(text: widget.realName);
     _bioCtrl = TextEditingController(text: userState.bios[_userId] ?? '');
     final savedMajor = userState.majors[_userId]?.trim();
     _major = (savedMajor != null && savedMajor.isNotEmpty) ? savedMajor : null;
@@ -83,6 +89,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
 
   @override
   void dispose() {
+    _nameCtrl.dispose();
     _bioCtrl.dispose();
     super.dispose();
   }
@@ -104,6 +111,9 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
         _academicYears = results[1] as List<ProfileLookupItem>;
         _interestOptions = results[2] as List<ProfileLookupItem>;
         if (profile != null) {
+          if (profile.fullName.trim().isNotEmpty) {
+            _nameCtrl.text = profile.fullName;
+          }
           _bioCtrl.text = profile.bio ?? '';
           _major = profile.majorName;
           _year = profile.academicYearName;
@@ -126,6 +136,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
   Future<void> _save() async {
     if (_isSaving) return;
     final safetyMessage = contentSafetyService.rejectionMessage([
+      _nameCtrl.text,
       _bioCtrl.text,
     ]);
     if (safetyMessage != null) {
@@ -141,7 +152,21 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
     }
     setState(() => _isSaving = true);
 
+    // An emptied field means "keep the account name", not "clear it".
+    final typedName = _nameCtrl.text.trim();
+    final fullName = typedName.isEmpty ? widget.realName : typedName;
+    final nameChanged = fullName != widget.realName;
+
     try {
+      // `updateProfile` only runs once the remote lookups have loaded, so a
+      // rename on its own still goes through the dedicated call the Settings
+      // sheet used before this field moved here.
+      if (nameChanged) {
+        await studentProfileService.updateFullName(
+          userId: _userId,
+          fullName: fullName,
+        );
+      }
       if (_majors.isNotEmpty || _academicYears.isNotEmpty) {
         final preservedInterestIds = _interestIds.isNotEmpty
             ? _interestIds
@@ -151,7 +176,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
         await studentProfileService.updateProfile(
           UpdateStudentProfileInput(
             userId: _userId,
-            fullName: widget.realName,
+            fullName: fullName,
             bio: _bioCtrl.text,
             majorId: _idForName(_majors, _major),
             academicYearId: _idForName(_academicYears, _year),
@@ -177,6 +202,12 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
       return;
     }
 
+    if (nameChanged) {
+      authService.updateCurrentUserName(fullName);
+      // The old display-name override would otherwise keep masking the name
+      // the student just typed.
+      userState.clearUsername(_userId);
+    }
     userState.setBio(_userId, _bioCtrl.text);
     userState.setMajor(_userId, _major ?? '');
     userState.setYear(_userId, _year ?? '');
@@ -483,6 +514,10 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
             ),
           ),
           const SizedBox(height: 8),
+
+          _label(AppLocalizations.of(context)!.displayName),
+          _field(controller: _nameCtrl, hint: widget.realName, maxLength: 40),
+          const SizedBox(height: 18),
 
           _label(AppLocalizations.of(context)!.bioLabel),
           _field(

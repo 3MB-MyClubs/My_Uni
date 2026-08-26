@@ -5,6 +5,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../models/event.dart';
 import '../services/app_colors.dart';
+import '../services/media_delivery_service.dart';
 import '../services/mock_data.dart';
 import '../services/photo_file_cache.dart';
 import '../services/user_state.dart';
@@ -39,7 +40,7 @@ class EventCoverImage extends ConsumerWidget {
       userStateProvider.select(_selectClubCoverPhoto),
     );
     final path = _firstUsablePath([
-      event.imagePath,
+      resolveEventImageReference(event.imagePath),
       clubPhotoPath,
       fallbackUrl,
     ]);
@@ -51,7 +52,7 @@ class EventCoverImage extends ConsumerWidget {
 
     final child = path == null
         ? _EventCoverFallback(color: color)
-        : _isRemote(path)
+        : _isNetworkReference(path)
         ? AppNetworkImage(
             url: path,
             width: width,
@@ -82,14 +83,33 @@ class EventCoverImage extends ConsumerWidget {
     );
   }
 
-  bool _isRemote(String path) =>
+  static bool _isRemote(String path) =>
       path.startsWith('http://') || path.startsWith('https://');
+
+  static bool _isNetworkReference(String path) =>
+      _isRemote(path) || StorageMediaReference.tryParse(path) != null;
+
+  static String? resolveEventImageReference(String? raw) {
+    final path = raw?.trim() ?? '';
+    if (path.isEmpty) return null;
+    if (_isNetworkReference(path) || photoFileCache.existsSync(path)) {
+      return path;
+    }
+
+    // Feed responses can contain the canonical object path when an older
+    // event row has no persisted public URL. Qualify it with the bucket so
+    // AppNetworkImage can resolve it through the normal media pipeline.
+    if (path.startsWith('events/')) return 'event-images/$path';
+    return null;
+  }
 
   String? _firstUsablePath(Iterable<String?> paths) {
     for (final raw in paths) {
       final path = raw?.trim() ?? '';
       if (path.isEmpty) continue;
-      if (_isRemote(path) || photoFileCache.existsSync(path)) return path;
+      if (_isNetworkReference(path) || photoFileCache.existsSync(path)) {
+        return path;
+      }
     }
     return null;
   }
