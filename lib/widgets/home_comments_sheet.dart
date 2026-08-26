@@ -721,6 +721,29 @@ class _HomeCommentsSheetState extends State<HomeCommentsSheet> {
   /// there is something to send, as in the replies frame.
   Widget _composer(Comment? target) {
     final me = authService.currentUser;
+    // A club-admin login has no student identity: `commentStore.add` refuses
+    // it and a nameless [UserAvatar] shimmers forever. The club POV reads the
+    // thread and answers from the club's own surfaces instead.
+    if (me == null) {
+      return Container(
+        key: const ValueKey('home-comment-readonly'),
+        width: double.infinity,
+        padding: const EdgeInsets.fromLTRB(20, 16, 20, 20),
+        decoration: BoxDecoration(
+          color: ClubUpColors.card,
+          border: Border(top: BorderSide(color: ClubUpColors.border)),
+        ),
+        child: Text(
+          S.commentsStudentsOnly,
+          textAlign: TextAlign.center,
+          style: figtree(
+            size: 13,
+            weight: FontWeight.w500,
+            color: ClubUpColors.muted,
+          ),
+        ),
+      );
+    }
     final canSend = _controller.text.trim().isNotEmpty && !_sending;
     return Container(
       padding: const EdgeInsets.all(16),
@@ -730,12 +753,7 @@ class _HomeCommentsSheetState extends State<HomeCommentsSheet> {
       ),
       child: Row(
         children: [
-          UserAvatar(
-            userId: me?.id ?? '',
-            name: me?.name ?? '',
-            size: 36,
-            fontSize: 14,
-          ),
+          UserAvatar(userId: me.id, name: me.name, size: 36, fontSize: 14),
           const SizedBox(width: 12),
           Expanded(
             child: Container(

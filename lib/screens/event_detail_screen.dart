@@ -113,6 +113,10 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
   // management screen for the club account they currently represent.
   bool get _ownContent => currentAccountManagesClubId(_event.clubId);
 
+  bool get _canUseStudentSocialActions =>
+      authService.isStudentSession &&
+      !accountSwitcherService.isClubAccountActive;
+
   bool get _isLive {
     final now = DateTime.now();
     return !_event.dateTime.isAfter(now) && _event.endTime.isAfter(now);
@@ -158,7 +162,9 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
             ? widget.event.attendeeUserIds
             : attendees.map((user) => user.id),
       );
-      if (peopleService.cachedPeople.isEmpty) {
+      // Club accounts do not have friends and cannot send event invitations.
+      // Only hydrate the broader suggestion pool for student sessions.
+      if (_canUseStudentSocialActions && peopleService.cachedPeople.isEmpty) {
         await peopleService.fetchPeople(excludeId: _currentSessionId);
       }
     } catch (_) {
@@ -334,7 +340,7 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
 
   // ── Actions ─────────────────────────────────────────────────────────────────
   void _toggleSaved() {
-    if (!authService.isStudentSession) return;
+    if (!_canUseStudentSocialActions) return;
 
     setState(() => userState.toggleSave(_event.id));
     userPrefsService.save(_currentSessionId);
@@ -357,7 +363,7 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
   }
 
   void _shareEvent() {
-    if (!authService.isStudentSession) return;
+    if (!_canUseStudentSocialActions) return;
     _showEventShareSheet();
   }
 
@@ -552,7 +558,7 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
         event.registrationUrl!.trim().isNotEmpty;
     final hasProgramme = event.schedule != null && event.schedule!.isNotEmpty;
     final hasSpeakers = event.speakers.isNotEmpty;
-    final canEngage = authService.isStudentSession;
+    final canEngage = _canUseStudentSocialActions;
     final showCta = canEngage && !_isPast;
 
     return Scaffold(
@@ -715,22 +721,23 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
                     ),
                   ),
 
-                  const Padding(
-                    padding: EdgeInsets.fromLTRB(20, 20, 20, 0),
-                    child: _EventDivider(),
-                  ),
-
-                  // Share with friends
-                  Padding(
-                    padding: const EdgeInsets.fromLTRB(20, 20, 20, 0),
-                    child: _BringFriendsSection(
-                      friends: _quickInviteFriends,
-                      invitedFriendIds: _invitedFriendIds,
-                      onInvite: _inviteFriend,
-                      onSeeAll: _showAllSuggestedFriends,
-                      onShare: _shareEvent,
+                  // Friend invitations belong to student accounts only.
+                  if (canEngage) ...[
+                    const Padding(
+                      padding: EdgeInsets.fromLTRB(20, 20, 20, 0),
+                      child: _EventDivider(),
                     ),
-                  ),
+                    Padding(
+                      padding: const EdgeInsets.fromLTRB(20, 20, 20, 0),
+                      child: _BringFriendsSection(
+                        friends: _quickInviteFriends,
+                        invitedFriendIds: _invitedFriendIds,
+                        onInvite: _inviteFriend,
+                        onSeeAll: _showAllSuggestedFriends,
+                        onShare: _shareEvent,
+                      ),
+                    ),
+                  ],
 
                   const SizedBox(height: 24),
                 ],
@@ -1624,8 +1631,16 @@ class _Hero extends StatelessWidget {
   Widget build(BuildContext context) {
     final topPad = MediaQuery.paddingOf(context).top;
 
+    // Match the Home feed's photo block — same edge-to-edge width, sized off
+    // the same `width - 40` basis — but keep the crop a touch shorter than a
+    // square feed photo so the event details still start above the fold.
+    final heroHeight = ((MediaQuery.sizeOf(context).width - 40) * 0.9).clamp(
+      240.0,
+      420.0,
+    );
+
     return SizedBox(
-      height: 320,
+      height: heroHeight,
       child: Stack(
         fit: StackFit.expand,
         children: [
@@ -1671,14 +1686,15 @@ class _Hero extends StatelessWidget {
                   ),
                   Row(
                     children: [
-                      _HeroGlassButton(
-                        icon: Icons.ios_share_rounded,
-                        onTap: onShare,
-                        semanticLabel: AppLocalizations.of(
-                          context,
-                        )!.shareAction,
-                      ),
                       if (canEngage) ...[
+                        _HeroGlassButton(
+                          key: const ValueKey('event-share-action'),
+                          icon: Icons.ios_share_rounded,
+                          onTap: onShare,
+                          semanticLabel: AppLocalizations.of(
+                            context,
+                          )!.shareAction,
+                        ),
                         const SizedBox(width: 8),
                         _HeroGlassButton(
                           icon: saved
@@ -1689,7 +1705,7 @@ class _Hero extends StatelessWidget {
                         ),
                       ],
                       if (canDelete) ...[
-                        const SizedBox(width: 8),
+                        if (canEngage) const SizedBox(width: 8),
                         _HeroGlassButton(
                           icon: Icons.delete_outline_rounded,
                           onTap: onDelete,
@@ -1726,6 +1742,7 @@ class _HeroGlassButton extends StatelessWidget {
   final String? semanticLabel;
 
   const _HeroGlassButton({
+    super.key,
     required this.icon,
     required this.onTap,
     this.semanticLabel,

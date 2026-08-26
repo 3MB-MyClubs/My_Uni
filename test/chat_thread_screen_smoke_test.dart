@@ -1089,9 +1089,13 @@ void main() {
     );
     await tester.pump();
 
-    await tester.tap(find.byIcon(Icons.more_horiz_rounded));
+    // CLUB CHATS `543:32`: a club login now reads its room through the
+    // redesigned chrome, so the Board lane's own composer replaces the ••• menu
+    // and its "Post a notice" row. The paperclip now opens the same media
+    // chooser as Chats; its details tile still carries a headline and pin.
+    await tester.tap(find.byKey(const ValueKey('chat-attach-button')));
     await tester.pumpAndSettle();
-    await tester.tap(find.text(S.boardPostNotice));
+    await tester.tap(find.text(S.postAsAnnouncement));
     await tester.pumpAndSettle();
 
     for (final field in tester.widgetList<TextField>(find.byType(TextField))) {
@@ -1108,16 +1112,19 @@ void main() {
     await tester.tap(find.text(S.post));
     await tester.pumpAndSettle();
 
-    // The notice is one object: a row on the Board the author lands back on,
-    // and the same record as a card in Chat.
+    // The notice lands on the Board, where the author published it.
     expect(find.text(title), findsOneWidget);
 
-    await tester.tap(find.byKey(const ValueKey('club-lane-chat')));
+    await tester.tap(find.byKey(const ValueKey('club-lane-pill')));
     await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('club-lane-option-chats')));
+    await tester.pumpAndSettle();
+    // The Board is the sortable archive, while Chats also shows the same
+    // announcement at the moment it was posted.
     expect(find.text(title), findsOneWidget);
 
-    await tester.tap(find.byKey(const ValueKey('club-attach-button')));
-    await tester.pump();
+    await tester.tap(find.byKey(const ValueKey('chat-attach-button')));
+    await tester.pumpAndSettle();
     await tester.tap(find.text(S.attachPoll));
     await tester.pumpAndSettle();
 
@@ -1131,11 +1138,14 @@ void main() {
     expect(find.text(question), findsOneWidget);
 
     // Events left this surface: the composer offers a photo and a poll only.
-    await tester.tap(find.byKey(const ValueKey('club-attach-button')));
-    await tester.pump();
-    expect(find.text(S.attachMedia), findsOneWidget);
+    await tester.tap(find.byKey(const ValueKey('chat-attach-button')));
+    await tester.pumpAndSettle();
+    expect(find.text(S.takePhoto), findsOneWidget);
     expect(find.text(S.attachEvent), findsNothing);
-    await tester.runAsync(chatStore.saveAll);
+    // Not `runAsync(chatStore.saveAll)`: with read receipts in flight it never
+    // returns, and this test only reached that line once the poll started
+    // rendering in the redesigned lane.
+    await tester.pump(const Duration(seconds: 1));
     expect(tester.takeException(), isNull);
   });
 

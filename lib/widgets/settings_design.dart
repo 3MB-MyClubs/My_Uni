@@ -274,11 +274,13 @@ class SettingsSegmentedToggle extends StatefulWidget {
     required this.labels,
     required this.selectedIndex,
     required this.onSelected,
+    this.expanded = false,
   });
 
   final List<String> labels;
   final int selectedIndex;
   final ValueChanged<int> onSelected;
+  final bool expanded;
 
   static const transitionDuration = Duration(milliseconds: 280);
 
@@ -343,64 +345,72 @@ class _SettingsSegmentedToggleState extends State<SettingsSegmentedToggle> {
         color: SettingsColors.tile,
         borderRadius: const BorderRadius.all(Radius.circular(10)),
       ),
-      child: SizedBox(
-        width: cellWidth * widget.labels.length,
-        height: 26,
-        child: Stack(
-          children: [
-            AnimatedPositioned(
-              duration: SettingsSegmentedToggle.transitionDuration,
-              curve: Curves.easeInOutCubic,
-              left: cellWidth * _visualIndex,
-              top: 0,
-              bottom: 0,
-              width: cellWidth,
-              child: const DecoratedBox(
-                key: ValueKey('settings-segmented-indicator-surface'),
-                decoration: BoxDecoration(
-                  color: SettingsColors.toggleSelected,
-                  borderRadius: BorderRadius.all(Radius.circular(8)),
-                  boxShadow: [
-                    BoxShadow(
-                      color: Color(0x26000000),
-                      blurRadius: 5,
-                      offset: Offset(0, 1),
-                    ),
-                  ],
-                ),
-              ),
-            ),
-            Row(
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          final resolvedCellWidth =
+              widget.expanded && constraints.hasBoundedWidth
+              ? constraints.maxWidth / widget.labels.length
+              : cellWidth;
+          return SizedBox(
+            width: resolvedCellWidth * widget.labels.length,
+            height: 26,
+            child: Stack(
               children: [
-                for (var i = 0; i < widget.labels.length; i++)
-                  Semantics(
-                    button: true,
-                    selected: i == _visualIndex,
-                    child: GestureDetector(
-                      onTap: i == _visualIndex ? null : () => _select(i),
-                      behavior: HitTestBehavior.opaque,
-                      child: SizedBox(
-                        width: cellWidth,
-                        height: 26,
-                        child: Center(
-                          child: AnimatedDefaultTextStyle(
-                            duration: const Duration(milliseconds: 160),
-                            curve: Curves.easeOut,
-                            style: unselectedStyle.copyWith(
-                              color: i == _visualIndex
-                                  ? Colors.white
-                                  : SettingsColors.muted,
+                AnimatedPositioned(
+                  duration: SettingsSegmentedToggle.transitionDuration,
+                  curve: Curves.easeInOutCubic,
+                  left: resolvedCellWidth * _visualIndex,
+                  top: 0,
+                  bottom: 0,
+                  width: resolvedCellWidth,
+                  child: const DecoratedBox(
+                    key: ValueKey('settings-segmented-indicator-surface'),
+                    decoration: BoxDecoration(
+                      color: SettingsColors.toggleSelected,
+                      borderRadius: BorderRadius.all(Radius.circular(8)),
+                      boxShadow: [
+                        BoxShadow(
+                          color: Color(0x26000000),
+                          blurRadius: 5,
+                          offset: Offset(0, 1),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+                Row(
+                  children: [
+                    for (var i = 0; i < widget.labels.length; i++)
+                      Semantics(
+                        button: true,
+                        selected: i == _visualIndex,
+                        child: GestureDetector(
+                          onTap: i == _visualIndex ? null : () => _select(i),
+                          behavior: HitTestBehavior.opaque,
+                          child: SizedBox(
+                            width: resolvedCellWidth,
+                            height: 26,
+                            child: Center(
+                              child: AnimatedDefaultTextStyle(
+                                duration: const Duration(milliseconds: 160),
+                                curve: Curves.easeOut,
+                                style: unselectedStyle.copyWith(
+                                  color: i == _visualIndex
+                                      ? Colors.white
+                                      : SettingsColors.muted,
+                                ),
+                                child: Text(widget.labels[i]),
+                              ),
                             ),
-                            child: Text(widget.labels[i]),
                           ),
                         ),
                       ),
-                    ),
-                  ),
+                  ],
+                ),
               ],
             ),
-          ],
-        ),
+          );
+        },
       ),
     );
   }

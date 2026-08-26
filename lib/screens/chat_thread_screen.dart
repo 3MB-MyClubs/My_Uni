@@ -19,6 +19,7 @@ import '../services/chat_store.dart';
 import '../services/club_admin_access.dart';
 import '../services/club_community_info_controller.dart';
 import '../services/locale_service.dart';
+import '../services/mock_clubup_profile.dart';
 import '../services/mock_data.dart';
 import '../services/notification_inbox_service.dart';
 import '../services/notification_service.dart';
@@ -1051,11 +1052,18 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
   // `search-results` 110:84. Flat bubbles on a flat page: no wallpaper, no
   // gradient, no tail, no shadow, and a 36pt composer.
   //
-  // Only a student session takes this path. A club admin reading the same
-  // club-inbox thread keeps the previous chrome, because the club-side frames
-  // have not been reviewed yet.
+  // The `CLUB CHATS` section (label `543:32`) added the club side of one of
+  // these: `admin-direct-messages` 335:255 / 331:438 is a private inbox read
+  // by the club rather than by the student, and draws through the same header
+  // and bubbles. It is the only thread a club login opens — everything else it
+  // can reach is the room itself, which `ClubCommunityScreen` draws.
 
-  bool get _designChat => authService.isStudentSession && !widget.embedded;
+  bool get _designChat {
+    if (widget.embedded) return false;
+    if (authService.isStudentSession) return true;
+    final admin = authService.currentAdmin;
+    return _isClubInbox && admin != null && !isClubUpAdmin(admin);
+  }
 
   double _designBubbleMaxWidth(BuildContext context, {required bool inset}) {
     final available = MediaQuery.sizeOf(context).width - 32 - (inset ? 36 : 0);
@@ -1140,9 +1148,11 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
                   focusNode: _inputFocusNode,
                   enabled: chatStore.canWriteThread(widget.threadId, _myId),
                   hint: S.typeMessage,
-                  // `chats-clubs` docks a camera here where the DM and group
-                  // frames draw a paperclip; the attach sheet covers both.
-                  attachIcon: _isClubInbox
+                  // Club-side inboxes use a single attachment entry point.
+                  // The sheet then separates library media from a live camera
+                  // capture, matching the familiar WhatsApp flow. Keep the
+                  // student-facing club inbox icon unchanged.
+                  attachIcon: _isClubInbox && !_isClubInboxBoardViewer
                       ? Icons.photo_camera_outlined
                       : Icons.attach_file_rounded,
                   onAttach: _openAttachSheet,
@@ -1697,6 +1707,13 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
                   weight: FontWeight.w600,
                   color: senderIsAdmin && club != null
                       ? ChatsColors.accentText
+                      // A club inbox has exactly two parties, so cycling the
+                      // group palette would make one arbitrary colour look
+                      // meaningful: both `chats-clubs` 225:5 and
+                      // `admin-direct-messages` 335:255 draw this name in
+                      // `#71717A`. Groups keep their per-speaker colours.
+                      : _isClubInbox
+                      ? ChatsColors.muted
                       : chatSenderAccent(senderId),
                 ),
               ),

@@ -7,6 +7,8 @@ import 'package:flutter_application_1/screens/feed_screen.dart';
 import 'package:flutter_application_1/services/auth_service.dart';
 import 'package:flutter_application_1/services/content_store.dart';
 import 'package:flutter_application_1/services/mock_data.dart';
+import 'package:flutter_application_1/widgets/home_design.dart';
+import 'package:flutter_application_1/widgets/instagram_refresh_control.dart';
 import 'package:hive/hive.dart';
 
 void main() {
@@ -57,6 +59,11 @@ void main() {
     // label is on screen at rest. Home opens on For You.
     final dropdown = find.byKey(const ValueKey('home-feed-scope-dropdown'));
     expect(dropdown, findsOneWidget);
+    final refreshControl = tester.widget<InstagramRefreshControl>(
+      find.byType(InstagramRefreshControl, skipOffstage: false),
+    );
+    expect(refreshControl.refreshTriggerPullDistance, 82);
+    expect(refreshControl.refreshIndicatorExtent, 60);
     expect(find.text('Senin İçin'), findsOneWidget);
     expect(find.text('Takip'), findsNothing);
 
@@ -87,17 +94,26 @@ void main() {
 }
 
 Future<void> _pullToRefresh(WidgetTester tester, Finder scrollView) async {
+  final header = find.byType(HomeFeedHeader);
+  final restingHeaderTop = tester.getTopLeft(header).dy;
   final gesture = await tester.startGesture(tester.getCenter(scrollView));
-  await gesture.moveBy(const Offset(0, 120));
+  await gesture.moveBy(const Offset(0, 150));
   await tester.pump();
-  expect(
-    tester
-        .widget<AnimatedOpacity>(
-          find.byKey(const ValueKey('home-refresh-indicator')),
-        )
-        .opacity,
-    1,
-  );
+
+  final indicator = find.byKey(const ValueKey('home-refresh-indicator'));
+  expect(indicator, findsOneWidget);
+  final pulledSpinner = tester.widget<InstagramRefreshSpinner>(indicator);
+  expect(pulledSpinner.progress, 1);
+  expect(pulledSpinner.spinning, isTrue);
+
   await gesture.up();
-  await tester.pump(const Duration(milliseconds: 900));
+  await tester.pump();
+  await tester.pump(const Duration(milliseconds: 300));
+  expect(tester.widget<InstagramRefreshSpinner>(indicator).spinning, isTrue);
+
+  await tester.pump(const Duration(milliseconds: 1200));
+  expect(
+    tester.getTopLeft(header).dy,
+    moreOrLessEquals(restingHeaderTop, epsilon: 0.1),
+  );
 }

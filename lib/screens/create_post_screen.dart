@@ -3,7 +3,6 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:uuid/uuid.dart';
-import '../models/news_post.dart';
 import '../services/app_colors.dart';
 import '../services/account_switcher_service.dart';
 import '../l10n/app_localizations.dart';
@@ -217,14 +216,6 @@ class _CreatePostScreenState extends State<CreatePostScreen> {
   final _contentController = TextEditingController();
   final String _reservedPostId = const Uuid().v4();
 
-  // Poll composer state (2 options minimum, up to 4).
-  bool _pollEnabled = false;
-  final _pollQuestionController = TextEditingController();
-  final List<TextEditingController> _pollOptionControllers = [
-    TextEditingController(),
-    TextEditingController(),
-  ];
-  bool _isAnnouncement = false;
   bool _isPosting = false;
 
   _ClubOption? _selectedClub;
@@ -257,10 +248,6 @@ class _CreatePostScreenState extends State<CreatePostScreen> {
   @override
   void dispose() {
     _contentController.dispose();
-    _pollQuestionController.dispose();
-    for (final c in _pollOptionControllers) {
-      c.dispose();
-    }
     super.dispose();
   }
 
@@ -325,17 +312,6 @@ class _CreatePostScreenState extends State<CreatePostScreen> {
     ),
   ];
 
-  PollData? get _pollData {
-    if (!_pollEnabled) return null;
-    final question = _pollQuestionController.text.trim();
-    final options = _pollOptionControllers
-        .map((c) => c.text.trim())
-        .where((t) => t.isNotEmpty)
-        .toList();
-    if (question.isEmpty || options.length < 2) return null;
-    return PollData(question: question, options: options);
-  }
-
   Future<void> _post() async {
     final content = _contentController.text.trim();
     if (content.isEmpty || _selectedClub == null) return;
@@ -350,8 +326,6 @@ class _CreatePostScreenState extends State<CreatePostScreen> {
         taggedClubIds: _extractTaggedClubIds(content),
         taggedUserIds: _extractTaggedUserIds(content),
         imagePath: _hasUploadedPhoto ? _imagePath : null,
-        poll: _pollData,
-        isAnnouncement: _isAnnouncement,
       );
       if (!mounted) return;
       newsPosts.insert(0, post);
@@ -654,17 +628,13 @@ class _CreatePostScreenState extends State<CreatePostScreen> {
                 ),
                 const SizedBox(height: 18),
 
-                // ── Template picker ────────────────────────────────────────
+                // Photo
                 Row(
                   children: [
-                    Icon(
-                      Icons.palette_outlined,
-                      size: 16,
-                      color: AppColors.text,
-                    ),
+                    Icon(Icons.image_outlined, size: 16, color: AppColors.text),
                     const SizedBox(width: 6),
                     Text(
-                      AppLocalizations.of(context)!.templateLabel,
+                      AppLocalizations.of(context)!.photoLabel,
                       style: TextStyle(
                         fontSize: 14,
                         fontWeight: FontWeight.w700,
@@ -673,248 +643,24 @@ class _CreatePostScreenState extends State<CreatePostScreen> {
                     ),
                   ],
                 ),
-                const SizedBox(height: 8),
-                SizedBox(
-                  height: 40,
-                  child: ListView(
-                    scrollDirection: Axis.horizontal,
-                    children: [
-                      _TemplateSwatch(
-                        isActive: _imagePath == null,
-                        onTap: () => setState(() => _imagePath = null),
-                        child: Icon(
-                          Icons.close,
-                          size: 14,
-                          color: AppColors.secondaryText,
-                        ),
-                      ),
-                      const SizedBox(width: 6),
-                      ..._templates.expand(
-                        (tpl) => [
-                          _TemplateSwatch(
-                            isActive: _imagePath == tpl.id,
-                            onTap: () => setState(() => _imagePath = tpl.id),
-                            gradient: LinearGradient(
-                              colors: tpl.colors,
-                              begin: tpl.begin,
-                              end: tpl.end,
-                            ),
-                          ),
-                          const SizedBox(width: 6),
-                        ],
-                      ),
-                    ],
-                  ),
+                const SizedBox(height: 10),
+                ContentImageUploader(
+                  imagePath: _imagePath,
+                  onChanged: (path) => setState(() => _imagePath = path),
+                  height: 200,
+                  compact: true,
+                  emptyTitle: AppLocalizations.of(context)!.addAPhotoTitle,
+                  emptySubtitle: AppLocalizations.of(
+                    context,
+                  )!.tapToPickFromCameraOrLibrary,
                 ),
-                const SizedBox(height: 16),
-
-                // Photo (hidden when a template is active)
-                if (!(_imagePath?.startsWith('tpl:') ?? false)) ...[
-                  Row(
-                    children: [
-                      Icon(
-                        Icons.image_outlined,
-                        size: 16,
-                        color: AppColors.text,
-                      ),
-                      const SizedBox(width: 6),
-                      Text(
-                        AppLocalizations.of(context)!.photoLabel,
-                        style: TextStyle(
-                          fontSize: 14,
-                          fontWeight: FontWeight.w700,
-                          color: AppColors.text,
-                        ),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 10),
-                  ContentImageUploader(
-                    imagePath: _imagePath,
-                    onChanged: (path) => setState(() => _imagePath = path),
-                    height: 200,
-                    compact: true,
-                    emptyTitle: AppLocalizations.of(context)!.addAPhotoTitle,
-                    emptySubtitle: AppLocalizations.of(
-                      context,
-                    )!.tapToPickFromCameraOrLibrary,
-                  ),
-                ],
                 const SizedBox(height: 20),
 
-                // ── Poll ───────────────────────────────────────────────────
-                Row(
-                  children: [
-                    Icon(Icons.poll_outlined, size: 16, color: AppColors.text),
-                    const SizedBox(width: 6),
-                    Text(
-                      AppLocalizations.of(context)!.addPoll,
-                      style: TextStyle(
-                        fontSize: 14,
-                        fontWeight: FontWeight.w700,
-                        color: AppColors.text,
-                      ),
-                    ),
-                    const Spacer(),
-                    Switch.adaptive(
-                      value: _pollEnabled,
-                      activeTrackColor: AppColors.primaryRed,
-                      onChanged: (v) => setState(() => _pollEnabled = v),
-                    ),
-                  ],
-                ),
-                if (_pollEnabled) ...[
-                  const SizedBox(height: 6),
-                  TextField(
-                    controller: _pollQuestionController,
-                    onChanged: (_) => setState(() {}),
-                    decoration: InputDecoration(
-                      isDense: true,
-                      filled: true,
-                      fillColor: AppColors.surfaceAlt,
-                      hintText: AppLocalizations.of(context)!.pollQuestionHint,
-                      border: OutlineInputBorder(
-                        borderRadius: BorderRadius.all(Radius.circular(12)),
-                        borderSide: BorderSide.none,
-                      ),
-                    ),
-                    style: TextStyle(fontSize: 14, color: AppColors.text),
-                  ),
-                  const SizedBox(height: 8),
-                  for (var i = 0; i < _pollOptionControllers.length; i++)
-                    Padding(
-                      padding: const EdgeInsets.only(bottom: 8),
-                      child: Row(
-                        children: [
-                          Expanded(
-                            child: TextField(
-                              controller: _pollOptionControllers[i],
-                              onChanged: (_) => setState(() {}),
-                              decoration: InputDecoration(
-                                isDense: true,
-                                filled: true,
-                                fillColor: AppColors.surfaceAlt,
-                                hintText: AppLocalizations.of(
-                                  context,
-                                )!.pollOptionHint(i + 1),
-                                border: OutlineInputBorder(
-                                  borderRadius: BorderRadius.all(
-                                    Radius.circular(12),
-                                  ),
-                                  borderSide: BorderSide.none,
-                                ),
-                              ),
-                              style: TextStyle(
-                                fontSize: 14,
-                                color: AppColors.text,
-                              ),
-                            ),
-                          ),
-                          if (_pollOptionControllers.length > 2)
-                            IconButton(
-                              onPressed: () => setState(() {
-                                _pollOptionControllers.removeAt(i).dispose();
-                              }),
-                              icon: Icon(
-                                Icons.remove_circle_outline,
-                                size: 19,
-                                color: AppColors.secondaryText,
-                              ),
-                            ),
-                        ],
-                      ),
-                    ),
-                  if (_pollOptionControllers.length < 4)
-                    TextButton.icon(
-                      onPressed: () => setState(
-                        () =>
-                            _pollOptionControllers.add(TextEditingController()),
-                      ),
-                      icon: Icon(
-                        Icons.add_rounded,
-                        size: 17,
-                        color: AppColors.primaryRed,
-                      ),
-                      label: Text(
-                        AppLocalizations.of(
-                          context,
-                        )!.pollOptionHint(_pollOptionControllers.length + 1),
-                        style: TextStyle(
-                          fontSize: 13,
-                          color: AppColors.primaryRed,
-                        ),
-                      ),
-                    ),
-                ],
-                const SizedBox(height: 4),
-
-                // ── Announcement toggle ────────────────────────────────────
-                Row(
-                  children: [
-                    Icon(
-                      Icons.campaign_outlined,
-                      size: 17,
-                      color: AppColors.text,
-                    ),
-                    const SizedBox(width: 6),
-                    Text(
-                      AppLocalizations.of(context)!.markAsAnnouncement,
-                      style: TextStyle(
-                        fontSize: 14,
-                        fontWeight: FontWeight.w700,
-                        color: AppColors.text,
-                      ),
-                    ),
-                    const Spacer(),
-                    Switch.adaptive(
-                      value: _isAnnouncement,
-                      activeTrackColor: AppColors.primaryRed,
-                      onChanged: (v) => setState(() => _isAnnouncement = v),
-                    ),
-                  ],
-                ),
                 const SizedBox(height: 40),
               ],
             ),
           ),
         ],
-      ),
-    );
-  }
-}
-
-// ── Template swatch ───────────────────────────────────────────────────────────
-
-class _TemplateSwatch extends StatelessWidget {
-  final bool isActive;
-  final VoidCallback onTap;
-  final LinearGradient? gradient;
-  final Widget? child;
-
-  const _TemplateSwatch({
-    required this.isActive,
-    required this.onTap,
-    this.gradient,
-    this.child,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return GestureDetector(
-      onTap: onTap,
-      child: Container(
-        width: 32,
-        height: 32,
-        decoration: BoxDecoration(
-          color: gradient == null ? AppColors.surfaceAlt : null,
-          gradient: gradient,
-          borderRadius: BorderRadius.all(Radius.circular(8)),
-          border: Border.all(
-            color: isActive ? AppColors.primaryRed : AppColors.divider,
-            width: isActive ? 2 : 1,
-          ),
-        ),
-        child: child != null ? Center(child: child) : null,
       ),
     );
   }

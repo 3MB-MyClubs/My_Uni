@@ -4,6 +4,7 @@ import 'package:flutter_application_1/models/app_admin.dart';
 import 'package:flutter_application_1/models/club.dart';
 import 'package:flutter_application_1/models/event.dart';
 import 'package:flutter_application_1/screens/create_event_screen.dart';
+import 'package:flutter_application_1/services/app_strings.dart';
 import 'package:flutter_application_1/services/auth_service.dart';
 import 'package:flutter_application_1/services/mock_data.dart';
 import 'package:flutter_application_1/services/supabase_event_service.dart';
@@ -81,12 +82,20 @@ void main() {
     expect(find.text('Edit Event'), findsOneWidget);
 
     await tester.enterText(find.byType(TextField).first, 'Edited in wizard');
-    for (var step = 0; step < 3; step++) {
-      await tester.tap(find.text('Next'));
+    // The redesigned wizard is Details → Speakers & Tags → Programme →
+    // Event Preview (`wz-*`), and only the preview's CTA commits.
+    // `S.*` follows localeService (Turkish by default in tests) while
+    // AppLocalizations resolves to en, so the CTAs are asserted through S.
+    for (final cta in [
+      S.eventWizardNextStep,
+      S.eventWizardNextStep,
+      S.eventWizardPreviewBadge,
+    ]) {
+      await tester.tap(find.text(cta));
       await tester.pump();
       await tester.pump(const Duration(milliseconds: 300));
     }
-    await tester.tap(find.text('Save Changes'));
+    await tester.tap(find.text(S.eventWizardSaveChanges));
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 350));
 

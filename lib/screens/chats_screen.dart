@@ -230,11 +230,10 @@ class _ChatsScreenState extends State<ChatsScreen> {
       thread.isClub || (!authService.isStudentSession && thread.isClubInbox);
 
   String _preview(ChatThreadSummary t) {
-    // A club room previews its Chat lane: a notice belongs to the Board, so it
-    // never becomes the inbox line. The badge still counts both lanes.
-    final last = ChatStore.isClubThread(t.threadId)
-        ? (chatStore.lastChatLaneMessageIn(t.threadId) ?? t.lastMessage)
-        : t.lastMessage;
+    // Announcements are part of the shared club conversation as well as the
+    // Board archive. Use the actual newest item so a notice is visible from
+    // the Chats inbox immediately after it is posted.
+    final last = t.lastMessage;
     if (last == null) return '';
     final body = switch (last.kind) {
       ChatMessageKind.postShare => S.sharedPost,
@@ -514,7 +513,7 @@ class _ChatsScreenState extends State<ChatsScreen> {
                   padding: const EdgeInsets.symmetric(horizontal: 12),
                   decoration: BoxDecoration(
                     color: _filterMenuOpen
-                        ? Colors.white.withValues(alpha: 0.16)
+                        ? ChatsColors.fill
                         : Colors.transparent,
                     borderRadius: BorderRadius.circular(999),
                   ),
@@ -545,7 +544,7 @@ class _ChatsScreenState extends State<ChatsScreen> {
                             style: figtree(
                               size: 18,
                               weight: FontWeight.w800,
-                              color: Colors.white,
+                              color: ChatsColors.text,
                             ),
                           ),
                         ),
@@ -555,10 +554,10 @@ class _ChatsScreenState extends State<ChatsScreen> {
                         turns: _filterMenuOpen ? 0.5 : 0,
                         duration: const Duration(milliseconds: 240),
                         curve: Curves.easeOutCubic,
-                        child: const Icon(
+                        child: Icon(
                           Icons.keyboard_arrow_down_rounded,
                           size: 16,
-                          color: Colors.white,
+                          color: ChatsColors.text,
                         ),
                       ),
                     ],
@@ -585,7 +584,7 @@ class _ChatsScreenState extends State<ChatsScreen> {
                     child: Icon(
                       Icons.edit_rounded,
                       size: 26,
-                      color: Colors.white,
+                      color: ChatsColors.text,
                     ),
                   ),
                 ),

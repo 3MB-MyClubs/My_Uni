@@ -3,6 +3,23 @@ import 'dart:typed_data';
 
 const int _maxImageHeaderBytes = 256 * 1024;
 
+/// The exact media viewport used by current Home post cards. Keeping this in
+/// one place prevents opened posts from drifting even a pixel from Home.
+const double kHomePostPortraitAspectRatio = 4 / 5;
+const double kHomePostLandscapeAspectRatio = 1.91;
+const double kHomePostMediaHorizontalInset = 40;
+
+double homePostMediaHeight(double viewportWidth, {double aspectRatio = 1}) {
+  final safeRatio = aspectRatio.isFinite && aspectRatio > 0 ? aspectRatio : 1;
+  final widthAfterInset = viewportWidth - kHomePostMediaHorizontalInset;
+  final heightBasisWidth = widthAfterInset > 0 ? widthAfterInset : 0.0;
+  return heightBasisWidth /
+      safeRatio.clamp(
+        kHomePostPortraitAspectRatio,
+        kHomePostLandscapeAspectRatio,
+      );
+}
+
 /// Reads only the leading metadata area instead of pulling a multi-megabyte
 /// upload into memory on the UI isolate. Unusual files whose dimension marker
 /// falls later simply return null and can use the normal decoded-image path.

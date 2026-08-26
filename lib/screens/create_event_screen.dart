@@ -1,17 +1,12 @@
 import 'dart:async';
-import 'dart:io';
 
-import 'package:flutter/cupertino.dart'
-    show
-        CupertinoDatePicker,
-        CupertinoDatePickerMode,
-        CupertinoTheme,
-        CupertinoThemeData;
 import 'package:flutter/material.dart';
 import 'package:image_cropper/image_cropper.dart';
 import 'package:image_picker/image_picker.dart';
+import 'package:intl/intl.dart';
 import 'package:uuid/uuid.dart';
 import '../models/event.dart';
+import '../services/app_strings.dart';
 import '../services/app_colors.dart';
 import '../services/account_switcher_service.dart';
 import '../services/auth_service.dart';
@@ -22,33 +17,9 @@ import '../services/mock_data.dart';
 import '../services/photo_upload_quality.dart';
 import '../services/rate_limit_error.dart';
 import '../services/supabase_event_service.dart';
-import '../services/user_state.dart';
-import '../widgets/app_network_image.dart';
-import '../widgets/club_avatar.dart';
-import '../widgets/loading_skeleton.dart';
-import '../widgets/mention_text_field.dart';
+import '../widgets/clubup_design.dart';
+import '../widgets/event_wizard_design.dart';
 import '../l10n/app_localizations.dart';
-
-bool _isRemoteEventImagePath(String path) =>
-    path.startsWith('http://') || path.startsWith('https://');
-
-List<String> _monthLabels(BuildContext context) {
-  final l10n = AppLocalizations.of(context)!;
-  return [
-    l10n.monthJan,
-    l10n.monthFeb,
-    l10n.monthMar,
-    l10n.monthApr,
-    l10n.monthMay,
-    l10n.monthJun,
-    l10n.monthJul,
-    l10n.monthAug,
-    l10n.monthSep,
-    l10n.monthOct,
-    l10n.monthNov,
-    l10n.monthDec,
-  ];
-}
 
 class CreateEventScreen extends StatefulWidget {
   final VoidCallback? onCreated;
@@ -121,23 +92,19 @@ class _CreateEventScreenState extends State<CreateEventScreen> {
   final List<_SpeakerEntry> _speakers = [];
   bool _isPosting = false;
 
-  DateTime _startDate = DateTime.now().add(const Duration(hours: 1));
-  DateTime _endDate = DateTime.now().add(const Duration(hours: 3));
+  // The frame's `Starts` / `Ends` cells read "Select start date" until they are
+  // picked, so a new event genuinely has no dates yet.
+  DateTime? _startDate;
+  DateTime? _endDate;
+
+  /// Which cell the open picker sheet belongs to — that one takes the accent
+  /// ring in `315:56`.
+  String? _activePicker;
 
   // Wizard navigation
   final PageController _pageController = PageController();
   int _step = 0;
   static const int _stepCount = 4;
-  List<String> get _stepTitles {
-    final l10n = AppLocalizations.of(context)!;
-    return [
-      l10n.eventStepBasics,
-      l10n.eventStepWhen,
-      l10n.eventStepDetails,
-      l10n.eventStepReview,
-    ];
-  }
-
   bool get _isEditing => widget.existing != null;
 
   SupabaseEventService get _eventService =>
@@ -182,34 +149,36 @@ class _CreateEventScreenState extends State<CreateEventScreen> {
     }
   }
 
-  bool get _canPost =>
-      _titleController.text.trim().isNotEmpty &&
-      _locationController.text.trim().isNotEmpty &&
-      _endDate.isAfter(_startDate);
-
   // ── Wizard navigation ────────────────────────────────────────────────────
 
   // Whether the user may move past [step]. Required fields are validated on the
   // step that collects them so they're always satisfied before Review.
+  // Step 1 now collects the dates too, so everything required lives there.
   bool _canAdvanceFrom(int step) {
-    switch (step) {
-      case 0:
-        return _titleController.text.trim().isNotEmpty &&
-            _locationController.text.trim().isNotEmpty;
-      case 1:
-        return _endDate.isAfter(_startDate);
-      case 3:
-        return _canPost;
-      default:
-        return true;
-    }
+    if (step != 0) return true;
+    final start = _startDate;
+    final end = _endDate;
+    return _titleController.text.trim().isNotEmpty &&
+        _locationController.text.trim().isNotEmpty &&
+        start != null &&
+        end != null &&
+        end.isAfter(start);
   }
 
-  // Reason shown when a Next is blocked, per step.
+  // Reason shown when a Next is blocked. The frame draws no disabled button,
+  // so the CTA stays solid and says what is missing instead.
   String _blockedReason(int step) {
     final l10n = AppLocalizations.of(context)!;
-    if (step == 0) return l10n.addTitleLocationToContinue;
-    if (step == 1) return l10n.endTimeAfterStartTime;
+    if (step != 0) return l10n.completeRequiredFields;
+    final start = _startDate;
+    final end = _endDate;
+    if (_titleController.text.trim().isEmpty ||
+        _locationController.text.trim().isEmpty) {
+      return l10n.addTitleLocationToContinue;
+    }
+    if (start == null || end == null || !end.isAfter(start)) {
+      return l10n.endTimeAfterStartTime;
+    }
     return l10n.completeRequiredFields;
   }
 
@@ -260,207 +229,174 @@ class _CreateEventScreenState extends State<CreateEventScreen> {
     }
   }
 
-  List<MentionOption> get _mentionOptions => [
-    ...clubs.map(
-      (club) =>
-          MentionOption(id: club.id, label: club.name, type: MentionType.club),
-    ),
-    ...users.map(
-      (user) => MentionOption(
-        id: user.id,
-        label: userState.displayNameFor(user.id, user.name),
-        type: MentionType.student,
-      ),
-    ),
-  ];
-
-  // Single, fast iOS-style wheel for both the date and the time — one scroll
-  // sets everything (replaces the fiddly Material calendar + analog clock).
-  Future<void> _pickDateTime(bool isStart) async {
-    final now = DateTime.now();
-    final initial = isStart ? _startDate : _endDate;
-    // Cupertino requires initialDateTime >= minimumDate.
-    final minDate = isStart
-        ? now.subtract(const Duration(days: 1))
-        : _startDate;
-    var temp = initial.isBefore(minDate) ? minDate : initial;
-
-    final result = await showModalBottomSheet<DateTime>(
-      context: context,
-      backgroundColor: AppColors.card,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
-      ),
-      builder: (ctx) => SafeArea(
-        top: false,
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            // Header: Cancel · Starts/Ends · Done
-            Padding(
-              padding: const EdgeInsets.fromLTRB(8, 8, 8, 0),
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  TextButton(
-                    onPressed: () => Navigator.pop(ctx),
-                    child: Text(
-                      AppLocalizations.of(context)!.cancel,
-                      style: TextStyle(color: AppColors.secondaryText),
-                    ),
-                  ),
-                  Text(
-                    isStart
-                        ? AppLocalizations.of(context)!.startsLabel
-                        : AppLocalizations.of(context)!.endsLabel,
-                    style: TextStyle(
-                      fontWeight: FontWeight.bold,
-                      color: AppColors.text,
-                    ),
-                  ),
-                  TextButton(
-                    onPressed: () => Navigator.pop(ctx, temp),
-                    child: Text(
-                      AppLocalizations.of(context)!.done,
-                      style: TextStyle(
-                        color: AppColors.primaryRed,
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            Divider(height: 1, color: AppColors.divider),
-            // The wheel — date + time together, 24-hour.
-            SizedBox(
-              height: 232,
-              child: CupertinoTheme(
-                data: CupertinoThemeData(
-                  brightness: Theme.of(context).brightness,
-                ),
-                child: CupertinoDatePicker(
-                  mode: CupertinoDatePickerMode.dateAndTime,
-                  initialDateTime: temp,
-                  minimumDate: minDate,
-                  maximumDate: now.add(const Duration(days: 365)),
-                  use24hFormat: true,
-                  onDateTimeChanged: (d) => temp = d,
-                ),
-              ),
-            ),
-          ],
+  // ── Pickers — the frames' own sheets ─────────────────────────────────────
+  /// `photo-uploader` 315:32. Same picker + crop the old hero editor used.
+  Future<void> _pickCover() async {
+    final picked = await ImagePicker().pickImage(source: ImageSource.gallery);
+    if (picked == null || !mounted) return;
+    final cropPhotoTitle = AppLocalizations.of(context)!.cropPhotoTitle;
+    final cropped = await ImageCropper().cropImage(
+      sourcePath: picked.path,
+      maxWidth: PhotoUploadQuality.contentMaxDimension,
+      maxHeight: PhotoUploadQuality.contentMaxDimension,
+      compressFormat: ImageCompressFormat.jpg,
+      compressQuality: PhotoUploadQuality.jpegQuality,
+      uiSettings: [
+        IOSUiSettings(
+          title: cropPhotoTitle,
+          resetAspectRatioEnabled: true,
+          rotateButtonsHidden: false,
         ),
-      ),
+        AndroidUiSettings(
+          toolbarTitle: cropPhotoTitle,
+          toolbarColor: AppColors.primaryRed,
+          toolbarWidgetColor: Colors.white,
+          lockAspectRatio: false,
+          showCropGrid: true,
+        ),
+      ],
     );
+    if (cropped == null || !mounted) return;
+    setState(() => _imagePath = cropped.path);
+  }
 
-    if (result == null || !mounted) return;
+  DateTime _combine(DateTime date, DateTime time) =>
+      DateTime(date.year, date.month, date.day, time.hour, time.minute);
+
+  /// `select-date` 319:7.
+  Future<void> _pickDate(bool isStart) async {
+    final current = isStart ? _startDate : _endDate;
+    setState(() => _activePicker = isStart ? 'start-date' : 'end-date');
+    final picked = await showEventWizardDateSheet(
+      context,
+      initial: current ?? DateTime.now(),
+      firstAllowed: isStart ? null : _startDate,
+    );
+    if (!mounted) return;
     setState(() {
+      _activePicker = null;
+      if (picked == null) return;
       if (isStart) {
-        _startDate = result;
-        // Keep the end after the start automatically.
-        if (!_endDate.isAfter(_startDate)) {
-          _endDate = _startDate.add(const Duration(hours: 1));
+        final base = _startDate ?? DateTime.now();
+        _startDate = _combine(picked, base);
+        final end = _endDate;
+        if (end != null && !end.isAfter(_startDate!)) {
+          _endDate = _startDate!.add(const Duration(hours: 2));
         }
       } else {
-        _endDate = result;
+        final base = _endDate ?? _startDate?.add(const Duration(hours: 2));
+        _endDate = _combine(picked, base ?? DateTime.now());
       }
     });
   }
 
-  Future<void> _pickSlotTime(_ScheduleEntry entry) async {
-    final now = DateTime.now();
-    var temp = DateTime(
-      now.year,
-      now.month,
-      now.day,
-      entry.time.hour,
-      entry.time.minute,
+  /// `select-start-time` / `select-end-time` 315:71.
+  Future<void> _pickTime(bool isStart) async {
+    final current = isStart ? _startDate : _endDate;
+    final fallback = TimeOfDay.fromDateTime(
+      current ?? DateTime.now().add(Duration(hours: isStart ? 1 : 3)),
     );
-    final result = await showModalBottomSheet<TimeOfDay>(
-      context: context,
-      backgroundColor: AppColors.card,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
-      ),
-      builder: (ctx) => SafeArea(
-        top: false,
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Padding(
-              padding: const EdgeInsets.fromLTRB(8, 8, 8, 0),
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  TextButton(
-                    onPressed: () => Navigator.pop(ctx),
-                    child: Text(
-                      AppLocalizations.of(context)!.cancel,
-                      style: TextStyle(color: AppColors.secondaryText),
-                    ),
-                  ),
-                  Text(
-                    AppLocalizations.of(context)!.time,
-                    style: TextStyle(
-                      fontWeight: FontWeight.bold,
-                      color: AppColors.text,
-                    ),
-                  ),
-                  TextButton(
-                    onPressed: () =>
-                        Navigator.pop(ctx, TimeOfDay.fromDateTime(temp)),
-                    child: Text(
-                      AppLocalizations.of(context)!.done,
-                      style: TextStyle(
-                        color: AppColors.primaryRed,
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            Divider(height: 1, color: AppColors.divider),
-            SizedBox(
-              height: 200,
-              child: CupertinoTheme(
-                data: CupertinoThemeData(
-                  brightness: Theme.of(context).brightness,
-                ),
-                child: CupertinoDatePicker(
-                  mode: CupertinoDatePickerMode.time,
-                  initialDateTime: temp,
-                  use24hFormat: true,
-                  onDateTimeChanged: (d) => temp = d,
-                ),
-              ),
-            ),
-          ],
-        ),
-      ),
+    setState(() => _activePicker = isStart ? 'start-time' : 'end-time');
+    final picked = await showEventWizardTimeSheet(
+      context,
+      initial: fallback,
+      title: isStart
+          ? S.eventWizardSelectStartTime
+          : S.eventWizardSelectEndTime,
     );
-    if (result == null || !mounted) return;
-    setState(() => entry.time = result);
+    if (!mounted) return;
+    setState(() {
+      _activePicker = null;
+      if (picked == null) return;
+      if (isStart) {
+        final base = _startDate ?? DateTime.now();
+        _startDate = DateTime(
+          base.year,
+          base.month,
+          base.day,
+          picked.hour,
+          picked.minute,
+        );
+        final end = _endDate;
+        if (end != null && !end.isAfter(_startDate!)) {
+          _endDate = _startDate!.add(const Duration(hours: 2));
+        }
+      } else {
+        final base = _endDate ?? _startDate ?? DateTime.now();
+        _endDate = DateTime(
+          base.year,
+          base.month,
+          base.day,
+          picked.hour,
+          picked.minute,
+        );
+      }
+    });
   }
 
-  void _addScheduleEntry() {
-    final lastTime = _scheduleEntries.isEmpty
-        ? TimeOfDay(hour: _startDate.hour, minute: _startDate.minute)
-        : _scheduleEntries.last.time;
-    // Default next slot 30 min after previous
-    final nextMinutes = lastTime.hour * 60 + lastTime.minute + 30;
+  /// `add-speaker-modal` 325:154 — replaces the three inline fields per
+  /// speaker the old Details step drew.
+  Future<void> _openSpeakerSheet({int? index}) async {
+    final existing = index == null
+        ? null
+        : EventWizardSpeakerDraft(
+            name: _speakers[index].nameCtrl.text,
+            role: _speakers[index].roleCtrl.text,
+            linkedin: _speakers[index].linkedinCtrl.text,
+          );
+    final draft = await showEventWizardSpeakerSheet(
+      context,
+      existing: existing,
+    );
+    if (draft == null || !mounted) return;
     setState(() {
-      _scheduleEntries.add(
-        _ScheduleEntry(
-          time: TimeOfDay(
-            hour: (nextMinutes ~/ 60) % 24,
-            minute: nextMinutes % 60,
-          ),
-          titleCtrl: TextEditingController(),
-          subtitleCtrl: TextEditingController(),
-        ),
-      );
+      final entry = index == null ? _SpeakerEntry() : _speakers[index];
+      entry.nameCtrl.text = draft.name;
+      entry.roleCtrl.text = draft.role;
+      entry.linkedinCtrl.text = draft.linkedin;
+      if (index == null) _speakers.add(entry);
+    });
+  }
+
+  /// `add-session` 325:485.
+  Future<void> _openSessionSheet({int? index}) async {
+    final existing = index == null
+        ? null
+        : EventWizardSessionDraft(
+            title: _scheduleEntries[index].titleCtrl.text,
+            speaker: _scheduleEntries[index].subtitleCtrl.text,
+            start: _scheduleEntries[index].time,
+          );
+    final lastTime = _scheduleEntries.isEmpty
+        ? TimeOfDay.fromDateTime(_startDate ?? DateTime.now())
+        : _scheduleEntries.last.time;
+    final nextMinutes = lastTime.hour * 60 + lastTime.minute + 30;
+    final draft = await showEventWizardSessionSheet(
+      context,
+      existing: existing,
+      defaultStart: TimeOfDay(
+        hour: (nextMinutes ~/ 60) % 24,
+        minute: nextMinutes % 60,
+      ),
+    );
+    if (draft == null || !mounted) return;
+    setState(() {
+      final entry = index == null
+          ? _ScheduleEntry(
+              time: draft.start,
+              titleCtrl: TextEditingController(),
+              subtitleCtrl: TextEditingController(),
+            )
+          : _scheduleEntries[index];
+      entry.time = draft.start;
+      entry.titleCtrl.text = draft.title;
+      entry.subtitleCtrl.text = draft.speaker;
+      if (index == null) _scheduleEntries.add(entry);
+      _scheduleEntries.sort((a, b) {
+        final am = a.time.hour * 60 + a.time.minute;
+        final bm = b.time.hour * 60 + b.time.minute;
+        return am.compareTo(bm);
+      });
     });
   }
 
@@ -471,9 +407,23 @@ class _CreateEventScreenState extends State<CreateEventScreen> {
     });
   }
 
+  void _addTag() {
+    final tag = _customTagCtrl.text.trim();
+    if (tag.isEmpty || _selectedTags.contains(tag)) return;
+    setState(() {
+      _selectedTags.add(tag);
+      _customTagCtrl.clear();
+    });
+  }
+
   Future<void> _post() async {
     final clubId = widget.existing?.clubId ?? _adminClubId;
     if (clubId == null || _isPosting) return;
+    // The CTA validates step 1 before the preview can be reached, so both are
+    // set by the time Publish is available.
+    final start = _startDate;
+    final end = _endDate;
+    if (start == null || end == null) return;
 
     // Build schedule
     List<EventSlot>? schedule;
@@ -481,7 +431,7 @@ class _CreateEventScreenState extends State<CreateEventScreen> {
         .where((e) => e.titleCtrl.text.trim().isNotEmpty)
         .toList();
     if (filledSlots.isNotEmpty) {
-      final baseDate = _startDate;
+      final baseDate = start;
       schedule = filledSlots.map((e) {
         return EventSlot(
           time: DateTime(
@@ -524,8 +474,8 @@ class _CreateEventScreenState extends State<CreateEventScreen> {
         title: _titleController.text.trim(),
         description: _descController.text.trim(),
         location: _locationController.text.trim(),
-        dateTime: _startDate,
-        endTime: _endDate,
+        dateTime: start,
+        endTime: end,
         attendeeUserIds: ev.attendeeUserIds,
         rsvpTimestamps: ev.rsvpTimestamps,
         imagePath: _imagePath,
@@ -582,8 +532,8 @@ class _CreateEventScreenState extends State<CreateEventScreen> {
       title: _titleController.text.trim(),
       description: _descController.text.trim(),
       location: _locationController.text.trim(),
-      dateTime: _startDate,
-      endTime: _endDate,
+      dateTime: start,
+      endTime: end,
       attendeeUserIds: [],
       imagePath: _imagePath,
       createdByUserId: accountSwitcherService.actorId,
@@ -659,1740 +609,461 @@ class _CreateEventScreenState extends State<CreateEventScreen> {
     super.dispose();
   }
 
-  // ── Build ────────────────────────────────────────────────────────────────────
+  // ── Build — the `wz-*` wizard ────────────────────────────────────────────
+  // Three steps plus the Event Preview page. The step chip reads "N of 3"
+  // across the first three; the preview carries the frame's "Preview" badge.
+  static const int _previewStep = 3;
+
+  String get _stepTitle {
+    if (_step == _previewStep) return S.eventWizardPreviewTitle;
+    if (_step == 1) return S.eventWizardStepTwoTitle;
+    if (_step == 2) return S.eventWizardStepThreeTitle;
+    return _isEditing
+        ? AppLocalizations.of(context)!.editEventTitle
+        : S.eventWizardStepOneTitle;
+  }
+
+  String get _stepBadge => _step == _previewStep
+      ? S.eventWizardPreviewBadge
+      : S.eventWizardStepOf(_step + 1, 3);
+
+  String get _ctaLabel {
+    if (_step < 2) return S.eventWizardNextStep;
+    if (_step == 2) {
+      // Editing does not "create" anything, and a second "Save Changes" one
+      // step before the real one would read as a double commit.
+      return _isEditing ? S.eventWizardPreviewBadge : S.eventWizardCreateEvent;
+    }
+    return _isEditing ? S.eventWizardSaveChanges : S.eventWizardPublish;
+  }
+
+  void _onPrimaryAction() {
+    if (_step < _previewStep) {
+      _next();
+      return;
+    }
+    unawaited(_post());
+  }
+
+  String _dateLabel(DateTime value) {
+    final locale = Localizations.localeOf(context).toString();
+    return DateFormat('EEE, MMM d, y', locale).format(value);
+  }
+
+  String _longDateLabel(DateTime value) {
+    final locale = Localizations.localeOf(context).toString();
+    return DateFormat.yMMMMEEEEd(locale).format(value);
+  }
+
+  String _timeLabel(DateTime value) =>
+      TimeOfDay.fromDateTime(value).format(context);
+
+  /// The `TONIGHT · 7 PM` line on the Live Event Preview card.
+  String get _whenLabel {
+    final start = _startDate;
+    if (start == null) return S.eventWizardSelectStartDate;
+    final now = DateTime.now();
+    final sameDay =
+        start.year == now.year &&
+        start.month == now.month &&
+        start.day == now.day;
+    final time = _timeLabel(start);
+    if (sameDay) return '${AppLocalizations.of(context)!.today} · $time';
+    final locale = Localizations.localeOf(context).toString();
+    return '${DateFormat.MMMd(locale).format(start)} · $time';
+  }
+
+  List<({String title, String speaker, String time})> get _sessionRows {
+    return [
+      for (final entry in _scheduleEntries)
+        if (entry.titleCtrl.text.trim().isNotEmpty)
+          (
+            title: entry.titleCtrl.text.trim(),
+            speaker: entry.subtitleCtrl.text.trim(),
+            time: TimeOfDay(
+              hour: entry.time.hour,
+              minute: entry.time.minute,
+            ).format(context),
+          ),
+    ];
+  }
+
+  List<EventWizardSpeakerDraft> get _speakerDrafts => [
+    for (final s in _speakers)
+      if (s.nameCtrl.text.trim().isNotEmpty)
+        EventWizardSpeakerDraft(
+          name: s.nameCtrl.text.trim(),
+          role: s.roleCtrl.text.trim(),
+          linkedin: s.linkedinCtrl.text.trim(),
+        ),
+  ];
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: AppColors.background,
-      appBar: AppBar(
-        backgroundColor: AppColors.card,
-        surfaceTintColor: Colors.transparent,
-        foregroundColor: AppColors.text,
-        leading: TextButton(
-          onPressed: _back,
-          child: Text(
-            _step == 0
-                ? AppLocalizations.of(context)!.cancel
-                : AppLocalizations.of(context)!.back,
-            style: TextStyle(color: AppColors.secondaryText),
-          ),
-        ),
-        leadingWidth: 80,
-        title: Text(
-          _isEditing
-              ? AppLocalizations.of(context)!.editEventTitle
-              : AppLocalizations.of(context)!.newEventTitle,
-          style: TextStyle(fontWeight: FontWeight.bold, fontSize: 17),
-        ),
-        centerTitle: true,
-      ),
-      body: Column(
-        children: [
-          _buildProgress(),
-          Expanded(
-            child: PageView(
-              controller: _pageController,
-              physics: const NeverScrollableScrollPhysics(),
-              onPageChanged: (i) => setState(() => _step = i),
-              children: [
-                _buildStepBasics(),
-                _buildStepWhen(),
-                _buildStepDetails(),
-                _buildStepReview(),
-              ],
-            ),
-          ),
-          _buildBottomBar(),
-        ],
-      ),
-    );
-  }
-
-  // ── Step 1: Basics ─────────────────────────────────────────────────────────
-  Widget _buildStepBasics() {
-    return SingleChildScrollView(
-      padding: const EdgeInsets.all(16),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          // ── Hero preview + optional image ────────────────────────────────
-          _HeroEditor(
-            imagePath: _imagePath,
-            titleText: _titleController.text.trim(),
-            onImageChanged: (p) => setState(() => _imagePath = p),
-          ),
-          const SizedBox(height: 16),
-
-          // ── Basic info ───────────────────────────────────────────────────
-          _SectionCard(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                _Field(
-                  controller: _titleController,
-                  label: AppLocalizations.of(context)!.eventTitleLabel,
-                  hint: AppLocalizations.of(context)!.eventTitleHint,
-                  onChanged: (_) => setState(() {}),
-                ),
-                const Divider(height: 1),
-                _Field(
-                  controller: _locationController,
-                  label: AppLocalizations.of(context)!.locationLabel,
-                  hint: AppLocalizations.of(context)!.locationHint,
-                  onChanged: (_) => setState(() {}),
-                ),
-                const Divider(height: 1),
-                _Field(
-                  controller: _descController,
-                  label: AppLocalizations.of(context)!.descriptionLabel,
-                  hint: AppLocalizations.of(context)!.eventDescriptionHint,
-                  maxLines: 4,
-                  mentionOptions: _mentionOptions,
-                  onChanged: (_) => setState(() {}),
-                ),
-              ],
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  // ── Step 2: When ─────────────────────────────────────────────────────────
-  Widget _buildStepWhen() {
-    return SingleChildScrollView(
-      padding: const EdgeInsets.all(16),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          _SectionHeader(
-            icon: Icons.event_rounded,
-            label: AppLocalizations.of(context)!.eventStepWhen,
-            subtitle: AppLocalizations.of(context)!.whenSectionSubtitle,
-          ),
-          const SizedBox(height: 8),
-          // ── Date & time ──────────────────────────────────────────────────
-          _SectionCard(
-            child: Column(
-              children: [
-                _DateTimeRow(
-                  label: AppLocalizations.of(context)!.startsLabel,
-                  dateTime: _startDate,
-                  onTap: () => _pickDateTime(true),
-                ),
-                const Divider(height: 1),
-                _DateTimeRow(
-                  label: AppLocalizations.of(context)!.endsLabel,
-                  dateTime: _endDate,
-                  onTap: () => _pickDateTime(false),
-                  error: !_endDate.isAfter(_startDate)
-                      ? AppLocalizations.of(context)!.endMustBeAfterStartShort
-                      : null,
-                ),
-              ],
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  // ── Step 3: Details (optional) ───────────────────────────────────────────
-  Widget _buildStepDetails() {
-    return SingleChildScrollView(
-      padding: const EdgeInsets.all(16),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          // ── Tags ─────────────────────────────────────────────────────────
-          _SectionHeader(
-            icon: Icons.label_outline_rounded,
-            label: AppLocalizations.of(context)!.tagsLabel,
-            subtitle: AppLocalizations.of(context)!.tagsSectionSubtitle,
-            badge: const _OptionalBadge(),
-          ),
-          const SizedBox(height: 8),
-          _SectionCard(
-            child: Padding(
-              padding: const EdgeInsets.all(14),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  if (_selectedTags.isNotEmpty) ...[
-                    Wrap(
-                      spacing: 8,
-                      runSpacing: 8,
-                      children: _selectedTags.map((tag) {
-                        return InputChip(
-                          label: Text(tag),
-                          onDeleted: () =>
-                              setState(() => _selectedTags.remove(tag)),
-                          backgroundColor: AppColors.surfaceAlt,
-                          deleteIconColor: AppColors.secondaryText,
-                          labelStyle: TextStyle(
-                            color: AppColors.text,
-                            fontSize: 12,
-                            fontWeight: FontWeight.w600,
-                          ),
-                          side: BorderSide(color: AppColors.divider),
-                        );
-                      }).toList(),
-                    ),
-                    const SizedBox(height: 12),
-                  ],
-                  Row(
-                    children: [
-                      Expanded(
-                        child: TextField(
-                          controller: _customTagCtrl,
-                          style: TextStyle(fontSize: 13, color: AppColors.text),
-                          decoration: InputDecoration(
-                            hintText: AppLocalizations.of(
-                              context,
-                            )!.addCustomTagHint,
-                            hintStyle: TextStyle(
-                              color: AppColors.secondaryText,
-                              fontSize: 13,
-                            ),
-                            border: OutlineInputBorder(
-                              borderRadius: BorderRadius.all(
-                                Radius.circular(10),
-                              ),
-                              borderSide: BorderSide(color: AppColors.divider),
-                            ),
-                            enabledBorder: OutlineInputBorder(
-                              borderRadius: BorderRadius.all(
-                                Radius.circular(10),
-                              ),
-                              borderSide: BorderSide(color: AppColors.divider),
-                            ),
-                            focusedBorder: OutlineInputBorder(
-                              borderRadius: BorderRadius.all(
-                                Radius.circular(10),
-                              ),
-                              borderSide: BorderSide(
-                                color: AppColors.primaryRed,
-                              ),
-                            ),
-                            isDense: true,
-                            contentPadding: const EdgeInsets.symmetric(
-                              horizontal: 12,
-                              vertical: 10,
-                            ),
-                          ),
-                          onSubmitted: (v) {
-                            final tag = v.trim();
-                            if (tag.isNotEmpty &&
-                                !_selectedTags.contains(tag)) {
-                              setState(() {
-                                _selectedTags.add(tag);
-                                _customTagCtrl.clear();
-                              });
-                            }
-                          },
-                        ),
-                      ),
-                      const SizedBox(width: 10),
-                      GestureDetector(
-                        onTap: () {
-                          final tag = _customTagCtrl.text.trim();
-                          if (tag.isNotEmpty && !_selectedTags.contains(tag)) {
-                            setState(() {
-                              _selectedTags.add(tag);
-                              _customTagCtrl.clear();
-                            });
-                          }
-                        },
-                        child: Container(
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 14,
-                            vertical: 10,
-                          ),
-                          decoration: BoxDecoration(
-                            color: AppColors.primaryRed,
-                            borderRadius: BorderRadius.all(Radius.circular(10)),
-                          ),
-                          child: Text(
-                            AppLocalizations.of(context)!.add,
-                            style: TextStyle(
-                              fontSize: 13,
-                              fontWeight: FontWeight.w600,
-                              color: Colors.white,
-                            ),
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-                ],
-              ),
-            ),
-          ),
-
-          const SizedBox(height: 16),
-
-          // ── Speakers ──────────────────────────────────────────────────────
-          _SectionHeader(
-            icon: Icons.groups_2_rounded,
-            label: AppLocalizations.of(context)!.speakersLabel,
-            subtitle: AppLocalizations.of(context)!.speakersSectionSubtitle,
-            badge: const _OptionalBadge(),
-          ),
-          const SizedBox(height: 8),
-          _SectionCard(
-            child: Column(
-              children: [
-                for (int i = 0; i < _speakers.length; i++) ...[
-                  if (i > 0)
-                    Divider(
-                      height: 1,
-                      color: AppColors.divider,
-                      indent: 16,
-                      endIndent: 16,
-                    ),
-                  Padding(
-                    padding: const EdgeInsets.fromLTRB(16, 10, 8, 6),
-                    child: Row(
-                      children: [
-                        Expanded(
-                          child: Column(
-                            children: [
-                              _Field(
-                                controller: _speakers[i].nameCtrl,
-                                label: AppLocalizations.of(
-                                  context,
-                                )!.speakerNameLabel,
-                                hint: AppLocalizations.of(
-                                  context,
-                                )!.speakerNameHint,
-                              ),
-                              _Field(
-                                controller: _speakers[i].roleCtrl,
-                                label: AppLocalizations.of(
-                                  context,
-                                )!.roleOrDepartmentLabel,
-                                hint: AppLocalizations.of(
-                                  context,
-                                )!.roleDeptHint,
-                              ),
-                              _Field(
-                                controller: _speakers[i].linkedinCtrl,
-                                label: AppLocalizations.of(
-                                  context,
-                                )!.linkedinOptionalLabel,
-                                hint: 'linkedin.com/in/…',
-                              ),
-                            ],
-                          ),
-                        ),
-                        IconButton(
-                          icon: Icon(
-                            Icons.remove_circle_outline,
-                            color: AppColors.secondaryText,
-                            size: 22,
-                          ),
-                          onPressed: () => setState(() {
-                            _speakers[i].dispose();
-                            _speakers.removeAt(i);
-                          }),
-                        ),
-                      ],
-                    ),
-                  ),
-                ],
-                Padding(
-                  padding: const EdgeInsets.fromLTRB(12, 6, 12, 10),
-                  child: SizedBox(
-                    width: double.infinity,
-                    child: OutlinedButton.icon(
-                      onPressed: () =>
-                          setState(() => _speakers.add(_SpeakerEntry())),
-                      icon: Icon(
-                        Icons.add_rounded,
-                        color: AppColors.primaryRed,
-                      ),
-                      label: Text(
-                        AppLocalizations.of(context)!.addSpeaker,
-                        style: TextStyle(color: AppColors.primaryRed),
-                      ),
-                      style: OutlinedButton.styleFrom(
-                        side: BorderSide(color: AppColors.divider),
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.all(Radius.circular(12)),
-                        ),
-                        padding: const EdgeInsets.symmetric(vertical: 12),
-                      ),
-                    ),
-                  ),
-                ),
-              ],
-            ),
-          ),
-
-          const SizedBox(height: 16),
-
-          // ── Registration ──────────────────────────────────────────────────
-          _SectionHeader(
-            icon: Icons.link_rounded,
-            label: AppLocalizations.of(context)!.registrationLabel,
-            subtitle: AppLocalizations.of(context)!.registrationSectionSubtitle,
-            badge: const _OptionalBadge(),
-          ),
-          const SizedBox(height: 8),
-          _SectionCard(
-            child: Column(
-              children: [
-                SwitchListTile(
-                  contentPadding: const EdgeInsets.symmetric(horizontal: 16),
-                  activeThumbColor: AppColors.primaryRed,
-                  title: Text(
-                    AppLocalizations.of(context)!.externalSignupLinkTitle,
-                    style: TextStyle(
-                      fontSize: 14,
-                      fontWeight: FontWeight.w600,
-                      color: AppColors.text,
-                    ),
-                  ),
-                  subtitle: Text(
-                    AppLocalizations.of(context)!.externalSignupLinkSubtitle,
-                    style: TextStyle(
-                      fontSize: 12,
-                      color: AppColors.secondaryText,
-                    ),
-                  ),
-                  value: _externalReg,
-                  onChanged: (v) => setState(() => _externalReg = v),
-                ),
-                if (_externalReg)
-                  _Field(
-                    controller: _regUrlCtrl,
-                    label: AppLocalizations.of(context)!.signupUrlLabel,
-                    hint: 'https://forms.gle/…',
-                    onChanged: (_) => setState(() {}),
-                  ),
-              ],
-            ),
-          ),
-
-          const SizedBox(height: 16),
-
-          // ── Schedule / Programme ──────────────────────────────────────────
-          _SectionHeader(
-            icon: Icons.format_list_bulleted_rounded,
-            label: AppLocalizations.of(context)!.programmeLabel,
-            subtitle: AppLocalizations.of(context)!.programmeSectionSubtitle,
-            badge: const _OptionalBadge(),
-          ),
-          const SizedBox(height: 8),
-          _SectionCard(
-            child: Column(
-              children: [
-                // Existing slots
-                for (int i = 0; i < _scheduleEntries.length; i++) ...[
-                  if (i > 0) Divider(height: 1, color: AppColors.divider),
-                  _ScheduleSlotEditor(
-                    entry: _scheduleEntries[i],
-                    index: i,
-                    onRemove: () => _removeScheduleEntry(i),
-                    onTimeTap: () => _pickSlotTime(_scheduleEntries[i]),
-                    onChanged: () => setState(() {}),
-                  ),
-                ],
-
-                // Add slot button
-                Padding(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 14,
-                    vertical: 12,
-                  ),
-                  child: GestureDetector(
-                    onTap: _addScheduleEntry,
-                    child: Container(
-                      width: double.infinity,
-                      padding: const EdgeInsets.symmetric(vertical: 10),
-                      decoration: BoxDecoration(
-                        color: AppColors.surfaceAlt,
-                        borderRadius: BorderRadius.all(Radius.circular(10)),
-                        border: Border.all(
-                          color: AppColors.divider,
-                          style: BorderStyle.solid,
-                        ),
-                      ),
-                      child: Row(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          Icon(
-                            Icons.add_rounded,
-                            size: 16,
-                            color: AppColors.secondaryText,
-                          ),
-                          const SizedBox(width: 6),
-                          Text(
-                            AppLocalizations.of(context)!.addTimeSlot,
-                            style: TextStyle(
-                              fontSize: 13,
-                              fontWeight: FontWeight.w600,
-                              color: AppColors.secondaryText,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ),
-                ),
-              ],
-            ),
-          ),
-
-          const SizedBox(height: 24),
-        ],
-      ),
-    );
-  }
-
-  // ── Step 4: Review ───────────────────────────────────────────────────────
-  Widget _buildStepReview() {
-    final clubId = widget.existing?.clubId ?? _adminClubId;
-    return SingleChildScrollView(
-      padding: const EdgeInsets.all(16),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          _SectionHeader(
-            icon: Icons.visibility_outlined,
-            label: AppLocalizations.of(context)!.eventStepReview,
-            subtitle: AppLocalizations.of(context)!.reviewSectionSubtitle,
-          ),
-          const SizedBox(height: 10),
-          Wrap(
-            spacing: 8,
-            children: [
-              OutlinedButton.icon(
-                onPressed: () => _goToStep(0),
-                icon: const Icon(Icons.edit_outlined, size: 13),
-                label: Text(AppLocalizations.of(context)!.eventStepBasics),
-                style: OutlinedButton.styleFrom(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 10,
-                    vertical: 4,
-                  ),
-                  minimumSize: Size.zero,
-                  tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                  textStyle: const TextStyle(
-                    fontSize: 12,
-                    fontWeight: FontWeight.w600,
-                  ),
-                  side: BorderSide(color: AppColors.divider),
-                  foregroundColor: AppColors.text,
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.all(Radius.circular(20)),
-                  ),
-                ),
-              ),
-              OutlinedButton.icon(
-                onPressed: () => _goToStep(1),
-                icon: const Icon(Icons.schedule_outlined, size: 13),
-                label: Text(AppLocalizations.of(context)!.eventStepWhen),
-                style: OutlinedButton.styleFrom(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 10,
-                    vertical: 4,
-                  ),
-                  minimumSize: Size.zero,
-                  tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                  textStyle: const TextStyle(
-                    fontSize: 12,
-                    fontWeight: FontWeight.w600,
-                  ),
-                  side: BorderSide(color: AppColors.divider),
-                  foregroundColor: AppColors.text,
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.all(Radius.circular(20)),
-                  ),
-                ),
-              ),
-              OutlinedButton.icon(
-                onPressed: () => _goToStep(2),
-                icon: const Icon(Icons.settings_outlined, size: 13),
-                label: Text(AppLocalizations.of(context)!.eventStepDetails),
-                style: OutlinedButton.styleFrom(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 10,
-                    vertical: 4,
-                  ),
-                  minimumSize: Size.zero,
-                  tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                  textStyle: const TextStyle(
-                    fontSize: 12,
-                    fontWeight: FontWeight.w600,
-                  ),
-                  side: BorderSide(color: AppColors.divider),
-                  foregroundColor: AppColors.text,
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.all(Radius.circular(20)),
-                  ),
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 12),
-          _EventPreviewCard(
-            imagePath: _imagePath,
-            title: _titleController.text.trim(),
-            location: _locationController.text.trim(),
-            startDate: _startDate,
-            endDate: _endDate,
-            tags: _selectedTags,
-            clubId: clubId,
-            hasRegistration: _externalReg && _regUrlCtrl.text.trim().isNotEmpty,
-          ),
-          const SizedBox(height: 16),
-          if (!_canPost)
-            Container(
-              padding: const EdgeInsets.all(12),
-              decoration: BoxDecoration(
-                color: AppColors.lightRed,
-                borderRadius: BorderRadius.all(Radius.circular(12)),
-              ),
-              child: Row(
-                children: [
-                  Icon(
-                    Icons.info_outline_rounded,
-                    size: 18,
-                    color: AppColors.primaryRed,
-                  ),
-                  const SizedBox(width: 8),
-                  Expanded(
-                    child: Text(
-                      AppLocalizations.of(
-                        context,
-                      )!.addRequiredFieldsBeforePublish,
-                      style: TextStyle(
-                        fontSize: 12.5,
-                        color: AppColors.text,
-                        height: 1.3,
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-            )
-          else
-            Text(
-              _isEditing
-                  ? AppLocalizations.of(context)!.tapSaveChangesHint
-                  : AppLocalizations.of(context)!.tapPublishEventHint,
-              style: TextStyle(fontSize: 12.5, color: AppColors.secondaryText),
-            ),
-          const SizedBox(height: 24),
-        ],
-      ),
-    );
-  }
-
-  // ── Progress header ──────────────────────────────────────────────────────
-  Widget _buildProgress() {
-    return Container(
-      width: double.infinity,
-      color: AppColors.card,
-      padding: const EdgeInsets.fromLTRB(16, 12, 16, 12),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: List.generate(_stepCount, (i) {
-              final filled = i <= _step;
-              // In edit mode every step is reachable; in create mode only
-              // already-visited steps can be jumped to.
-              final canTap = _isEditing || i <= _step;
-              return Expanded(
-                child: GestureDetector(
-                  behavior: HitTestBehavior.opaque,
-                  onTap: canTap ? () => _goToStep(i) : null,
-                  child: Padding(
-                    padding: EdgeInsets.only(left: i == 0 ? 0 : 5),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Container(
-                          height: 4,
-                          decoration: BoxDecoration(
-                            color: filled
-                                ? AppColors.primaryRed
-                                : AppColors.divider,
-                            borderRadius: BorderRadius.all(Radius.circular(2)),
-                          ),
-                        ),
-                        const SizedBox(height: 4),
-                        Text(
-                          _stepTitles[i],
-                          style: TextStyle(
-                            fontSize: 10,
-                            color: i == _step
-                                ? AppColors.primaryRed
-                                : i < _step
-                                ? AppColors.text
-                                : AppColors.secondaryText,
-                            fontWeight: i == _step
-                                ? FontWeight.w700
-                                : FontWeight.w500,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
-              );
-            }),
-          ),
-          const SizedBox(height: 8),
-          Text(
-            AppLocalizations.of(
-              context,
-            )!.stepProgressLabel(_step + 1, _stepCount, _stepTitles[_step]),
-            style: TextStyle(
-              fontSize: 12,
-              fontWeight: FontWeight.w600,
-              color: AppColors.secondaryText,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  // ── Bottom navigation bar ──────────────────────────────────────────────────
-  Widget _buildBottomBar() {
-    final isLast = _step == _stepCount - 1;
-    return SafeArea(
-      top: false,
-      child: Container(
-        decoration: BoxDecoration(
-          color: AppColors.card,
-          border: Border(top: BorderSide(color: AppColors.divider)),
-        ),
-        padding: const EdgeInsets.fromLTRB(16, 12, 16, 12),
-        child: Row(
+      backgroundColor: EventWizardColors.page,
+      body: SafeArea(
+        child: Column(
           children: [
-            OutlinedButton(
-              onPressed: _back,
-              style: OutlinedButton.styleFrom(
-                side: BorderSide(color: AppColors.divider),
-                foregroundColor: AppColors.text,
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 20,
-                  vertical: 14,
-                ),
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.all(Radius.circular(14)),
-                ),
+            EventWizardTopBar(
+              title: _stepTitle,
+              stepLabel: _stepBadge,
+              onBack: _back,
+            ),
+            Expanded(
+              child: PageView(
+                controller: _pageController,
+                physics: const NeverScrollableScrollPhysics(),
+                onPageChanged: (i) => setState(() => _step = i),
+                children: [
+                  _buildDetailsStep(),
+                  _buildSpeakersStep(),
+                  _buildProgrammeStep(),
+                  _buildPreviewStep(),
+                ],
               ),
-              child: Text(
-                _step == 0
-                    ? AppLocalizations.of(context)!.cancel
-                    : AppLocalizations.of(context)!.back,
+            ),
+            EventWizardBottomAction(
+              label: _ctaLabel,
+              busy: _isPosting,
+              onTap: _onPrimaryAction,
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  // ── Step 1 of 3 — `light-details` 310:11 / `light-start-time` 315:8 ───────
+  Widget _buildDetailsStep() {
+    final start = _startDate;
+    final end = _endDate;
+    return ListView(
+      key: const ValueKey('event-wizard-step-details'),
+      padding: const EdgeInsets.all(kEventWizardGutter),
+      children: [
+        EventWizardPhotoUploader(
+          imagePath: _imagePath,
+          onTap: () => unawaited(_pickCover()),
+        ),
+        const SizedBox(height: 16),
+        EventWizardTextField(
+          fieldKey: const ValueKey('event-wizard-title-field'),
+          controller: _titleController,
+          label: S.eventWizardTitleLabel,
+          hint: S.eventWizardTitleHint,
+          onChanged: (_) => setState(() {}),
+        ),
+        const SizedBox(height: 16),
+        EventWizardTextField(
+          fieldKey: const ValueKey('event-wizard-location-field'),
+          controller: _locationController,
+          label: S.eventWizardLocationLabel,
+          hint: S.eventWizardLocationHint,
+          icon: Icons.place_outlined,
+          onChanged: (_) => setState(() {}),
+        ),
+        const SizedBox(height: 16),
+        // The newest step-1 frames (315:8, 319:7) drop the description, but the
+        // Event Preview still prints "About this Event" — so it stays.
+        EventWizardTextField(
+          fieldKey: const ValueKey('event-wizard-description-field'),
+          controller: _descController,
+          label: S.eventWizardDescriptionLabel,
+          hint: S.eventWizardDescriptionHint,
+          minLines: 3,
+          maxLines: 6,
+        ),
+        const SizedBox(height: 16),
+        EventWizardLabel(S.eventWizardStarts),
+        const SizedBox(height: 6),
+        Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Expanded(
+              child: EventWizardPickerField(
+                fieldKey: const ValueKey('event-wizard-start-date'),
+                label: S.eventWizardDate,
+                icon: Icons.calendar_today_outlined,
+                value: start == null ? null : _dateLabel(start),
+                placeholder: S.eventWizardSelectStartDate,
+                active: _activePicker == 'start-date',
+                onTap: () => unawaited(_pickDate(true)),
               ),
             ),
             const SizedBox(width: 12),
             Expanded(
-              child: isLast ? _buildPublishButton() : _buildNextButton(),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildNextButton() {
-    final enabled = _canAdvanceFrom(_step);
-    return ElevatedButton(
-      // Always tappable — when blocked, _next() surfaces a reason via SnackBar.
-      onPressed: _next,
-      style: ElevatedButton.styleFrom(
-        backgroundColor: enabled ? AppColors.primaryRed : AppColors.lightRed,
-        foregroundColor: enabled ? Colors.white : AppColors.secondaryText,
-        elevation: 0,
-        padding: const EdgeInsets.symmetric(vertical: 14),
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.all(Radius.circular(14)),
-        ),
-      ),
-      child: Text(
-        AppLocalizations.of(context)!.next,
-        style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15),
-      ),
-    );
-  }
-
-  Widget _buildPublishButton() {
-    final enabled = _canPost && !_isPosting;
-    return ElevatedButton(
-      onPressed: enabled ? () => _post() : null,
-      style: ElevatedButton.styleFrom(
-        backgroundColor: AppColors.primaryRed,
-        foregroundColor: Colors.white,
-        disabledBackgroundColor: AppColors.lightRed,
-        disabledForegroundColor: AppColors.secondaryText,
-        elevation: 0,
-        padding: const EdgeInsets.symmetric(vertical: 14),
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.all(Radius.circular(14)),
-        ),
-      ),
-      child: _isPosting
-          ? const SizedBox(
-              width: 18,
-              height: 18,
-              child: CircularProgressIndicator(
-                strokeWidth: 2,
-                color: Colors.white,
-              ),
-            )
-          : Text(
-              _isEditing
-                  ? AppLocalizations.of(context)!.saveChangesButton
-                  : AppLocalizations.of(context)!.publishEventButton,
-              style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15),
-            ),
-    );
-  }
-}
-
-// ─────────────────────────────────────────────────────────────────────────────
-// Live preview card — how the event will appear (Review step)
-// ─────────────────────────────────────────────────────────────────────────────
-
-class _EventPreviewCard extends StatelessWidget {
-  final String? imagePath;
-  final String title;
-  final String location;
-  final DateTime startDate;
-  final DateTime endDate;
-  final List<String> tags;
-  final String? clubId;
-  final bool hasRegistration;
-
-  const _EventPreviewCard({
-    required this.imagePath,
-    required this.title,
-    required this.location,
-    required this.startDate,
-    required this.endDate,
-    required this.tags,
-    required this.clubId,
-    required this.hasRegistration,
-  });
-
-  String _t(DateTime d) =>
-      '${d.hour.toString().padLeft(2, '0')}:${d.minute.toString().padLeft(2, '0')}';
-
-  String _timeLine(BuildContext context) {
-    final months = _monthLabels(context);
-    final sameDay =
-        startDate.year == endDate.year &&
-        startDate.month == endDate.month &&
-        startDate.day == endDate.day;
-    if (sameDay) {
-      return '${months[startDate.month - 1]} ${startDate.day} · ${_t(startDate)} – ${_t(endDate)}';
-    }
-    return '${months[startDate.month - 1]} ${startDate.day}, ${_t(startDate)} → '
-        '${months[endDate.month - 1]} ${endDate.day}, ${_t(endDate)}';
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final hasImage = imagePath != null && imagePath!.isNotEmpty;
-    String clubName = AppLocalizations.of(context)!.yourClubFallback;
-    if (clubId != null && clubId!.isNotEmpty) {
-      for (final c in clubs) {
-        if (c.id == clubId) {
-          clubName = c.name;
-          break;
-        }
-      }
-    }
-    final months = _monthLabels(context);
-    final dateChip = '${months[startDate.month - 1]} ${startDate.day}';
-
-    return Container(
-      decoration: BoxDecoration(
-        color: AppColors.card,
-        borderRadius: BorderRadius.all(Radius.circular(18)),
-        border: Border.all(color: AppColors.divider),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.04),
-            blurRadius: 10,
-            offset: const Offset(0, 3),
-          ),
-        ],
-      ),
-      clipBehavior: Clip.antiAlias,
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          if (hasImage)
-            SizedBox(
-              height: 150,
-              width: double.infinity,
-              child: Stack(
-                fit: StackFit.expand,
-                children: [
-                  _EventPreviewImage(path: imagePath!),
-                  const DecoratedBox(
-                    decoration: BoxDecoration(
-                      gradient: LinearGradient(
-                        begin: Alignment.topCenter,
-                        end: Alignment.bottomCenter,
-                        colors: [Colors.transparent, Color(0x8C000000)],
-                      ),
-                    ),
-                  ),
-                  Positioned(
-                    left: 14,
-                    right: 14,
-                    bottom: 12,
-                    child: Text(
-                      title.isEmpty
-                          ? AppLocalizations.of(context)!.eventTitlePlaceholder
-                          : title,
-                      style: const TextStyle(
-                        color: Colors.white,
-                        fontSize: 18,
-                        fontWeight: FontWeight.w800,
-                        height: 1.15,
-                      ),
-                      maxLines: 2,
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          Padding(
-            padding: const EdgeInsets.all(14),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(
-                  children: [
-                    ClubAvatar(
-                      clubId: clubId ?? '',
-                      clubName: clubName,
-                      color: AppColors.primaryRed,
-                      imageUrl: clubs.any((club) => club.id == clubId)
-                          ? clubs
-                                .firstWhere((club) => club.id == clubId)
-                                .logoUrl
-                          : null,
-                      size: 36,
-                      fontSize: 15,
-                    ),
-                    const SizedBox(width: 10),
-                    Expanded(
-                      child: Text(
-                        clubName,
-                        style: TextStyle(
-                          fontSize: 13.5,
-                          fontWeight: FontWeight.w700,
-                          color: AppColors.text,
-                        ),
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                    ),
-                    const SizedBox(width: 8),
-                    Container(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 10,
-                        vertical: 5,
-                      ),
-                      decoration: BoxDecoration(
-                        color: AppColors.lightRed,
-                        borderRadius: BorderRadius.all(Radius.circular(8)),
-                      ),
-                      child: Text(
-                        dateChip,
-                        style: TextStyle(
-                          fontSize: 12,
-                          fontWeight: FontWeight.w700,
-                          color: AppColors.primaryRed,
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-                if (!hasImage) ...[
-                  const SizedBox(height: 12),
-                  Text(
-                    title.isEmpty
-                        ? AppLocalizations.of(context)!.eventTitlePlaceholder
-                        : title,
-                    style: TextStyle(
-                      fontSize: 18,
-                      fontWeight: FontWeight.w800,
-                      color: title.isEmpty
-                          ? AppColors.secondaryText
-                          : AppColors.text,
-                      height: 1.2,
-                    ),
-                    maxLines: 2,
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                ],
-                const SizedBox(height: 10),
-                Row(
-                  children: [
-                    Icon(
-                      Icons.access_time_rounded,
-                      size: 14,
-                      color: AppColors.secondaryText,
-                    ),
-                    const SizedBox(width: 6),
-                    Expanded(
-                      child: Text(
-                        _timeLine(context),
-                        style: TextStyle(
-                          fontSize: 12.5,
-                          color: AppColors.secondaryText,
-                        ),
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 5),
-                Row(
-                  children: [
-                    Icon(
-                      Icons.location_on_outlined,
-                      size: 14,
-                      color: AppColors.secondaryText,
-                    ),
-                    const SizedBox(width: 6),
-                    Expanded(
-                      child: Text(
-                        location.isEmpty
-                            ? AppLocalizations.of(context)!.locationLabel
-                            : location,
-                        style: TextStyle(
-                          fontSize: 12.5,
-                          color: location.isEmpty
-                              ? AppColors.secondaryText.withValues(alpha: 0.7)
-                              : AppColors.secondaryText,
-                        ),
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                    ),
-                  ],
-                ),
-                if (tags.isNotEmpty) ...[
-                  const SizedBox(height: 12),
-                  Wrap(
-                    spacing: 6,
-                    runSpacing: 6,
-                    children: tags
-                        .map(
-                          (t) => Container(
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 10,
-                              vertical: 4,
-                            ),
-                            decoration: BoxDecoration(
-                              color: AppColors.surfaceAlt,
-                              borderRadius: BorderRadius.all(
-                                Radius.circular(100),
-                              ),
-                              border: Border.all(color: AppColors.divider),
-                            ),
-                            child: Text(
-                              t,
-                              style: TextStyle(
-                                fontSize: 11,
-                                fontWeight: FontWeight.w600,
-                                color: AppColors.text,
-                              ),
-                            ),
-                          ),
-                        )
-                        .toList(),
-                  ),
-                ],
-                if (hasRegistration) ...[
-                  const SizedBox(height: 12),
-                  Row(
-                    children: [
-                      Icon(
-                        Icons.link_rounded,
-                        size: 14,
-                        color: AppColors.primaryRed,
-                      ),
-                      const SizedBox(width: 6),
-                      Text(
-                        AppLocalizations.of(context)!.externalSignupBadge,
-                        style: TextStyle(
-                          fontSize: 12,
-                          fontWeight: FontWeight.w600,
-                          color: AppColors.primaryRed,
-                        ),
-                      ),
-                    ],
-                  ),
-                ],
-              ],
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-// ─────────────────────────────────────────────────────────────────────────────
-// Hero preview + optional photo
-// ─────────────────────────────────────────────────────────────────────────────
-
-class _HeroEditor extends StatelessWidget {
-  final String? imagePath;
-  final String titleText;
-  final ValueChanged<String?> onImageChanged;
-
-  const _HeroEditor({
-    required this.imagePath,
-    required this.titleText,
-    required this.onImageChanged,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    final hasImage = imagePath != null;
-
-    return ClipRRect(
-      borderRadius: BorderRadius.all(Radius.circular(16)),
-      child: SizedBox(
-        height: 200,
-        child: Stack(
-          fit: StackFit.expand,
-          children: [
-            if (hasImage)
-              _EventPreviewImage(path: imagePath!)
-            else
-              Container(
-                decoration: BoxDecoration(
-                  color: AppColors.surfaceAlt,
-                  border: Border.all(color: AppColors.divider),
-                ),
-                child: Center(
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Icon(
-                        Icons.image_outlined,
-                        size: 34,
-                        color: AppColors.secondaryText.withValues(alpha: 0.75),
-                      ),
-                      const SizedBox(height: 8),
-                      Text(
-                        AppLocalizations.of(context)!.noEventImageSelected,
-                        style: TextStyle(
-                          color: AppColors.secondaryText,
-                          fontSize: 13,
-                          fontWeight: FontWeight.w600,
-                        ),
-                      ),
-                      const SizedBox(height: 2),
-                      Text(
-                        AppLocalizations.of(context)!.addImageOrKeepImageless,
-                        style: TextStyle(
-                          color: AppColors.secondaryText.withValues(
-                            alpha: 0.75,
-                          ),
-                          fontSize: 11,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-
-            if (hasImage)
-              Positioned(
-                left: 0,
-                right: 0,
-                bottom: 0,
-                height: 110,
-                child: DecoratedBox(
-                  decoration: BoxDecoration(
-                    gradient: LinearGradient(
-                      begin: Alignment.topCenter,
-                      end: Alignment.bottomCenter,
-                      colors: [
-                        Colors.transparent,
-                        Colors.black.withValues(alpha: 0.65),
-                      ],
-                    ),
-                  ),
-                ),
-              ),
-
-            if (hasImage)
-              Positioned(
-                left: 14,
-                right: 14,
-                bottom: 14,
-                child: Text(
-                  titleText.isEmpty
-                      ? AppLocalizations.of(
-                          context,
-                        )!.eventTitlePreviewPlaceholder
-                      : titleText,
-                  style: TextStyle(
-                    color: titleText.isEmpty
-                        ? Colors.white.withValues(alpha: 0.4)
-                        : Colors.white,
-                    fontSize: 22,
-                    fontWeight: FontWeight.w900,
-                    letterSpacing: -0.5,
-                    height: 1.15,
-                  ),
-                  maxLines: 2,
-                  overflow: TextOverflow.ellipsis,
-                ),
-              ),
-
-            Positioned(
-              top: 10,
-              right: 10,
-              child: _PhotoEditButton(
-                hasImage: hasImage,
-                imagePath: imagePath,
-                onChanged: onImageChanged,
+              child: EventWizardPickerField(
+                fieldKey: const ValueKey('event-wizard-start-time'),
+                label: S.eventWizardTime,
+                icon: Icons.schedule_rounded,
+                value: start == null ? null : _timeLabel(start),
+                placeholder: S.eventWizardSelectStart,
+                active: _activePicker == 'start-time',
+                onTap: () => unawaited(_pickTime(true)),
               ),
             ),
           ],
         ),
-      ),
-    );
-  }
-}
-
-class _EventPreviewImage extends StatelessWidget {
-  final String path;
-
-  const _EventPreviewImage({required this.path});
-
-  @override
-  Widget build(BuildContext context) {
-    if (_isRemoteEventImagePath(path)) {
-      return AppNetworkImage(
-        url: path,
-        fit: BoxFit.cover,
-        cacheWidth: 500,
-        placeholderBuilder: (_) => const SkeletonBox(),
-        errorBuilder: (_) => Container(
-          color: AppColors.surfaceAlt,
-          alignment: Alignment.center,
-          child: Icon(
-            Icons.image_not_supported_outlined,
-            color: AppColors.secondaryText.withValues(alpha: 0.45),
-            size: 28,
-          ),
-        ),
-      );
-    }
-    return Image.file(File(path), fit: BoxFit.cover);
-  }
-}
-
-class _PhotoEditButton extends StatelessWidget {
-  final bool hasImage;
-  final String? imagePath;
-  final ValueChanged<String?> onChanged;
-
-  const _PhotoEditButton({
-    required this.hasImage,
-    required this.imagePath,
-    required this.onChanged,
-  });
-
-  Future<void> _pickFromGallery(BuildContext context) async {
-    final picked = await ImagePicker().pickImage(source: ImageSource.gallery);
-    if (picked == null || !context.mounted) return;
-
-    final cropPhotoTitle = AppLocalizations.of(context)!.cropPhotoTitle;
-    final cropped = await ImageCropper().cropImage(
-      sourcePath: picked.path,
-      maxWidth: PhotoUploadQuality.contentMaxDimension,
-      maxHeight: PhotoUploadQuality.contentMaxDimension,
-      compressFormat: ImageCompressFormat.jpg,
-      compressQuality: PhotoUploadQuality.jpegQuality,
-      uiSettings: [
-        IOSUiSettings(
-          title: cropPhotoTitle,
-          resetAspectRatioEnabled: true,
-          rotateButtonsHidden: false,
-        ),
-        AndroidUiSettings(
-          toolbarTitle: cropPhotoTitle,
-          toolbarColor: AppColors.primaryRed,
-          toolbarWidgetColor: Colors.white,
-          lockAspectRatio: false,
-          showCropGrid: true,
-        ),
-      ],
-    );
-    if (cropped != null && context.mounted) {
-      onChanged(cropped.path);
-    }
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return GestureDetector(
-      onTap: () => _pickFromGallery(context),
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-        decoration: BoxDecoration(
-          color: Colors.black.withValues(alpha: 0.50),
-          borderRadius: BorderRadius.all(Radius.circular(20)),
-        ),
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(
-              hasImage ? Icons.edit_rounded : Icons.add_photo_alternate_rounded,
-              color: Colors.white,
-              size: 14,
-            ),
-            const SizedBox(width: 5),
-            Text(
-              hasImage
-                  ? AppLocalizations.of(context)!.changeEventPhoto
-                  : AppLocalizations.of(context)!.addPhoto,
-              style: const TextStyle(
-                color: Colors.white,
-                fontSize: 12,
-                fontWeight: FontWeight.w600,
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-// ─────────────────────────────────────────────────────────────────────────────
-// Schedule slot editor row
-// ─────────────────────────────────────────────────────────────────────────────
-
-class _ScheduleSlotEditor extends StatelessWidget {
-  final _ScheduleEntry entry;
-  final int index;
-  final VoidCallback onRemove;
-  final VoidCallback onTimeTap;
-  final VoidCallback onChanged;
-
-  const _ScheduleSlotEditor({
-    required this.entry,
-    required this.index,
-    required this.onRemove,
-    required this.onTimeTap,
-    required this.onChanged,
-  });
-
-  String _fmtTime(TimeOfDay t) {
-    final h = t.hour.toString().padLeft(2, '0');
-    final m = t.minute.toString().padLeft(2, '0');
-    return '$h:$m';
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(14, 10, 14, 10),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              // Time picker button
-              GestureDetector(
-                onTap: onTimeTap,
-                child: Container(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 10,
-                    vertical: 6,
-                  ),
-                  decoration: BoxDecoration(
-                    color: AppColors.lightRed,
-                    borderRadius: BorderRadius.all(Radius.circular(8)),
-                  ),
-                  child: Text(
-                    _fmtTime(entry.time),
-                    style: TextStyle(
-                      fontSize: 13,
-                      fontWeight: FontWeight.w700,
-                      color: AppColors.primaryRed,
-                    ),
-                  ),
-                ),
-              ),
-              const SizedBox(width: 10),
-              // Highlight toggle
-              GestureDetector(
-                onTap: () {
-                  entry.isHighlighted = !entry.isHighlighted;
-                  onChanged();
-                },
-                child: AnimatedContainer(
-                  duration: const Duration(milliseconds: 160),
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 8,
-                    vertical: 6,
-                  ),
-                  decoration: BoxDecoration(
-                    color: entry.isHighlighted
-                        ? AppColors.primaryRed.withValues(alpha: 0.12)
-                        : AppColors.surfaceAlt,
-                    borderRadius: BorderRadius.all(Radius.circular(8)),
-                    border: Border.all(
-                      color: entry.isHighlighted
-                          ? AppColors.primaryRed.withValues(alpha: 0.4)
-                          : AppColors.divider,
-                    ),
-                  ),
-                  child: Text(
-                    '★ ${AppLocalizations.of(context)!.highlight}',
-                    style: TextStyle(
-                      fontSize: 11,
-                      fontWeight: FontWeight.w600,
-                      color: entry.isHighlighted
-                          ? AppColors.primaryRed
-                          : AppColors.secondaryText,
-                    ),
-                  ),
-                ),
-              ),
-              const Spacer(),
-              // Remove button
-              GestureDetector(
-                onTap: onRemove,
-                child: Icon(
-                  Icons.close_rounded,
-                  size: 18,
-                  color: AppColors.secondaryText,
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 8),
-          TextField(
-            controller: entry.titleCtrl,
-            onChanged: (_) => onChanged(),
-            style: TextStyle(fontSize: 13, color: AppColors.text),
-            decoration: InputDecoration(
-              hintText: AppLocalizations.of(context)!.sessionTitleRequiredHint,
-              hintStyle: TextStyle(
-                color: AppColors.secondaryText,
-                fontSize: 13,
-              ),
-              border: OutlineInputBorder(
-                borderRadius: BorderRadius.all(Radius.circular(8)),
-                borderSide: BorderSide(color: AppColors.divider),
-              ),
-              enabledBorder: OutlineInputBorder(
-                borderRadius: BorderRadius.all(Radius.circular(8)),
-                borderSide: BorderSide(color: AppColors.divider),
-              ),
-              focusedBorder: OutlineInputBorder(
-                borderRadius: BorderRadius.all(Radius.circular(8)),
-                borderSide: BorderSide(color: AppColors.primaryRed),
-              ),
-              isDense: true,
-              contentPadding: const EdgeInsets.symmetric(
-                horizontal: 12,
-                vertical: 9,
-              ),
-            ),
-          ),
-          const SizedBox(height: 6),
-          TextField(
-            controller: entry.subtitleCtrl,
-            onChanged: (_) => onChanged(),
-            style: TextStyle(fontSize: 12, color: AppColors.text),
-            decoration: InputDecoration(
-              hintText: AppLocalizations.of(
-                context,
-              )!.subtitleSpeakerOptionalHint,
-              hintStyle: TextStyle(
-                color: AppColors.secondaryText,
-                fontSize: 12,
-              ),
-              border: OutlineInputBorder(
-                borderRadius: BorderRadius.all(Radius.circular(8)),
-                borderSide: BorderSide(color: AppColors.divider),
-              ),
-              enabledBorder: OutlineInputBorder(
-                borderRadius: BorderRadius.all(Radius.circular(8)),
-                borderSide: BorderSide(color: AppColors.divider),
-              ),
-              focusedBorder: OutlineInputBorder(
-                borderRadius: BorderRadius.all(Radius.circular(8)),
-                borderSide: BorderSide(color: AppColors.primaryRed),
-              ),
-              isDense: true,
-              contentPadding: const EdgeInsets.symmetric(
-                horizontal: 12,
-                vertical: 9,
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-// ─────────────────────────────────────────────────────────────────────────────
-// Shared form widgets
-// ─────────────────────────────────────────────────────────────────────────────
-
-class _SectionHeader extends StatelessWidget {
-  final IconData icon;
-  final String label;
-  final String subtitle;
-  final Widget? badge;
-
-  const _SectionHeader({
-    required this.icon,
-    required this.label,
-    required this.subtitle,
-    this.badge,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Row(
-      children: [
-        Icon(icon, size: 16, color: AppColors.primaryRed),
-        const SizedBox(width: 8),
-        Column(
+        const SizedBox(height: 12),
+        EventWizardLabel(S.eventWizardEnds),
+        const SizedBox(height: 6),
+        Row(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Row(
-              children: [
-                Text(
-                  label,
-                  style: TextStyle(
-                    fontSize: 14,
-                    fontWeight: FontWeight.w700,
-                    color: AppColors.text,
-                  ),
-                ),
-                if (badge != null) ...[const SizedBox(width: 6), badge!],
-              ],
+            Expanded(
+              child: EventWizardPickerField(
+                fieldKey: const ValueKey('event-wizard-end-date'),
+                label: S.eventWizardDate,
+                icon: Icons.calendar_today_outlined,
+                value: end == null ? null : _dateLabel(end),
+                placeholder: S.eventWizardSelectEndDate,
+                active: _activePicker == 'end-date',
+                onTap: () => unawaited(_pickDate(false)),
+              ),
             ),
-            Text(
-              subtitle,
-              style: TextStyle(fontSize: 11, color: AppColors.secondaryText),
+            const SizedBox(width: 12),
+            Expanded(
+              child: EventWizardPickerField(
+                fieldKey: const ValueKey('event-wizard-end-time'),
+                label: S.eventWizardTime,
+                icon: Icons.schedule_rounded,
+                value: end == null ? null : _timeLabel(end),
+                placeholder: S.eventWizardSelectEnd,
+                active: _activePicker == 'end-time',
+                onTap: () => unawaited(_pickTime(false)),
+              ),
             ),
           ],
         ),
       ],
     );
   }
-}
 
-class _OptionalBadge extends StatelessWidget {
-  const _OptionalBadge();
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-      decoration: BoxDecoration(
-        color: AppColors.surfaceAlt,
-        borderRadius: BorderRadius.all(Radius.circular(4)),
-        border: Border.all(color: AppColors.divider),
-      ),
-      child: Text(
-        AppLocalizations.of(context)!.optional,
-        style: TextStyle(
-          fontSize: 10,
-          fontWeight: FontWeight.w500,
-          color: AppColors.secondaryText,
-        ),
-      ),
-    );
-  }
-}
-
-class _SectionCard extends StatelessWidget {
-  final Widget child;
-  const _SectionCard({required this.child});
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      decoration: BoxDecoration(
-        color: AppColors.card,
-        borderRadius: BorderRadius.all(Radius.circular(14)),
-        border: Border.all(color: AppColors.divider),
-      ),
-      child: child,
-    );
-  }
-}
-
-class _Field extends StatelessWidget {
-  final TextEditingController controller;
-  final String label;
-  final String hint;
-  final int maxLines;
-  final List<MentionOption>? mentionOptions;
-  final ValueChanged<String>? onChanged;
-
-  const _Field({
-    required this.controller,
-    required this.label,
-    required this.hint,
-    this.maxLines = 1,
-    this.mentionOptions,
-    this.onChanged,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    final decoration = InputDecoration(
-      labelText: label,
-      labelStyle: TextStyle(color: AppColors.secondaryText, fontSize: 13),
-      hintText: hint,
-      hintStyle: TextStyle(color: AppColors.secondaryText, fontSize: 13),
-      border: InputBorder.none,
-    );
-
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
-      child: mentionOptions == null
-          ? TextField(
-              controller: controller,
-              maxLines: maxLines,
-              onChanged: onChanged,
-              style: TextStyle(fontSize: 14, color: AppColors.text),
-              decoration: decoration,
-            )
-          : MentionTextField(
-              controller: controller,
-              options: mentionOptions!,
-              maxLines: maxLines,
-              onChanged: onChanged,
-              style: TextStyle(fontSize: 14, color: AppColors.text),
-              decoration: decoration,
+  // ── Step 2 of 3 — `light-speakers` 310:62 ────────────────────────────────
+  Widget _buildSpeakersStep() {
+    return ListView(
+      key: const ValueKey('event-wizard-step-speakers'),
+      padding: const EdgeInsets.all(kEventWizardGutter),
+      children: [
+        EventWizardLabel(S.eventWizardTagsLabel),
+        const SizedBox(height: 10),
+        Row(
+          children: [
+            Expanded(
+              child: EventWizardInputBox(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 14,
+                  vertical: 10,
+                ),
+                child: TextField(
+                  key: const ValueKey('event-wizard-tag-field'),
+                  controller: _customTagCtrl,
+                  textInputAction: TextInputAction.done,
+                  onSubmitted: (_) => _addTag(),
+                  style: figtree(
+                    size: 14,
+                    weight: FontWeight.w400,
+                    color: EventWizardColors.text,
+                  ),
+                  decoration: InputDecoration(
+                    isDense: true,
+                    // EventWizardInputBox paints the only surface and border.
+                    // Do not inherit the global grey fill or focus ring.
+                    filled: false,
+                    fillColor: Colors.transparent,
+                    border: InputBorder.none,
+                    enabledBorder: InputBorder.none,
+                    focusedBorder: InputBorder.none,
+                    disabledBorder: InputBorder.none,
+                    errorBorder: InputBorder.none,
+                    focusedErrorBorder: InputBorder.none,
+                    contentPadding: EdgeInsets.zero,
+                    hintText: S.eventWizardTagHint,
+                    hintStyle: figtree(
+                      size: 14,
+                      weight: FontWeight.w400,
+                      color: EventWizardColors.placeholder,
+                    ),
+                  ),
+                ),
+              ),
             ),
-    );
-  }
-}
-
-class _DateTimeRow extends StatelessWidget {
-  final String label;
-  final DateTime dateTime;
-  final VoidCallback onTap;
-  final String? error;
-
-  const _DateTimeRow({
-    required this.label,
-    required this.dateTime,
-    required this.onTap,
-    this.error,
-  });
-
-  String _fmtDate(BuildContext context, DateTime dt) {
-    final months = _monthLabels(context);
-    return '${months[dt.month - 1]} ${dt.day}, ${dt.year}';
-  }
-
-  String _fmtTime(DateTime dt) =>
-      '${dt.hour.toString().padLeft(2, '0')}:${dt.minute.toString().padLeft(2, '0')}';
-
-  @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              SizedBox(
-                width: 52,
-                child: Text(
-                  label,
-                  style: TextStyle(
-                    fontSize: 14,
-                    color: AppColors.text,
-                    fontWeight: FontWeight.w500,
-                  ),
-                ),
-              ),
-              const SizedBox(width: 12),
-              GestureDetector(
-                onTap: onTap,
-                child: Container(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 12,
-                    vertical: 6,
-                  ),
-                  decoration: BoxDecoration(
-                    color: AppColors.lightRed,
-                    borderRadius: BorderRadius.all(Radius.circular(8)),
-                  ),
-                  child: Text(
-                    _fmtDate(context, dateTime),
-                    style: TextStyle(
-                      fontSize: 13,
-                      color: AppColors.primaryRed,
-                      fontWeight: FontWeight.w600,
-                    ),
-                  ),
-                ),
-              ),
-              const SizedBox(width: 8),
-              GestureDetector(
-                onTap: onTap,
-                child: Container(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 12,
-                    vertical: 6,
-                  ),
-                  decoration: BoxDecoration(
-                    color: AppColors.lightRed,
-                    borderRadius: BorderRadius.all(Radius.circular(8)),
-                  ),
-                  child: Text(
-                    _fmtTime(dateTime),
-                    style: TextStyle(
-                      fontSize: 13,
-                      color: AppColors.primaryRed,
-                      fontWeight: FontWeight.w600,
-                    ),
-                  ),
-                ),
-              ),
-            ],
-          ),
-          if (error != null) ...[
-            const SizedBox(height: 4),
-            Text(
-              error!,
-              style: const TextStyle(fontSize: 11, color: Colors.red),
+            const SizedBox(width: 8),
+            EventWizardAddButton(
+              buttonKey: const ValueKey('event-wizard-tag-add'),
+              label: AppLocalizations.of(context)!.add,
+              onTap: _addTag,
             ),
           ],
+        ),
+        if (_selectedTags.isNotEmpty) ...[
+          const SizedBox(height: 10),
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: [
+              for (final tag in _selectedTags)
+                EventWizardTagChip(
+                  label: tag,
+                  onRemove: () => setState(() => _selectedTags.remove(tag)),
+                ),
+            ],
+          ),
         ],
-      ),
+        const SizedBox(height: 20),
+        Row(
+          children: [
+            Expanded(
+              child: Text(
+                AppLocalizations.of(context)!.speakers,
+                style: figtree(
+                  size: 14,
+                  weight: FontWeight.w700,
+                  color: EventWizardColors.text,
+                ),
+              ),
+            ),
+            EventWizardTextAction(
+              actionKey: const ValueKey('event-wizard-add-speaker'),
+              label: S.eventWizardAddSpeaker,
+              onTap: () => unawaited(_openSpeakerSheet()),
+            ),
+          ],
+        ),
+        const SizedBox(height: 12),
+        for (var i = 0; i < _speakers.length; i++)
+          if (_speakers[i].nameCtrl.text.trim().isNotEmpty)
+            Padding(
+              padding: const EdgeInsets.only(bottom: 12),
+              child: EventWizardSpeakerCard(
+                name: _speakers[i].nameCtrl.text.trim(),
+                role: _speakers[i].roleCtrl.text.trim(),
+                linkedin: _speakers[i].linkedinCtrl.text.trim(),
+                onEdit: () => unawaited(_openSpeakerSheet(index: i)),
+                onRemove: () => setState(() {
+                  _speakers[i].dispose();
+                  _speakers.removeAt(i);
+                }),
+              ),
+            ),
+        EventWizardDashedButton(
+          buttonKey: const ValueKey('event-wizard-add-another-speaker'),
+          label: _speakers.isEmpty
+              ? S.eventWizardAddSpeaker
+              : S.eventWizardAddAnotherSpeaker,
+          onTap: () => unawaited(_openSpeakerSheet()),
+        ),
+        const SizedBox(height: 20),
+        // `add-registration-link-btn` 310:121 reveals the field of
+        // `speakers-expanded` 325:6. The old switch is gone.
+        if (!_externalReg)
+          Align(
+            alignment: Alignment.centerLeft,
+            child: EventWizardTextAction(
+              actionKey: const ValueKey('event-wizard-add-registration'),
+              label: S.eventWizardAddRegistrationLink,
+              onTap: () => setState(() => _externalReg = true),
+            ),
+          )
+        else
+          EventWizardTextField(
+            fieldKey: const ValueKey('event-wizard-registration-field'),
+            controller: _regUrlCtrl,
+            label: S.eventWizardRegistrationLabel,
+            hint: S.eventWizardRegistrationHint,
+            icon: Icons.link_rounded,
+            keyboardType: TextInputType.url,
+          ),
+      ],
+    );
+  }
+
+  // ── Step 3 of 3 — `light-preview` 310:133 / `add-session` 325:485 ────────
+  Widget _buildProgrammeStep() {
+    final rows = _sessionRows;
+    return ListView(
+      key: const ValueKey('event-wizard-step-programme'),
+      padding: const EdgeInsets.all(kEventWizardGutter),
+      children: [
+        Row(
+          children: [
+            Expanded(
+              child: Text(
+                S.eventWizardProgrammeSchedule,
+                style: figtree(
+                  size: 14,
+                  weight: FontWeight.w700,
+                  color: EventWizardColors.text,
+                ),
+              ),
+            ),
+            EventWizardTextAction(
+              actionKey: const ValueKey('event-wizard-add-session'),
+              label: S.eventWizardAddSession,
+              onTap: () => unawaited(_openSessionSheet()),
+            ),
+          ],
+        ),
+        const SizedBox(height: 4),
+        if (_scheduleEntries.isEmpty)
+          Padding(
+            padding: const EdgeInsets.symmetric(vertical: 18),
+            child: Text(
+              S.eventWizardNoSessions,
+              style: figtree(
+                size: 13,
+                weight: FontWeight.w400,
+                color: EventWizardColors.muted,
+              ),
+            ),
+          )
+        else
+          for (var i = 0; i < _scheduleEntries.length; i++)
+            EventWizardSessionRow(
+              title: _scheduleEntries[i].titleCtrl.text.trim(),
+              speaker: _scheduleEntries[i].subtitleCtrl.text.trim(),
+              time: TimeOfDay(
+                hour: _scheduleEntries[i].time.hour,
+                minute: _scheduleEntries[i].time.minute,
+              ).format(context),
+              onEdit: () => unawaited(_openSessionSheet(index: i)),
+              onRemove: () => _removeScheduleEntry(i),
+              showDivider: i != _scheduleEntries.length - 1,
+            ),
+        const SizedBox(height: 24),
+        EventWizardLabel(S.eventWizardLivePreview),
+        const SizedBox(height: 10),
+        EventWizardLivePreviewCard(
+          imagePath: _imagePath,
+          title: _titleController.text.trim(),
+          location: _locationController.text.trim(),
+          whenLabel: _whenLabel,
+          speakerCount: _speakerDrafts.length,
+          sessionCount: rows.length,
+        ),
+      ],
+    );
+  }
+
+  // ── The Event Preview page — `light-details` 324:978 ─────────────────────
+  Widget _buildPreviewStep() {
+    final start = _startDate;
+    final end = _endDate;
+    return EventWizardPreviewBody(
+      imagePath: _imagePath,
+      title: _titleController.text.trim(),
+      location: _locationController.text.trim(),
+      dateLabel: start == null ? '' : _longDateLabel(start),
+      timeLabel: start == null
+          ? ''
+          : end == null
+          ? _timeLabel(start)
+          : '${_timeLabel(start)} – ${_timeLabel(end)}',
+      description: _descController.text,
+      tags: List<String>.from(_selectedTags),
+      speakers: _speakerDrafts,
+      sessions: _sessionRows,
     );
   }
 }

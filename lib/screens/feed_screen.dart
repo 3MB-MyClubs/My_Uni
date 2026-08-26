@@ -15,6 +15,7 @@ import '../services/content_store.dart';
 import '../services/mock_data.dart';
 import '../services/auth_service.dart';
 import '../services/club_admin_access.dart';
+import '../services/mock_clubup_profile.dart';
 import '../services/feed_v2_controller.dart';
 import '../services/feed_v2_service.dart';
 import '../services/image_aspect_ratio.dart';
@@ -42,6 +43,7 @@ import 'user_profile_screen.dart';
 import 'club_profile_screen.dart';
 import 'create_post_screen.dart' show buildPostBanner;
 import '../widgets/big_picture_post_composer_sheet.dart';
+import '../widgets/club_home_design.dart';
 import '../widgets/clubup_design.dart';
 import '../widgets/comments_sheet.dart';
 import '../widgets/home_design.dart';
@@ -170,8 +172,6 @@ class _FeedScreenState extends State<FeedScreen> {
   // pixel-identical in both states (the translucent fill is the same).
   bool _scrolledUnder = false;
   bool _studentHeaderControlsVisible = true;
-  double _refreshProgress = 0;
-  bool _isRefreshing = false;
   int _refreshCycle = 0;
   Future<void>? _refreshTask;
   final ScrollController _scrollController = ScrollController();
@@ -248,7 +248,10 @@ class _FeedScreenState extends State<FeedScreen> {
   /// injects are dropped there; club-admin sessions keep the full mix.
   List<dynamic> _homeFeedItems() {
     final mixed = _mixedFeed();
-    if (!authService.isStudentSession) return mixed;
+    // CLUB HOME's `feed-scroller-content` is posts only as well, so both
+    // redesigned Homes drop the suggestion rails; the platform moderator's
+    // un-redesigned Home keeps the full mix.
+    if (!authService.isStudentSession && !_isClubSession) return mixed;
     return mixed.whereType<_FeedItem>().toList(growable: false);
   }
 
@@ -816,7 +819,9 @@ class _FeedScreenState extends State<FeedScreen> {
   }
 
   Future<void> _performRefresh() async {
-    if (mounted) setState(() => _isRefreshing = true);
+    // Instagram keeps the activity ring visible long enough to register even
+    // when a cached/offline refresh resolves immediately.
+    final stopwatch = Stopwatch()..start();
     try {
       try {
         supabaseFeedV2Service.invalidateFirstPages();
@@ -825,35 +830,59 @@ class _FeedScreenState extends State<FeedScreen> {
         // Keep currently loaded content if the network request fails.
       }
     } finally {
-      if (mounted) {
-        setState(() {
-          _isRefreshing = false;
-          _refreshProgress = 0;
-          // CupertinoSliverRefreshControl only accepts a new pull after its
-          // old sliver has fully retracted. Recreate it after completion so a
-          // completed refresh can never leave the next pull or tab gesture in
-          // the old `done` lifecycle state.
-          _refreshCycle++;
-        });
-      }
+      stopwatch.stop();
+      const minimumSpinTime = Duration(milliseconds: 850);
+      final remaining = minimumSpinTime - stopwatch.elapsed;
+      if (remaining > Duration.zero) await Future<void>.delayed(remaining);
+
+      // Let CupertinoSliverRefreshControl animate its temporary pull space
+      // closed before rotating its key for the next gesture.
+      unawaited(
+        Future<void>.delayed(const Duration(milliseconds: 360), () {
+          if (!mounted || _refreshTask != null) return;
+          setState(() => _refreshCycle++);
+        }),
+      );
     }
+  }
+
+  /// The CLUB HOME point of view: the club-admin login and a student who has
+  /// switched to their club account. Same condition the bottom nav uses to
+  /// swap Search for the create button, so the two chromes always agree.
+  /// Platform moderators are deliberately excluded — their Home has no frame
+  /// in the handoff yet.
+  bool get _isClubSession {
+    if (accountSwitcherService.isClubAccountActive) return true;
+    final admin = authService.currentAdmin;
+    return admin != null && !isClubUpAdmin(admin);
+  }
+
+  /// The club a club session posts as.
+  Club? get _sessionClub {
+    final linked = accountSwitcherService.activeClub;
+    if (linked != null) return linked;
+    final admin = authService.currentAdmin;
+    return admin == null ? null : managedClubForAdmin(admin.id);
   }
 
   @override
   Widget build(BuildContext context) {
-    final designHome = authService.isStudentSession;
+    final designClubHome = _isClubSession;
+    final designHome = authService.isStudentSession && !designClubHome;
     final mixed = _homeFeedItems();
     final showFeedSkeleton =
         _pagingController.isInitialLoading && mixed.isEmpty;
     return Scaffold(
-      backgroundColor: designHome
+      backgroundColor: designClubHome
+          ? ClubHomeColors.page
+          : designHome
           ? ClubUpColors.background
           : AppColors.background,
       body: NotificationListener<ScrollNotification>(
         onNotification: (n) {
           // Vertical feed scroll only (depth 0) — not the horizontal events
           // rail. The glass state changes only on threshold crossings; while
-          // pulling, the negative overscroll also drives the title-row refresh
+          // pulling, the refresh sliver owns the temporary top space and its
           // indicator. Post-_FeedCache, either rebuild is just a hash compare.
           if (n.depth != 0 || n.metrics.axis != Axis.vertical) return false;
           // Any downward travel at all counts as scrolled-under: the flat
@@ -861,11 +890,8 @@ class _FeedScreenState extends State<FeedScreen> {
           // 180ms crossfade below absorbs the jitter this would otherwise
           // cause on flicks right at the boundary.
           final under = n.metrics.pixels > 0.0;
-          final refreshProgress = n.metrics.pixels < 0
-              ? (-n.metrics.pixels / 82).clamp(0.0, 1.0)
-              : 0.0;
           var showStudentHeaderControls = _studentHeaderControlsVisible;
-          if (designHome) {
+          if (designHome || designClubHome) {
             if (!under) showStudentHeaderControls = true;
             if (n is UserScrollNotification) {
               if (n.direction == ScrollDirection.reverse) {
@@ -876,11 +902,9 @@ class _FeedScreenState extends State<FeedScreen> {
             }
           }
           if (under != _scrolledUnder ||
-              refreshProgress != _refreshProgress ||
               showStudentHeaderControls != _studentHeaderControlsVisible) {
             setState(() {
               _scrolledUnder = under;
-              _refreshProgress = refreshProgress;
               _studentHeaderControlsVisible = showStudentHeaderControls;
             });
           }
@@ -896,9 +920,14 @@ class _FeedScreenState extends State<FeedScreen> {
             InstagramRefreshControl(
               key: ValueKey('home-refresh-control-$_refreshCycle'),
               onRefresh: _onRefresh,
-              showIndicator: false,
+              refreshIndicatorExtent: 60,
+              indicatorKey: const ValueKey('home-refresh-indicator'),
             ),
-            if (designHome) ...[
+            if (designClubHome) ...[
+              _buildDesignTopBar(),
+              _buildClubDesignComposer(),
+              _buildClubComposerDivider(),
+            ] else if (designHome) ...[
               _buildDesignTopBar(),
             ] else ...[
               _buildTopBar(),
@@ -1001,8 +1030,8 @@ class _FeedScreenState extends State<FeedScreen> {
                 ),
               )
             else ...[
-              // The design has no section label above the cards.
-              if (!designHome)
+              // Neither design has a section label above the cards.
+              if (!designHome && !designClubHome)
                 SliverToBoxAdapter(
                   child: Padding(
                     padding: const EdgeInsets.fromLTRB(14, 14, 14, 6),
@@ -1020,7 +1049,26 @@ class _FeedScreenState extends State<FeedScreen> {
                     ),
                   ),
                 ),
-              if (designHome)
+              if (designClubHome)
+                SliverList(
+                  delegate: SliverChildBuilderDelegate((context, i) {
+                    final item = mixed[i] as _FeedItem;
+                    final post = item.data as NewsPost;
+                    return KeyedSubtree(
+                      key: ValueKey('home-feed-item-${item.id}'),
+                      child: StaggeredEntrance(
+                        index: i,
+                        child: HomeFeedPostCard(
+                          key: ValueKey('club-home-card-${item.id}'),
+                          post: post,
+                          onChanged: () => setState(() {}),
+                          clubContext: true,
+                        ),
+                      ),
+                    );
+                  }, childCount: mixed.length),
+                )
+              else if (designHome)
                 SliverList(
                   delegate: SliverChildBuilderDelegate((context, i) {
                     final item = mixed[i] as _FeedItem;
@@ -1126,7 +1174,7 @@ class _FeedScreenState extends State<FeedScreen> {
                 ),
               // `feed-scroller-content` ends on 100pt of clearance for the
               // floating bottom nav.
-              if (designHome)
+              if (designHome || designClubHome)
                 SliverToBoxAdapter(
                   child: SizedBox(
                     height: MediaQuery.paddingOf(context).bottom + 100,
@@ -1224,9 +1272,7 @@ class _FeedScreenState extends State<FeedScreen> {
   }
 
   // ── ClubUp top bar — redesigned student Home ──────────────────────────────
-  /// `premium-header-container` of `home-feed-alt`. The old glass app bar and
-  /// its scrolled-under crossfade are kept for club-admin sessions below; the
-  /// design's header is a flat band on the page background.
+  /// Shared student/club header with greeting, feed-scope dropdown and bell.
   SliverAppBar _buildDesignTopBar() {
     return SliverAppBar(
       key: const ValueKey('home-active-feed-header'),
@@ -1251,6 +1297,7 @@ class _FeedScreenState extends State<FeedScreen> {
           unreadCount: _unreadNotificationCount(),
           atTop: !_scrolledUnder,
           controlsVisible: _studentHeaderControlsVisible,
+          showFeedScope: !_isClubSession,
           scopeAnchorKey: onboardingAnchors.keyFor(
             OnboardingAnchors.homeFeedToggle,
           ),
@@ -1258,21 +1305,51 @@ class _FeedScreenState extends State<FeedScreen> {
             context,
             MaterialPageRoute(builder: (_) => NotificationsScreen()),
           ),
-          overlay: AnimatedOpacity(
-            key: const ValueKey('home-refresh-indicator'),
-            opacity: _isRefreshing || _refreshProgress > 0 ? 1 : 0,
-            duration: const Duration(milliseconds: 120),
-            child: InstagramRefreshSpinner(
-              progress: _isRefreshing ? 1 : _refreshProgress,
-              spinning: _isRefreshing,
-            ),
-          ),
+        ),
+      ),
+    );
+  }
+
+  // ── CLUB HOME — `home-feed-alt` 272:31 / 272:200 ─────────────────────────
+  /// `admin-compose` 298:5. A club session with no club behind it (a linked
+  /// account whose club row has gone) has nothing to post as, so the card is
+  /// simply absent rather than inert.
+  SliverToBoxAdapter _buildClubDesignComposer() {
+    final club = _sessionClub;
+    if (club == null) {
+      return const SliverToBoxAdapter(child: SizedBox.shrink());
+    }
+    return SliverToBoxAdapter(
+      child: Padding(
+        key: onboardingAnchors.keyFor(OnboardingAnchors.clubQuickComposer),
+        padding: const EdgeInsets.fromLTRB(
+          kClubHomeGutter,
+          0,
+          kClubHomeGutter,
+          10,
+        ),
+        child: ClubHomeComposerCard(
+          key: ValueKey('club-home-composer-${club.id}'),
+          club: club,
+          onPosted: () => setState(() {}),
         ),
       ),
     );
   }
 
   // ── ClubUp top bar ────────────────────────────────────────────────────────
+  /// Strong boundary between the club authoring controls and its public feed.
+  SliverToBoxAdapter _buildClubComposerDivider() {
+    return SliverToBoxAdapter(
+      child: Container(
+        key: const ValueKey('club-home-composer-divider'),
+        width: double.infinity,
+        height: 3,
+        color: themeService.isDark ? Colors.white : ClubUpColors.text,
+      ),
+    );
+  }
+
   SliverAppBar _buildTopBar() {
     // At rest, the app bar blends into the screen background. Once content
     // scrolls underneath, that full-width fill fades away completely so only
@@ -1379,17 +1456,6 @@ class _FeedScreenState extends State<FeedScreen> {
                   },
                 ),
               ],
-            ),
-            IgnorePointer(
-              child: AnimatedOpacity(
-                key: const ValueKey('home-refresh-indicator'),
-                opacity: _isRefreshing || _refreshProgress > 0 ? 1 : 0,
-                duration: const Duration(milliseconds: 120),
-                child: InstagramRefreshSpinner(
-                  progress: _isRefreshing ? 1 : _refreshProgress,
-                  spinning: _isRefreshing,
-                ),
-              ),
             ),
           ],
         ),

@@ -3,8 +3,14 @@ import 'package:intl/intl.dart';
 
 import '../l10n/app_localizations.dart';
 import '../models/club.dart';
+import '../services/account_switcher_service.dart';
 import '../services/app_colors.dart';
+import '../services/app_strings.dart';
+import '../services/auth_service.dart';
 import '../services/club_insights_service.dart';
+import '../services/mock_clubup_profile.dart';
+import '../widgets/club_profile_design.dart';
+import 'create_post_screen.dart' show buildPostBanner;
 import 'post_detail_screen.dart';
 
 /// Private club-admin analytics, designed as a compact at-a-glance dashboard.
@@ -74,10 +80,150 @@ class _ClubInsightsScreenState extends State<ClubInsightsScreen> {
     ).format(date);
   }
 
+  /// `insights` `347:6` runs for the club's own session, exactly like the
+  /// profile it opens from. The ClubUp platform moderator reaches this screen
+  /// from the admin dashboard, where no frame reviewed it, so it keeps the
+  /// previous dashboard.
+  bool get _designInsights {
+    if (accountSwitcherService.isClubAccountActive) return true;
+    final admin = authService.currentAdmin;
+    return admin != null && !isClubUpAdmin(admin);
+  }
+
+  String _count(BuildContext context, int value) => NumberFormat.decimalPattern(
+    Localizations.localeOf(context).toLanguageTag(),
+  ).format(value);
+
+  String _compact(BuildContext context, int value) => NumberFormat.compact(
+    locale: Localizations.localeOf(context).toLanguageTag(),
+  ).format(value);
+
+  String _postTitle(PostStat stat) {
+    final content = stat.post.content.trim();
+    if (content.isNotEmpty) return content;
+    final title = stat.post.title.trim();
+    return title.isEmpty ? '—' : title;
+  }
+
+  /// `insights-light` / `-dark` — Figma `347:6` / `347:166`. Four metric tiles
+  /// over the Post Performance list. The frame's numbers are all-time, which
+  /// is what the service already computes, so the previous `since <date>`
+  /// divider is gone.
+  Widget _buildDesigned(BuildContext context, ClubInsightsData data) {
+    return Scaffold(
+      backgroundColor: ClubProfileColors.page,
+      body: SafeArea(
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            ClubProfileHeaderBar(
+              key: const ValueKey('club-insights-header'),
+              title: S.clubInsightsTitle,
+              compact: true,
+              onBack: () => Navigator.maybePop(context),
+            ),
+            Expanded(
+              child: RefreshIndicator(
+                color: ClubProfileColors.accent,
+                backgroundColor: ClubProfileColors.card,
+                onRefresh: _refresh,
+                child: ListView(
+                  key: const ValueKey('club-insights-scroll'),
+                  physics: const AlwaysScrollableScrollPhysics(),
+                  padding: const EdgeInsets.fromLTRB(
+                    kClubProfileGutter,
+                    12,
+                    kClubProfileGutter,
+                    32,
+                  ),
+                  children: [
+                    Row(
+                      children: [
+                        Expanded(
+                          child: ClubProfileMetricTile(
+                            icon: Icons.people_outline_rounded,
+                            value: _count(context, data.followers),
+                            label: S.clubInsightsAllTimeFollowers,
+                          ),
+                        ),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: ClubProfileMetricTile(
+                            icon: Icons.calendar_today_outlined,
+                            value: _count(context, data.totalRsvps),
+                            label: S.clubInsightsTotalRsvps,
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 12),
+                    Row(
+                      children: [
+                        Expanded(
+                          child: ClubProfileMetricTile(
+                            icon: Icons.favorite_border_rounded,
+                            value: _count(context, data.totalLikes),
+                            label: S.clubInsightsTotalLikes,
+                          ),
+                        ),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: ClubProfileMetricTile(
+                            icon: Icons.visibility_outlined,
+                            value: _count(context, data.totalViews),
+                            label: S.clubInsightsTotalViews,
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: kClubProfileGap),
+                    ClubProfileSectionHeader(
+                      title: S.clubInsightsPostPerformance,
+                      actionLabel: S.clubInsightsMostPopular,
+                      rule: true,
+                    ),
+                    const SizedBox(height: 12),
+                    if (data.topPosts.isEmpty)
+                      ClubProfileEmptyState(
+                        icon: Icons.insights_outlined,
+                        title: AppLocalizations.of(context)!.noPostsYet,
+                      )
+                    else
+                      for (final stat in data.topPosts)
+                        Padding(
+                          padding: const EdgeInsets.only(bottom: 12),
+                          child: ClubProfilePostStatRow(
+                            key: ValueKey('insights-post-${stat.post.id}'),
+                            thumbnail: buildPostBanner(
+                              imagePath: stat.post.imagePath,
+                              fallbackColor: widget.accent,
+                              fallbackLetter: widget.club.name.isNotEmpty
+                                  ? widget.club.name[0]
+                                  : '?',
+                              height: 44,
+                            ),
+                            title: _postTitle(stat),
+                            dateLabel: _postDate(context, stat.post.createdAt),
+                            likes: _compact(context, stat.likes),
+                            views: _compact(context, stat.views),
+                            onTap: () => _openPost(stat),
+                          ),
+                        ),
+                  ],
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context)!;
     final data = widget.previewData ?? clubInsightsService.compute(widget.club);
+    if (_designInsights) return _buildDesigned(context, data);
 
     return Scaffold(
       backgroundColor: AppColors.background,

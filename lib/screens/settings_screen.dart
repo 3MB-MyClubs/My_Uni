@@ -24,11 +24,14 @@ import '../l10n/app_localizations.dart';
 import '../services/photo_upload_quality.dart';
 import '../onboarding/onboarding_service.dart';
 import '../widgets/club_avatar.dart';
-import '../widgets/clubup_design.dart';
+import '../widgets/club_profile_design.dart';
+import '../widgets/club_settings_design.dart';
 import '../widgets/language_toggle.dart';
 import '../widgets/settings_design.dart';
-import 'club_profile_screen.dart' show BoardManagementSheet;
 import 'blocked_accounts_screen.dart';
+import 'club_edit_category_screen.dart';
+import 'club_edit_description_screen.dart';
+import 'club_manage_board_screen.dart';
 import 'edit_profile_screen.dart';
 import 'moderation_center_screen.dart';
 import 'saved_posts_screen.dart';
@@ -562,12 +565,16 @@ class _SettingsScreenState extends State<SettingsScreen> {
     });
   }
 
+  /// `board-members` `413:7` — the club's own redesigned Manage Board Members
+  /// screen. Only a club admin sees this row at all (`_managedClub` is null for
+  /// students and the ClubUp moderator). This was the last caller of
+  /// `BoardManagementSheet`, which is left standing in `club_profile_screen.dart`
+  /// rather than deleted — same as `StudentCampusProfileView` after the profile
+  /// pass.
   void _openBoardManagement(Club club) {
-    showModalBottomSheet<void>(
-      context: context,
-      isScrollControlled: true,
-      backgroundColor: Colors.transparent,
-      builder: (_) => BoardManagementSheet(club: club),
+    Navigator.push<void>(
+      context,
+      MaterialPageRoute(builder: (_) => ClubManageBoardScreen(club: club)),
     ).then((_) {
       if (mounted) setState(() {});
     });
@@ -1044,6 +1051,333 @@ class _SettingsScreenState extends State<SettingsScreen> {
     );
   }
 
+  // ── club settings (`settings` 350:6 / 350:184) ──────────────────────────────
+
+  /// A section on the club frame: the label, then **one** card holding every
+  /// row — unlike the student frame, which gives each row its own card.
+  Widget _clubSection(String label, List<Widget> rows) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 20),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          ClubSettingsSectionLabel(label),
+          ClubSettingsGroupCard(rows: rows),
+        ],
+      ),
+    );
+  }
+
+  void _openClubCategoryScreen(Club club) {
+    Navigator.push<void>(
+      context,
+      MaterialPageRoute(
+        builder: (_) => ClubEditCategoryScreen(
+          club: club,
+          categoryOptions: _clubCategoryOptions,
+          localizeCategory: _localizedClubCategory,
+        ),
+      ),
+    ).then((_) {
+      if (mounted) setState(() {});
+    });
+  }
+
+  void _openClubDescriptionScreen(Club club) {
+    Navigator.push<void>(
+      context,
+      MaterialPageRoute(builder: (_) => ClubEditDescriptionScreen(club: club)),
+    ).then((_) {
+      if (mounted) setState(() {});
+    });
+  }
+
+  /// `settings-language` 417:208 — the frame puts the language behind a sheet
+  /// with a radio per option, rather than the student screen's inline toggle.
+  Future<void> _openClubLanguageSheet() async {
+    final selected = await showModalBottomSheet<String>(
+      context: context,
+      backgroundColor: ClubProfileColors.card,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (sheetContext) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            const SizedBox(height: 10),
+            Center(
+              child: Container(
+                width: 40,
+                height: 4,
+                decoration: BoxDecoration(
+                  color: ClubProfileColors.border,
+                  borderRadius: BorderRadius.circular(999),
+                ),
+              ),
+            ),
+            const SizedBox(height: 18),
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 24),
+              child: Text(
+                S.clubSettingsChooseLanguage,
+                style: figtree(
+                  size: 18,
+                  weight: FontWeight.w800,
+                  color: ClubProfileColors.text,
+                ),
+              ),
+            ),
+            const SizedBox(height: 8),
+            for (final option in const [
+              ('en', 'English', 'English'),
+              ('tr', 'Türkçe', 'Turkish'),
+            ])
+              _ClubLanguageOption(
+                code: option.$1,
+                title: option.$2,
+                subtitle: option.$3,
+                selected: localeService.languageCode == option.$1,
+                onTap: () => Navigator.pop(sheetContext, option.$1),
+              ),
+            const SizedBox(height: 12),
+          ],
+        ),
+      ),
+    );
+    if (selected == null) return;
+    await _setLanguagePreference(selected);
+  }
+
+  Widget _buildClubSettings(
+    BuildContext context,
+    AppLocalizations l10n,
+    Club club,
+  ) {
+    return Scaffold(
+      backgroundColor: ClubProfileColors.page,
+      body: SafeArea(
+        bottom: false,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            ClubProfileHeaderBar(
+              key: const ValueKey('club-settings-header'),
+              title: l10n.settings,
+              compact: true,
+              onBack: () => Navigator.of(context).maybePop(),
+            ),
+            Expanded(
+              child: ListView(
+                key: const ValueKey('club-settings-scroll'),
+                physics: const BouncingScrollPhysics(
+                  parent: AlwaysScrollableScrollPhysics(),
+                ),
+                padding: EdgeInsets.fromLTRB(
+                  kClubProfileGutter,
+                  8,
+                  kClubProfileGutter,
+                  32 + MediaQuery.paddingOf(context).bottom,
+                ),
+                children: [
+                  // `profile-group` 350:29.
+                  ListenableBuilder(
+                    listenable: userState,
+                    builder: (context, _) => Padding(
+                      padding: const EdgeInsets.only(bottom: 20),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          ClubSettingsSectionLabel(
+                            S.clubSettingsProfileSection,
+                          ),
+                          ClubSettingsIdentityCard(
+                            avatar: ClubAvatar(
+                              clubId: club.id,
+                              clubName: club.name,
+                              color: ClubProfileColors.accent,
+                              imageUrl: club.logoUrl,
+                              size: 56,
+                              fontSize: 22,
+                              borderRadius: 28,
+                            ),
+                            name: club.name,
+                            editLabel: S.clubSettingsEditPhoto,
+                            onEdit: () => _showClubPhotoOptions(club),
+                            details: [
+                              ClubSettingsDetailRow(
+                                key: const ValueKey('club-settings-name'),
+                                icon: Icons.edit_outlined,
+                                label: l10n.clubName,
+                                onTap: () => _openClubNameSheet(club),
+                              ),
+                              ClubSettingsDetailRow(
+                                key: const ValueKey('club-settings-category'),
+                                icon: Icons.sell_outlined,
+                                label: l10n.clubCategories,
+                                onTap: () => _openClubCategoryScreen(club),
+                              ),
+                              ClubSettingsDetailRow(
+                                key: const ValueKey(
+                                  'club-settings-description',
+                                ),
+                                icon: Icons.description_outlined,
+                                label: l10n.clubDescription,
+                                onTap: () => _openClubDescriptionScreen(club),
+                              ),
+                            ],
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+
+                  // `management-group` 350:67.
+                  ListenableBuilder(
+                    listenable: userState,
+                    builder: (context, _) => _clubSection(
+                      S.clubSettingsManagementSection,
+                      [
+                        ClubSettingsRow(
+                          key: const ValueKey('club-settings-board'),
+                          icon: Icons.group_outlined,
+                          title: l10n.manageBoardMembers,
+                          value: '${club.boardMemberIds.length}',
+                          onTap: () => _openBoardManagement(club),
+                        ),
+                        ClubSettingsRow(
+                          key: const ValueKey('club-settings-blocked'),
+                          icon: Icons.shield_outlined,
+                          title: S.clubSettingsBlockedRow,
+                          onTap: () => Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                              builder: (_) => const BlockedAccountsScreen(),
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+
+                  // `preferences-group` 350:87. The frame draws a switch for
+                  // Dark Mode; this keeps the student screen's Light/Dark pill
+                  // so both settings screens work the same way, which is why
+                  // the row reads Appearance rather than the frame's label.
+                  _clubSection(S.settingsPreferences, [
+                    ClubSettingsRow(
+                      key: const ValueKey('club-settings-appearance'),
+                      icon: Icons.light_mode_outlined,
+                      title: l10n.appearance,
+                      trailing: SettingsSegmentedToggle(
+                        labels: [S.settingsLightOption, S.settingsDarkOption],
+                        selectedIndex: themeService.isDark ? 1 : 0,
+                        onSelected: (index) =>
+                            unawaited(_setThemePreference(index == 1)),
+                      ),
+                    ),
+                    ClubSettingsRow(
+                      key: const ValueKey('club-settings-language'),
+                      icon: Icons.language_rounded,
+                      title: l10n.language,
+                      value: localeService.languageCode == 'tr'
+                          ? 'Türkçe'
+                          : 'English',
+                      onTap: () => unawaited(_openClubLanguageSheet()),
+                    ),
+                  ]),
+
+                  // `support-group` 350:120.
+                  _clubSection(S.settingsSupport, [
+                    ClubSettingsRow(
+                      key: const ValueKey('club-settings-tutorial'),
+                      icon: Icons.replay_rounded,
+                      title: l10n.replayTutorial,
+                      onTap: _replayTutorial,
+                    ),
+                  ]),
+
+                  // `legal-group` 350:135.
+                  _clubSection(S.clubSettingsLegalSection, [
+                    ClubSettingsRow(
+                      key: const ValueKey('club-settings-privacy'),
+                      icon: Icons.lock_outline_rounded,
+                      title: l10n.privacyPolicy,
+                      external: true,
+                      onTap: () => _openExternalPage(
+                        localeService.languageCode == 'tr'
+                            ? AppLinks.privacyPolicyTurkish
+                            : AppLinks.privacyPolicy,
+                      ),
+                    ),
+                    ClubSettingsRow(
+                      key: const ValueKey('club-settings-support'),
+                      icon: Icons.help_outline_rounded,
+                      title: l10n.supportCenter,
+                      external: true,
+                      onTap: () => _openExternalPage(
+                        localeService.languageCode == 'tr'
+                            ? AppLinks.supportTurkish
+                            : AppLinks.support,
+                      ),
+                    ),
+                    ClubSettingsRow(
+                      key: const ValueKey('club-settings-terms'),
+                      icon: Icons.description_outlined,
+                      title: l10n.termsOfUse,
+                      external: true,
+                      onTap: () => _openExternalPage(
+                        localeService.languageCode == 'tr'
+                            ? AppLinks.termsOfUseTurkish
+                            : AppLinks.termsOfUse,
+                      ),
+                    ),
+                  ]),
+
+                  // `danger-group` 350:160.
+                  _clubSection(S.settingsDangerZone, [
+                    ClubSettingsRow(
+                      key: const ValueKey('club-settings-logout'),
+                      icon: Icons.logout_rounded,
+                      title: l10n.logOut,
+                      danger: true,
+                      onTap: _confirmAndLogout,
+                    ),
+                    ClubSettingsRow(
+                      key: const ValueKey('club-settings-delete'),
+                      icon: Icons.delete_outline_rounded,
+                      title: l10n.deleteAccount,
+                      danger: true,
+                      external: true,
+                      onTap: () => _openExternalPage(
+                        localeService.languageCode == 'tr'
+                            ? AppLinks.accountDeletionTurkish
+                            : AppLinks.accountDeletion,
+                      ),
+                    ),
+                  ]),
+
+                  if (_hasVersion)
+                    Center(
+                      child: Text(
+                        S.settingsVersionLine(_appVersion, _buildNumber),
+                        style: figtree(
+                          size: 11,
+                          weight: FontWeight.w400,
+                          color: ClubProfileColors.muted,
+                        ),
+                      ),
+                    ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
   /// `sec-*`: the uppercase label, then one card per row with a 10pt gap.
   Widget _settingsSection(String label, List<Widget> rows) {
     return Padding(
@@ -1075,6 +1409,16 @@ class _SettingsScreenState extends State<SettingsScreen> {
             return _buildStudentSettings(
               context,
               AppLocalizations.of(context)!,
+            );
+          }
+          // `settings` 350:6 — the club's own frame. `_managedClub` is null for
+          // the ClubUp moderator, who keeps the legacy screen.
+          final club = _managedClub;
+          if (club != null) {
+            return _buildClubSettings(
+              context,
+              AppLocalizations.of(context)!,
+              club,
             );
           }
           return _buildLegacySettings(context);
@@ -1960,6 +2304,7 @@ class _ClubNameSheetState extends State<_ClubNameSheet> {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
     final value = _controller.text.trim();
     final canSave = value.isNotEmpty && value != widget.club.name && !_saving;
 
@@ -1969,108 +2314,139 @@ class _ClubNameSheetState extends State<_ClubNameSheet> {
       ),
       child: Container(
         decoration: BoxDecoration(
-          color: AppColors.card,
-          borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+          color: ClubProfileColors.card,
+          borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
         ),
-        padding: const EdgeInsets.fromLTRB(20, 14, 20, 32),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Center(
-              child: Container(
-                width: 36,
-                height: 4,
+        padding: const EdgeInsets.fromLTRB(24, 10, 24, 24),
+        child: SafeArea(
+          top: false,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Center(
+                child: Container(
+                  width: 40,
+                  height: 4,
+                  decoration: BoxDecoration(
+                    color: ClubProfileColors.border,
+                    borderRadius: BorderRadius.circular(999),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 22),
+              Text(
+                S.clubEditNameTitle,
+                textAlign: TextAlign.center,
+                style: figtree(
+                  size: 19,
+                  weight: FontWeight.w800,
+                  color: ClubProfileColors.text,
+                ),
+              ),
+              const SizedBox(height: 6),
+              Text(
+                S.clubEditNameSubtitle,
+                textAlign: TextAlign.center,
+                style: figtree(
+                  size: 12.5,
+                  weight: FontWeight.w400,
+                  color: ClubProfileColors.muted,
+                  height: 1.4,
+                ),
+              ),
+              const SizedBox(height: 24),
+              Padding(
+                padding: const EdgeInsets.only(left: 4, bottom: 8),
+                child: Text(
+                  S.clubEditNameField.toUpperCase(),
+                  style: figtree(
+                    size: 11,
+                    weight: FontWeight.w700,
+                    color: ClubProfileColors.muted,
+                    letterSpacing: 0.6,
+                  ),
+                ),
+              ),
+              Container(
+                height: 48,
+                padding: const EdgeInsets.symmetric(horizontal: 14),
                 decoration: BoxDecoration(
-                  color: AppColors.divider,
-                  borderRadius: BorderRadius.all(Radius.circular(2)),
+                  color: ClubProfileColors.field,
+                  borderRadius: BorderRadius.circular(12),
                 ),
-              ),
-            ),
-            const SizedBox(height: 18),
-            Text(
-              AppLocalizations.of(context)!.clubName,
-              style: TextStyle(
-                fontSize: 18,
-                fontWeight: FontWeight.bold,
-                color: AppColors.text,
-              ),
-            ),
-            const SizedBox(height: 6),
-            Text(
-              AppLocalizations.of(context)!.clubNameAppearsAcrossApp,
-              style: TextStyle(fontSize: 13, color: AppColors.secondaryText),
-            ),
-            const SizedBox(height: 18),
-            TextField(
-              controller: _controller,
-              autofocus: true,
-              maxLength: 60,
-              textCapitalization: TextCapitalization.words,
-              style: TextStyle(color: AppColors.text, fontSize: 14),
-              decoration: InputDecoration(
-                labelText: AppLocalizations.of(context)!.clubNameLabel,
-                filled: true,
-                fillColor: AppColors.background,
-                border: OutlineInputBorder(
-                  borderRadius: BorderRadius.all(Radius.circular(12)),
-                  borderSide: BorderSide.none,
-                ),
-                focusedBorder: OutlineInputBorder(
-                  borderRadius: BorderRadius.all(Radius.circular(12)),
-                  borderSide: BorderSide(
-                    color: AppColors.primaryRed,
-                    width: 1.5,
+                alignment: Alignment.centerLeft,
+                child: TextField(
+                  key: const ValueKey('club-settings-name-field'),
+                  controller: _controller,
+                  autofocus: true,
+                  maxLength: 60,
+                  textCapitalization: TextCapitalization.words,
+                  textInputAction: TextInputAction.done,
+                  onChanged: (_) => setState(() {}),
+                  onSubmitted: (_) {
+                    if (canSave) unawaited(_save(value));
+                  },
+                  style: figtree(
+                    size: 14.5,
+                    weight: FontWeight.w500,
+                    color: ClubProfileColors.text,
                   ),
-                ),
-                counterStyle: TextStyle(
-                  color: AppColors.secondaryText,
-                  fontSize: 11,
-                ),
-              ),
-              onChanged: (_) => setState(() {}),
-            ),
-            const SizedBox(height: 12),
-            Row(
-              children: [
-                Expanded(
-                  child: TextButton(
-                    onPressed: () => Navigator.pop(context),
-                    child: Text(
-                      AppLocalizations.of(context)!.cancel,
-                      style: TextStyle(color: AppColors.secondaryText),
+                  decoration: InputDecoration(
+                    isDense: true,
+                    border: InputBorder.none,
+                    counterText: '',
+                    contentPadding: EdgeInsets.zero,
+                    hintText: l10n.clubNameLabel,
+                    hintStyle: figtree(
+                      size: 14.5,
+                      weight: FontWeight.w400,
+                      color: ClubProfileColors.muted,
                     ),
                   ),
                 ),
-                const SizedBox(width: 12),
-                Expanded(
-                  flex: 2,
-                  child: ElevatedButton(
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: canSave
-                          ? AppColors.primaryRed
-                          : AppColors.divider,
-                      foregroundColor: Colors.white,
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.all(Radius.circular(12)),
-                      ),
-                      padding: const EdgeInsets.symmetric(vertical: 14),
+              ),
+              const SizedBox(height: 24),
+              // `save-btn` — a full-width accent pill, muted while there is
+              // nothing to save.
+              Opacity(
+                opacity: canSave ? 1 : 0.45,
+                child: GestureDetector(
+                  key: const ValueKey('club-settings-name-save'),
+                  behavior: HitTestBehavior.opaque,
+                  onTap: canSave ? () => unawaited(_save(value)) : null,
+                  child: Container(
+                    height: 48,
+                    alignment: Alignment.center,
+                    decoration: BoxDecoration(
+                      color: ClubProfileColors.accent,
+                      borderRadius: BorderRadius.circular(999),
                     ),
-                    onPressed: canSave ? () => _save(value) : null,
                     child: Text(
-                      _saving
-                          ? AppLocalizations.of(context)!.savingEllipsis
-                          : AppLocalizations.of(context)!.saveName,
-                      style: TextStyle(
-                        fontWeight: FontWeight.bold,
-                        fontSize: 15,
+                      _saving ? l10n.savingEllipsis : S.clubEditNameSave,
+                      style: figtree(
+                        size: 15,
+                        weight: FontWeight.w700,
+                        color: Colors.white,
                       ),
                     ),
                   ),
                 ),
-              ],
-            ),
-          ],
+              ),
+              const SizedBox(height: 6),
+              TextButton(
+                onPressed: () => Navigator.pop(context),
+                child: Text(
+                  l10n.cancel,
+                  style: figtree(
+                    size: 14,
+                    weight: FontWeight.w600,
+                    color: ClubProfileColors.muted,
+                  ),
+                ),
+              ),
+            ],
+          ),
         ),
       ),
     );
@@ -2081,3 +2457,92 @@ class _ClubNameSheetState extends State<_ClubNameSheet> {
 /// [TextEditingController] so it is disposed only after the sheet is fully
 /// removed — disposing it earlier (e.g. in `whenComplete`) crashed because the
 /// dismiss animation rebuilds the [TextField] against a disposed controller.
+
+/// One row of `settings-language` `417:208` — the name, its English gloss and
+/// a radio on the right.
+class _ClubLanguageOption extends StatelessWidget {
+  const _ClubLanguageOption({
+    required this.code,
+    required this.title,
+    required this.subtitle,
+    required this.selected,
+    required this.onTap,
+  });
+
+  final String code;
+  final String title;
+  final String subtitle;
+  final bool selected;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      key: ValueKey('club-settings-language-$code'),
+      behavior: HitTestBehavior.opaque,
+      onTap: onTap,
+      child: Container(
+        height: 70,
+        padding: const EdgeInsets.symmetric(horizontal: 24),
+        decoration: BoxDecoration(
+          border: Border(
+            top: BorderSide(color: ClubProfileColors.border),
+          ),
+        ),
+        child: Row(
+          children: [
+            Expanded(
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    title,
+                    style: figtree(
+                      size: 15,
+                      weight: FontWeight.w700,
+                      color: ClubProfileColors.text,
+                    ),
+                  ),
+                  const SizedBox(height: 2),
+                  Text(
+                    subtitle,
+                    style: figtree(
+                      size: 12,
+                      weight: FontWeight.w400,
+                      color: ClubProfileColors.muted,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            Container(
+              width: 20,
+              height: 20,
+              alignment: Alignment.center,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                border: Border.all(
+                  color: selected
+                      ? ClubProfileColors.accentText
+                      : ClubProfileColors.border,
+                  width: 2,
+                ),
+              ),
+              child: selected
+                  ? Container(
+                      width: 10,
+                      height: 10,
+                      decoration: BoxDecoration(
+                        shape: BoxShape.circle,
+                        color: ClubProfileColors.accentText,
+                      ),
+                    )
+                  : null,
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}

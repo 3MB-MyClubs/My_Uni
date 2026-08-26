@@ -14,6 +14,7 @@ import 'package:flutter_application_1/services/mock_data.dart';
 import 'package:flutter_application_1/services/theme_service.dart';
 import 'package:flutter_application_1/services/people_service.dart';
 import 'package:flutter_application_1/services/user_state.dart';
+import 'package:flutter_application_1/widgets/chats_design.dart';
 
 void main() {
   setUpAll(() {
@@ -283,8 +284,10 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
-  testWidgets('ChatsScreen also renders in light mode', (tester) async {
-    await themeService.setDark(false);
+  testWidgets('student chat header adapts when light and dark mode change', (
+    tester,
+  ) async {
+    await themeService.setDark(false, persistToAccount: false);
     authService.login('alice@ku.edu.tr', '111111');
 
     await tester.pumpWidget(
@@ -293,6 +296,21 @@ void main() {
     await tester.pump();
 
     expect(find.byType(ChatsScreen), findsOneWidget);
+    Text friendsLabel() => tester.widget<Text>(find.text(S.chatsTabFriends));
+    Icon composePen() => tester.widget<Icon>(find.byIcon(Icons.edit_rounded));
+
+    expect(friendsLabel().style?.color, const Color(0xFF18181B));
+    expect(composePen().color, const Color(0xFF18181B));
+    expect(friendsLabel().style?.color, ChatsColors.text);
+    expect(composePen().color, ChatsColors.text);
+
+    await themeService.setDark(true, persistToAccount: false);
+    await tester.pump();
+
+    expect(friendsLabel().style?.color, const Color(0xFFFAFAFA));
+    expect(composePen().color, const Color(0xFFFAFAFA));
+    expect(friendsLabel().style?.color, ChatsColors.text);
+    expect(composePen().color, ChatsColors.text);
     expect(tester.takeException(), isNull);
   });
 
@@ -355,11 +373,16 @@ void main() {
     expect(find.byIcon(Icons.edit_outlined), findsNothing);
     expect(find.byIcon(Icons.arrow_back_ios_new_rounded), findsNothing);
 
-    await tester.tap(find.byKey(const ValueKey('club-lane-solo')));
+    // CLUB CHATS `543:32`: the lane pill replaced the segmented switch, and on
+    // the club side Direct is an inbox — `admin-dm-list` 335:6 — which titles
+    // itself rather than repeating the club.
+    await tester.tap(find.byKey(const ValueKey('club-lane-pill')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('club-lane-option-direct')));
     await tester.pumpAndSettle();
 
-    expect(find.byKey(const ValueKey('club-solo-chat-empty')), findsOneWidget);
-    expect(find.text(S.soloChatAllTitle), findsOneWidget);
+    expect(find.text(S.clubDirectInboxTitle), findsOneWidget);
+    expect(find.text(S.clubDirectInboxEmpty), findsOneWidget);
     expect(find.byKey(const ValueKey('club-solo-chat-start')), findsNothing);
     expect(tester.takeException(), isNull);
   });

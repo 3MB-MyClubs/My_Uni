@@ -9,13 +9,14 @@ import '../services/app_colors.dart';
 /// A restrained, Instagram-style pull-to-refresh control.
 ///
 /// Pulling progressively reveals the activity indicator's twelve ticks. Once
-/// released, the indicator rotates until [onRefresh] completes, then the sliver
-/// retracts immediately without a separate success animation.
+/// the trigger is reached, the indicator rotates until [onRefresh] completes,
+/// then the sliver retracts immediately without a separate success animation.
 class InstagramRefreshControl extends StatelessWidget {
   final Future<void> Function() onRefresh;
   final double refreshTriggerPullDistance;
   final double refreshIndicatorExtent;
   final bool showIndicator;
+  final Key? indicatorKey;
 
   const InstagramRefreshControl({
     super.key,
@@ -23,6 +24,7 @@ class InstagramRefreshControl extends StatelessWidget {
     this.refreshTriggerPullDistance = 82,
     this.refreshIndicatorExtent = 48,
     this.showIndicator = true,
+    this.indicatorKey,
   });
 
   @override
@@ -43,8 +45,11 @@ class InstagramRefreshControl extends StatelessWidget {
               final progress = (pulledExtent / triggerDistance).clamp(0.0, 1.0);
               return Center(
                 child: InstagramRefreshSpinner(
+                  key: indicatorKey,
                   progress: progress,
-                  spinning: refreshState == RefreshIndicatorMode.refresh,
+                  spinning:
+                      refreshState == RefreshIndicatorMode.armed ||
+                      refreshState == RefreshIndicatorMode.refresh,
                 ),
               );
             }

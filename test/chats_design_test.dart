@@ -148,10 +148,10 @@ void main() {
       tester.widget<Scaffold>(find.byType(Scaffold).first).backgroundColor,
       ChatsColors.background,
     );
-    expect(filterLabel.style?.color, Colors.white);
+    expect(filterLabel.style?.color, ChatsColors.text);
     expect(filterLabel.style?.fontSize, 18);
     expect(filterLabel.style?.fontWeight, FontWeight.w800);
-    expect(pen.color, Colors.white);
+    expect(pen.color, ChatsColors.text);
     expect(pen.size, 26);
     // The old chrome: a two-up filter with a sliding indicator, and a
     // hand-painted campus backdrop behind the list.

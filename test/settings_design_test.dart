@@ -3,6 +3,7 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter_application_1/l10n/app_localizations.dart';
 import 'package:flutter_application_1/models/app_admin.dart';
+import 'package:flutter_application_1/models/club.dart';
 import 'package:flutter_application_1/screens/settings_screen.dart';
 import 'package:flutter_application_1/services/app_strings.dart';
 import 'package:flutter_application_1/services/auth_service.dart';
@@ -176,9 +177,22 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
-  testWidgets('club admins keep the pre-redesign settings screen', (
+  testWidgets('a club admin now gets the club frame, not this one', (
     tester,
   ) async {
+    // `settings` `350:6` replaced the legacy club screen. This file owns the
+    // *student* frame, so all it pins is that the two no longer collide:
+    // `club_settings_design_test.dart` covers the club screen itself.
+    final club = Club(
+      id: 'settings-design-club-record',
+      name: 'Design Club',
+      description: 'A club for the settings fixture.',
+      adminUserIds: const ['settings-design-club'],
+    );
+    clubs
+      ..clear()
+      ..add(club);
+    addTearDown(clubs.clear);
     authService.setClubAdmin(
       AppAdmin(
         id: 'settings-design-club',
@@ -190,8 +204,32 @@ void main() {
 
     await pumpSettings(tester);
 
-    // The club rows the handoff never drew are still there, in the old chrome.
-    expect(find.text(S.settingsDangerZone.toUpperCase()), findsNothing);
+    expect(find.byKey(const ValueKey('club-settings-header')), findsOneWidget);
+    // The student frame's own chrome is not drawn for a club.
+    expect(find.byType(SettingsHeaderBar), findsNothing);
+    expect(find.byType(SettingsRowCard), findsNothing);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('the ClubUp moderator still gets the pre-redesign screen', (
+    tester,
+  ) async {
+    // `_managedClub` is null for the platform admin, so neither redesigned
+    // settings screen applies and the legacy one is still the fallback.
+    clubs.clear();
+    authService.setClubAdmin(
+      AppAdmin(
+        id: 'admin1',
+        name: 'ClubUp',
+        email: 'clubup@ku.edu.tr',
+        password: '22222222',
+      ),
+    );
+
+    await pumpSettings(tester);
+
+    expect(find.byKey(const ValueKey('club-settings-header')), findsNothing);
+    expect(find.byType(SettingsHeaderBar), findsNothing);
     expect(find.byType(SettingsRowCard), findsNothing);
     expect(find.text('Light Mode'), findsOneWidget);
     expect(tester.takeException(), isNull);

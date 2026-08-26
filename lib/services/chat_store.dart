@@ -181,7 +181,9 @@ class ChatStore extends ChangeNotifier {
       _rateLimitFailureMessage =
           '${limited.displayMessage} Your message is saved and will be retried.';
     }
-    if (message.kind == ChatMessageKind.photo) {
+    if (message.kind == ChatMessageKind.photo ||
+        (message.kind == ChatMessageKind.announcement &&
+            (message.attachmentPath?.trim().isNotEmpty ?? false))) {
       _attachmentUploadFailed = true;
     } else if (limited == null) {
       return;
@@ -694,7 +696,10 @@ class ChatStore extends ChangeNotifier {
         _upsertChatV2Message(message);
       }
     }
-    if (_chatV2.summaries.isNotEmpty || _chatV2.loadedThreadIds.isNotEmpty) {
+    final normalizedPins = _normalizePinnedMessages();
+    if (_chatV2.summaries.isNotEmpty ||
+        _chatV2.loadedThreadIds.isNotEmpty ||
+        normalizedPins) {
       scheduleSave();
     }
     notifyListeners();
@@ -745,6 +750,7 @@ class ChatStore extends ChangeNotifier {
         ),
       );
     }
+    final normalizedPins = _normalizePinnedMessages();
     final rawLastRead = box.get('lastRead');
     if (rawLastRead is Map) {
       for (final entry in rawLastRead.entries) {
@@ -883,7 +889,7 @@ class ChatStore extends ChangeNotifier {
         .whereType<String>()
         .toSet();
     unawaited(_sweepStagedAttachments(activeAttachmentPaths));
-    if (removedMockChats || migratedAdminMessaging) {
+    if (removedMockChats || migratedAdminMessaging || normalizedPins) {
       unawaited(saveAll());
     }
   }
@@ -1298,8 +1304,9 @@ class ChatStore extends ChangeNotifier {
           notifyRecipient: false,
         );
       }
+      final normalizedPins = _normalizePinnedMessages();
       await _reconcileRemoteClubPollVotes(client, rows, actorId);
-      if (pruned) {
+      if (pruned || normalizedPins) {
         scheduleSave();
         notifyListeners();
       }
@@ -1435,6 +1442,7 @@ class ChatStore extends ChangeNotifier {
       return;
     }
     _messages.add(message);
+    _normalizePinnedMessages(threadId: message.threadId);
     _pendingRemoteClubMessageIds.remove(id);
     if (notifyRecipient && senderId != actorId) {
       final clubName = clubForId(clubId)?.name ?? '';
@@ -2301,10 +2309,15 @@ class ChatStore extends ChangeNotifier {
     ChatMessage message,
   ) async {
     final attachmentPath = message.attachmentPath?.trim() ?? '';
-    final isPhoto = message.kind == ChatMessageKind.photo;
+    final attachmentName = message.attachmentName ?? attachmentPath;
+    final isPhoto =
+        message.kind == ChatMessageKind.photo ||
+        (message.kind == ChatMessageKind.announcement &&
+            isImageMediaPath(attachmentName));
     final isVideo =
-        message.kind == ChatMessageKind.file &&
-        isVideoMediaPath(message.attachmentName ?? attachmentPath);
+        (message.kind == ChatMessageKind.file ||
+            message.kind == ChatMessageKind.announcement) &&
+        isVideoMediaPath(attachmentName);
     if ((!isPhoto && !isVideo) || attachmentPath.isEmpty) {
       return message;
     }
@@ -4005,6 +4018,44 @@ class ChatStore extends ChangeNotifier {
         _messages[i] = message.copyWith(pinned: false);
       }
     }
+  }
+
+  /// Repairs old cache or synchronization data that contains more than one
+  /// pin. A thread has one shared pin across ordinary messages and Board
+  /// announcements; the newest pinned item wins deterministically.
+  bool _normalizePinnedMessages({String? threadId}) {
+    final winnerByThread = <String, int>{};
+    for (var i = 0; i < _messages.length; i++) {
+      final candidate = _messages[i];
+      if (!candidate.pinned ||
+          (threadId != null && candidate.threadId != threadId)) {
+        continue;
+      }
+      final winnerIndex = winnerByThread[candidate.threadId];
+      if (winnerIndex == null) {
+        winnerByThread[candidate.threadId] = i;
+        continue;
+      }
+      final winner = _messages[winnerIndex];
+      final timeOrder = candidate.createdAt.compareTo(winner.createdAt);
+      if (timeOrder > 0 ||
+          (timeOrder == 0 && candidate.id.compareTo(winner.id) > 0)) {
+        winnerByThread[candidate.threadId] = i;
+      }
+    }
+
+    var changed = false;
+    for (var i = 0; i < _messages.length; i++) {
+      final message = _messages[i];
+      if (!message.pinned ||
+          (threadId != null && message.threadId != threadId) ||
+          winnerByThread[message.threadId] == i) {
+        continue;
+      }
+      _messages[i] = message.copyWith(pinned: false);
+      changed = true;
+    }
+    return changed;
   }
 
   /// Pins one message to the top of its thread; only one pin per thread.

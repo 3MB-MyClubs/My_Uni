@@ -11,8 +11,10 @@ import 'package:flutter_application_1/services/auth_service.dart';
 import 'package:flutter_application_1/services/content_store.dart';
 import 'package:flutter_application_1/services/locale_service.dart';
 import 'package:flutter_application_1/services/mock_data.dart';
+import 'package:flutter_application_1/services/theme_service.dart';
 import 'package:flutter_application_1/services/user_state.dart';
 import 'package:flutter_application_1/services/view_tracker.dart';
+import 'package:flutter_application_1/widgets/club_profile_design.dart';
 import 'package:flutter_application_1/widgets/clubup_design.dart';
 import 'package:flutter_application_1/widgets/home_comments_sheet.dart';
 import 'package:flutter_application_1/widgets/home_design.dart';
@@ -129,6 +131,18 @@ void main() {
     // X-style feed row — full width, shared page surface, then a thin divider.
     final card = find.byKey(const ValueKey('home-post-card-$postId'));
     expect(card, findsOneWidget);
+    final verifiedBadge = find.descendant(
+      of: card,
+      matching: find.byType(ClubVerifiedBadge),
+    );
+    expect(verifiedBadge, findsOneWidget);
+    final verifiedIcon = tester.widget<Icon>(
+      find.descendant(
+        of: verifiedBadge,
+        matching: find.byIcon(Icons.verified_rounded),
+      ),
+    );
+    expect(verifiedIcon.color, const Color(0xFF800020));
     expect(tester.getSize(card).width, 393);
     final postContainer = tester.widget<Container>(card);
     final decoration = postContainer.decoration! as BoxDecoration;
@@ -172,6 +186,29 @@ void main() {
       const Color(0xFF800020),
     );
     expect(find.text(S.unfollow), findsNothing); // not following this club yet
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('For You remains visible when the Home theme changes', (
+    tester,
+  ) async {
+    await themeService.setDark(false, persistToAccount: false);
+    addTearDown(() => themeService.setDark(false, persistToAccount: false));
+    await pumpHome(tester);
+
+    final feedScope = find.byKey(const ValueKey('home-feed-scope-dropdown'));
+    Text forYouLabel() => tester.widget<Text>(
+      find.descendant(of: feedScope, matching: find.text(S.forYou)),
+    );
+
+    expect(forYouLabel().style?.color, const Color(0xFF800020));
+    expect(forYouLabel().style?.color, ClubUpColors.accentText);
+
+    await themeService.setDark(true, persistToAccount: false);
+    await tester.pump();
+
+    expect(forYouLabel().style?.color, const Color(0xFFE8A1A6));
+    expect(forYouLabel().style?.color, ClubUpColors.accentText);
     expect(tester.takeException(), isNull);
   });
 

@@ -1,3 +1,5 @@
+import 'dart:io';
+
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import '../models/news_post.dart';
@@ -6,6 +8,7 @@ import '../l10n/app_localizations.dart';
 import '../services/auth_service.dart';
 import '../services/locale_service.dart';
 import '../services/content_store.dart';
+import '../services/image_aspect_ratio.dart';
 import '../services/mock_data.dart';
 import '../services/moderation_service.dart';
 import '../services/media_delivery_service.dart';
@@ -32,10 +35,81 @@ class PostDetailScreen extends StatefulWidget {
 }
 
 class _PostDetailScreenState extends State<PostDetailScreen> {
+  double _imageAspectRatio = 1;
+  String? _probedImagePath;
+
   String get _currentAdminId => authService.currentAdmin?.id ?? '';
 
   bool get _canDeletePost =>
       contentStore.canDeletePost(widget.post.id, _currentAdminId);
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    _probeImageAspectRatio();
+  }
+
+  @override
+  void didUpdateWidget(covariant PostDetailScreen oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.post.imagePath == widget.post.imagePath) return;
+    _probedImagePath = null;
+    _imageAspectRatio = 1;
+    _probeImageAspectRatio();
+  }
+
+  void _probeImageAspectRatio() {
+    final path = widget.post.imagePath?.trim() ?? '';
+    if (_probedImagePath == path) return;
+    _probedImagePath = path;
+    if (path.isEmpty) {
+      _imageAspectRatio = 1;
+      return;
+    }
+    if (path.startsWith('tpl:')) {
+      _imageAspectRatio = kHomePostPortraitAspectRatio;
+      return;
+    }
+    if (path.startsWith('http://') || path.startsWith('https://')) {
+      _imageAspectRatio = 1;
+      return;
+    }
+    _imageAspectRatio = imageAspectRatioFromFile(File(path)) ?? 1;
+  }
+
+  void _onImageAspectRatio(double ratio) {
+    if (!mounted || !ratio.isFinite || ratio <= 0) return;
+    if ((_imageAspectRatio - ratio).abs() <= 0.001) return;
+    setState(() => _imageAspectRatio = ratio);
+  }
+
+  Widget _postImage(String clubName) {
+    final safeRatio = _imageAspectRatio.isFinite && _imageAspectRatio > 0
+        ? _imageAspectRatio
+        : 1.0;
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final width = constraints.maxWidth;
+        final height = homePostMediaHeight(
+          MediaQuery.sizeOf(context).width,
+          aspectRatio: safeRatio,
+        );
+        return SizedBox(
+          key: ValueKey('post-detail-photo-${widget.post.id}'),
+          width: width,
+          height: height,
+          child: buildPostBanner(
+            imagePath: widget.post.imagePath,
+            fallbackColor: widget.clubColor,
+            fallbackLetter: clubName.isEmpty ? '?' : clubName[0],
+            height: height,
+            rendition: MediaRendition.screen,
+            onAspectRatio: _onImageAspectRatio,
+          ),
+        );
+      },
+    );
+  }
 
   void _confirmDelete() {
     showDialog<bool>(
@@ -239,14 +313,7 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
                   ),
 
                   // ── Banner image ──
-                  if (hasImage)
-                    buildPostBanner(
-                      imagePath: widget.post.imagePath,
-                      fallbackColor: widget.clubColor,
-                      fallbackLetter: club.name[0],
-                      height: 220,
-                      rendition: MediaRendition.screen,
-                    ),
+                  if (hasImage) _postImage(club.name),
 
                   // ── Like count ──
                   Container(

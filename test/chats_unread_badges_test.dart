@@ -133,6 +133,7 @@ void main() {
 
     await selectTab('clubs');
     expect(clubBadge, findsOneWidget);
+    expect(find.textContaining('A new club announcement'), findsOneWidget);
 
     await tester.tap(
       find.byKey(

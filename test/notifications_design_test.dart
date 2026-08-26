@@ -23,6 +23,7 @@ import 'package:flutter_application_1/services/user_state.dart';
 import 'package:flutter_application_1/services/view_tracker.dart';
 import 'package:flutter_application_1/widgets/clubup_design.dart';
 import 'package:flutter_application_1/widgets/home_design.dart';
+import 'package:flutter_application_1/widgets/instagram_refresh_control.dart';
 import 'package:hive/hive.dart';
 
 /// Verifies the "UniHub Notifications" design: grouped chronological feed with
@@ -661,7 +662,7 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
-  testWidgets('the Home refresh indicator sits beneath the feed switcher', (
+  testWidgets('Home refresh uses temporary pull space above the header', (
     tester,
   ) async {
     await tester.pumpWidget(
@@ -677,32 +678,40 @@ void main() {
 
     final header = find.byType(HomeFeedHeader);
     final logo = find.byKey(const ValueKey('home-header-greeting'));
-    final scope = find.byKey(const ValueKey('home-feed-scope-dropdown'));
-    final refresh = find.byKey(const ValueKey('home-refresh-indicator'));
+    final restingHeaderTop = tester.getTopLeft(header).dy;
 
     expect(header, findsOneWidget);
     expect(find.descendant(of: header, matching: logo), findsOneWidget);
-    expect(find.descendant(of: header, matching: refresh), findsOneWidget);
-    expect(
-      tester.getCenter(refresh).dx,
-      moreOrLessEquals(tester.getCenter(scope).dx, epsilon: 0.1),
-    );
-    expect(
-      tester.getTopLeft(refresh).dy,
-      greaterThan(tester.getRect(scope).bottom),
-    );
-    expect(tester.widget<AnimatedOpacity>(refresh).opacity, 0);
 
     final gesture = await tester.startGesture(
       tester.getCenter(find.byType(CustomScrollView)),
     );
-    await gesture.moveBy(const Offset(0, 100));
+    await gesture.moveBy(const Offset(0, 150));
     await tester.pump();
 
-    expect(tester.widget<AnimatedOpacity>(refresh).opacity, 1);
+    final refresh = find.byKey(const ValueKey('home-refresh-indicator'));
+    expect(refresh, findsOneWidget);
+    expect(find.descendant(of: header, matching: refresh), findsNothing);
+    expect(
+      tester.getRect(refresh).bottom,
+      lessThanOrEqualTo(tester.getRect(header).top + 0.1),
+    );
+    expect(
+      tester.widget<InstagramRefreshSpinner>(refresh).progress,
+      greaterThan(0),
+    );
+    expect(tester.widget<InstagramRefreshSpinner>(refresh).spinning, isTrue);
 
     await gesture.up();
-    await tester.pump(const Duration(milliseconds: 900));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 300));
+    expect(tester.widget<InstagramRefreshSpinner>(refresh).spinning, isTrue);
+
+    await tester.pump(const Duration(milliseconds: 1200));
+    expect(
+      tester.getTopLeft(header).dy,
+      moreOrLessEquals(restingHeaderTop, epsilon: 0.1),
+    );
     expect(tester.takeException(), isNull);
   });
 

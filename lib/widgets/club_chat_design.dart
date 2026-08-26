@@ -20,9 +20,11 @@ import 'clubup_design.dart';
 ///   `146:298` / `146:428`.
 ///
 /// The palette is [ChatsColors] unchanged — sampling the club frames turns up
-/// exactly the same ramp as the rest of CHATS, accent-text lift included. Only
-/// a student session draws these: `ClubCommunityScreen` is shared with the club
-/// admin, whose frames have not been reviewed.
+/// exactly the same ramp as the rest of CHATS, accent-text lift included.
+///
+/// Since the `CLUB CHATS` pass (section label `543:32`, the widgets at the end
+/// of this file) the **club side** draws these too. Only the ClubUp platform
+/// moderator still gets the previous chrome: no frame has been drawn for it.
 
 /// The three destinations inside a club room. Mirrors `ClubCommunityTab`, kept
 /// separate so this file has no dependency on the screen.
@@ -408,6 +410,7 @@ class ClubNoticeCard extends StatelessWidget {
   final String whenLabel;
   final String body;
   final String? title;
+  final Widget? attachment;
   final bool pinned;
   final Map<String, int> reactions;
   final Set<String> myReactions;
@@ -425,6 +428,7 @@ class ClubNoticeCard extends StatelessWidget {
     required this.body,
     this.roleLabel,
     this.title,
+    this.attachment,
     this.pinned = false,
     this.reactions = const {},
     this.myReactions = const {},
@@ -521,15 +525,17 @@ class ClubNoticeCard extends StatelessWidget {
                   ),
                   const SizedBox(height: 4),
                 ],
-                Text(
-                  body,
-                  style: figtree(
-                    size: 14,
-                    weight: FontWeight.w400,
-                    color: ChatsColors.text,
-                    height: 1.5,
+                if (body.trim().isNotEmpty)
+                  Text(
+                    body,
+                    style: figtree(
+                      size: 14,
+                      weight: FontWeight.w400,
+                      color: ChatsColors.text,
+                      height: 1.5,
+                    ),
                   ),
-                ),
+                ?attachment,
                 if (reactions.isNotEmpty || replyCount > 0) ...[
                   const SizedBox(height: 10),
                   Row(
@@ -1394,6 +1400,418 @@ class ClubChatsSkeleton extends StatelessWidget {
           ),
         ),
       ),
+    );
+  }
+}
+
+// ── CLUB CHATS (the board side) ───────────────────────────────────────────────
+//
+// Section label `543:32`. The same room, read by the club rather than by a
+// student, so the Board / Chats / Direct chrome above is reused as it stands.
+// Two things are only on these frames:
+//
+// * `admin-dm-list` `335:6` / `335:127` — the Direct lane as an inbox. Its
+//   header drops the club identity for a plain "Messages" title and gains a
+//   search field, because the board side sees every student conversation
+//   where a member sees exactly one.
+// * `admin-chats-list` `331:136` / `331:235` — the Board lane with a real
+//   composer ("Write an announcement…") where the student frame draws only the
+//   locked strip.
+//
+// `admin-board-chat` `331:10` / `331:73` (the Chats lane) and
+// `admin-direct-messages` `335:255` / `331:438` (a private thread) are the
+// student frames with club content in them, and draw through the existing
+// widgets unchanged.
+//
+// Palette is still [ChatsColors]: the Board and Chats frames sample to exactly
+// the CHATS ramp. `admin-dm-list` and `admin-direct-messages` drift to a
+// darker `#0A0A0A` page over `#1C1C1E` surfaces, which would put two different
+// blacks inside one room — the majority wins, as it did for the inbox pair in
+// [ChatsColors].
+
+/// `chat-header` `335:21` — the Direct lane's own bar: a chevron back to the
+/// lane you came from, "Messages" in ExtraBold 20, and the same accent lane
+/// pill as [ClubRoomHeader].
+class ClubDirectInboxHeader extends StatelessWidget {
+  final String title;
+  final GlobalKey laneAnchorKey;
+  final VoidCallback onLaneTap;
+  final VoidCallback? onBack;
+  final int laneBadge;
+
+  const ClubDirectInboxHeader({
+    super.key,
+    required this.title,
+    required this.laneAnchorKey,
+    required this.onLaneTap,
+    this.onBack,
+    this.laneBadge = 0,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: EdgeInsets.only(top: MediaQuery.viewPaddingOf(context).top),
+      color: ChatsColors.background,
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(16, 8, 16, 12),
+        child: SizedBox(
+          height: 32,
+          child: Row(
+            children: [
+              if (onBack != null) ...[
+                Semantics(
+                  button: true,
+                  label: MaterialLocalizations.of(context).backButtonTooltip,
+                  child: GestureDetector(
+                    key: const ValueKey('club-direct-inbox-back'),
+                    behavior: HitTestBehavior.opaque,
+                    onTap: onBack,
+                    child: SizedBox(
+                      width: 24,
+                      height: 32,
+                      child: Icon(
+                        Icons.chevron_left_rounded,
+                        size: 24,
+                        color: ChatsColors.text,
+                      ),
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 12),
+              ],
+              Expanded(
+                child: Text(
+                  title,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: figtree(
+                    size: 20,
+                    weight: FontWeight.w800,
+                    color: ChatsColors.text,
+                    letterSpacing: -0.3,
+                  ),
+                ),
+              ),
+              const SizedBox(width: 8),
+              ClubLanePill(
+                anchorKey: laneAnchorKey,
+                lane: ClubRoomLane.direct,
+                onTap: onLaneTap,
+                badge: laneBadge,
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// `search-container` `335:35` — a 38pt filled pill. The frame paints it
+/// `#E4E4E7` at half alpha; [ChatsColors.fill] is the token for every other
+/// search box in the area and lands within a shade of it.
+class ClubDirectSearchField extends StatelessWidget {
+  final TextEditingController controller;
+  final String hint;
+  final ValueChanged<String>? onChanged;
+
+  const ClubDirectSearchField({
+    super.key,
+    required this.controller,
+    required this.hint,
+    this.onChanged,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 12, 16, 4),
+      child: Container(
+        height: 38,
+        padding: const EdgeInsets.symmetric(horizontal: 16),
+        decoration: BoxDecoration(
+          color: ChatsColors.fill,
+          borderRadius: BorderRadius.circular(20),
+        ),
+        child: Row(
+          children: [
+            Icon(Icons.search_rounded, size: 14, color: ChatsColors.muted),
+            const SizedBox(width: 10),
+            Expanded(
+              child: TextField(
+                key: const ValueKey('club-direct-search-field'),
+                controller: controller,
+                onChanged: onChanged,
+                textInputAction: TextInputAction.search,
+                style: figtree(
+                  size: 14,
+                  weight: FontWeight.w400,
+                  color: ChatsColors.text,
+                ),
+                decoration: InputDecoration(
+                  hintText: hint,
+                  hintStyle: figtree(
+                    size: 14,
+                    weight: FontWeight.w400,
+                    color: ChatsColors.muted,
+                  ),
+                  isDense: true,
+                  filled: false,
+                  border: InputBorder.none,
+                  enabledBorder: InputBorder.none,
+                  focusedBorder: InputBorder.none,
+                  contentPadding: EdgeInsets.zero,
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+/// `conversation-row` `335:52` — a 48pt avatar, the name over the last
+/// message, and the time. No hairline between rows on this frame, and unread
+/// is an 8pt dot beside the preview rather than a count: the board side reads
+/// the inbox row by row, not by how much is waiting in each one.
+class ClubDirectInboxRow extends StatelessWidget {
+  final Widget avatar;
+  final String name;
+  final String whenLabel;
+  final String preview;
+  final bool unread;
+  final VoidCallback? onTap;
+
+  const ClubDirectInboxRow({
+    super.key,
+    required this.avatar,
+    required this.name,
+    required this.whenLabel,
+    required this.preview,
+    required this.unread,
+    this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    // No wash behind an unread row here: 335:63 marks it with the dot and the
+    // accent timestamp only, where the Friends inbox tints the whole row.
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: onTap,
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+          child: Row(
+            children: [
+              SizedBox(width: 48, height: 48, child: avatar),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        Expanded(
+                          child: Text(
+                            name,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: figtree(
+                              size: 15,
+                              weight: FontWeight.w800,
+                              color: ChatsColors.text,
+                              letterSpacing: -0.2,
+                            ),
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        Text(
+                          whenLabel,
+                          style: figtree(
+                            size: 12,
+                            weight: FontWeight.w600,
+                            color: unread
+                                ? ChatsColors.accentText
+                                : ChatsColors.muted,
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 4),
+                    Row(
+                      children: [
+                        Expanded(
+                          child: Text(
+                            preview,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: figtree(
+                              size: 13,
+                              weight: unread
+                                  ? FontWeight.w500
+                                  : FontWeight.w400,
+                              color: unread
+                                  ? ChatsColors.text
+                                  : ChatsColors.muted,
+                              height: 1.4,
+                            ),
+                          ),
+                        ),
+                        if (unread) ...[
+                          const SizedBox(width: 8),
+                          Container(
+                            width: 8,
+                            height: 8,
+                            decoration: BoxDecoration(
+                              color: ChatsColors.accent,
+                              shape: BoxShape.circle,
+                            ),
+                          ),
+                        ],
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// A poll inside a chat bubble. The handoff's club frames never draw one —
+/// `club-attachment-sheet` 146:298 offers Poll, but no frame shows the result —
+/// so this stays inside the bubble it was sent in and borrows the bubble's own
+/// colours rather than inventing a card. Without it a poll would render as an
+/// empty bubble, which is what the design lane did before CLUB CHATS put the
+/// club account (the only account that sends polls here) on this path.
+class ClubBubblePoll extends StatelessWidget {
+  final String question;
+  final List<String> options;
+  final List<int> counts;
+  final int total;
+  final int? myChoice;
+  final String? closesLabel;
+  final bool mine;
+  final bool closed;
+  final ValueChanged<int>? onVote;
+
+  const ClubBubblePoll({
+    super.key,
+    required this.question,
+    required this.options,
+    required this.counts,
+    required this.total,
+    required this.mine,
+    required this.closed,
+    this.myChoice,
+    this.closesLabel,
+    this.onVote,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final onBubble = mine ? ChatsColors.onAccent : ChatsColors.text;
+    final track = onBubble.withValues(alpha: mine ? 0.18 : 0.06);
+    final fill = mine
+        ? ChatsColors.onAccent.withValues(alpha: 0.34)
+        : ChatsColors.accent.withValues(alpha: 0.16);
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          question,
+          style: figtree(
+            size: 14,
+            weight: FontWeight.w700,
+            color: onBubble,
+            height: 1.35,
+          ),
+        ),
+        const SizedBox(height: 8),
+        for (var i = 0; i < options.length; i++) ...[
+          if (i > 0) const SizedBox(height: 6),
+          GestureDetector(
+            key: ValueKey('club-bubble-poll-option-$i'),
+            behavior: HitTestBehavior.opaque,
+            onTap: closed || onVote == null ? null : () => onVote!(i),
+            child: ClipRRect(
+              borderRadius: BorderRadius.circular(10),
+              child: Stack(
+                children: [
+                  Container(height: 34, color: track),
+                  Positioned.fill(
+                    child: FractionallySizedBox(
+                      alignment: Alignment.centerLeft,
+                      widthFactor: total == 0
+                          ? 0
+                          : (counts.length > i ? counts[i] : 0) / total,
+                      child: ColoredBox(color: fill),
+                    ),
+                  ),
+                  SizedBox(
+                    height: 34,
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 10),
+                      child: Row(
+                        children: [
+                          if (myChoice == i) ...[
+                            Icon(
+                              Icons.check_circle_rounded,
+                              size: 13,
+                              color: onBubble,
+                            ),
+                            const SizedBox(width: 6),
+                          ],
+                          Expanded(
+                            child: Text(
+                              options[i],
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: figtree(
+                                size: 13,
+                                weight: myChoice == i
+                                    ? FontWeight.w700
+                                    : FontWeight.w500,
+                                color: onBubble,
+                              ),
+                            ),
+                          ),
+                          const SizedBox(width: 8),
+                          Text(
+                            '${counts.length > i ? counts[i] : 0}',
+                            style: figtree(
+                              size: 12,
+                              weight: FontWeight.w600,
+                              color: onBubble.withValues(alpha: 0.72),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ],
+        if (closesLabel != null && closesLabel!.isNotEmpty) ...[
+          const SizedBox(height: 6),
+          Text(
+            closesLabel!,
+            style: figtree(
+              size: 11,
+              weight: FontWeight.w500,
+              color: onBubble.withValues(alpha: 0.72),
+            ),
+          ),
+        ],
+      ],
     );
   }
 }
