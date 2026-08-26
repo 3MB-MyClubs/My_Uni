@@ -82,12 +82,13 @@ void main() {
 
     await pumpThread(tester, threadId);
 
-    // Canvas: flat body under the wallpaper + bloom layer.
+    // `chat-dm` 102:7 is a flat page: the campus wallpaper and its bloom layer
+    // are gone from the student thread.
     expect(
       find.byKey(const ValueKey('chat-conversation-backdrop')),
-      findsOneWidget,
+      findsNothing,
     );
-    expect(find.byType(ChatCampusBackdrop), findsOneWidget);
+    expect(find.byType(ChatCampusBackdrop), findsNothing);
 
     // Intro: the peer's name heads it, over a single quiet context line.
     expect(
@@ -99,13 +100,15 @@ void main() {
     expect(find.text(S.chatNoMessagesYet), findsOneWidget);
     expect(find.byKey(const ValueKey('chat-starter-chips')), findsNothing);
 
-    // Composer: attach, camera, and a disabled send affordance until typing.
+    // `composer-row` 102:55 — paperclip, pill, send. The camera that used to
+    // be docked inside the pill is not on the frame; the attach sheet still
+    // offers it.
     expect(find.byKey(const ValueKey('chat-attach-button')), findsOneWidget);
-    expect(find.byKey(const ValueKey('chat-camera-button')), findsOneWidget);
+    expect(find.byKey(const ValueKey('chat-camera-button')), findsNothing);
     expect(find.byKey(const ValueKey('chat-send-button')), findsOneWidget);
     expect(find.byType(TextField), findsOneWidget);
     final messageField = tester.widget<TextField>(find.byType(TextField));
-    expect(messageField.maxLines, 1);
+    expect(messageField.maxLines, 4);
     expect(messageField.textInputAction, TextInputAction.send);
     expect(find.byIcon(Icons.mic_none_rounded), findsNothing);
     expect(find.byIcon(Icons.send_rounded), findsOneWidget);
@@ -174,9 +177,10 @@ void main() {
 
     await pumpThread(tester, threadId);
 
-    // Header: stacked member avatars plus "N people".
+    // Header: stacked member avatars plus the frame's "N friends" subtitle
+    // (`102:144`), where the old header said "N people".
     expect(find.byKey(const ValueKey('group-chat-header')), findsOneWidget);
-    expect(find.text(S.chatPeopleCount(3)), findsOneWidget);
+    expect(find.text(S.chatsFriendsCount(3)), findsOneWidget);
 
     // Intro: stacked avatars over the "N people · created by you" line.
     expect(
@@ -221,19 +225,20 @@ void main() {
   testWidgets('thread header keeps both kinds on the same metrics', (
     tester,
   ) async {
-    // Direct message: grounded back button, no drill-in chevron.
+    // `header-top` 102:18 / 102:134 — a bare 24pt chevron in a 62pt bar, no
+    // circular tinted button and no drill-in chevron on either kind.
     chatStore.ensureDirectThread(myId, peer.$1);
     await pumpThread(tester, ChatStore.dmThreadId(myId, peer.$1));
 
     final back = find.byKey(const ValueKey('chat-thread-back'));
     expect(back, findsOneWidget);
-    expect(tester.getSize(back), const Size(44, 44));
+    expect(tester.getSize(back), const Size(24, 62));
+    expect(find.byIcon(Icons.chevron_left_rounded), findsOneWidget);
     expect(find.byIcon(Icons.chevron_right_rounded), findsNothing);
     final dmHeaderHeight = tester.getSize(find.byType(UserAvatar).first);
     expect(dmHeaderHeight.height, 38);
 
-    // Group: same back button and avatar box, plus the drill-in chevron. The
-    // stacked avatars get a reserved slot so they cannot collide with either.
+    // Group: identical bar, and the stack keeps the frame's 48x38 slot.
     final threadId = chatStore.createGroupThread(
       creatorId: myId,
       recipientIds: [peer.$1, second.$1],
@@ -242,21 +247,11 @@ void main() {
 
     expect(
       tester.getSize(find.byKey(const ValueKey('chat-thread-back'))),
-      const Size(44, 44),
+      const Size(24, 62),
     );
-    expect(find.byIcon(Icons.chevron_right_rounded), findsOneWidget);
+    expect(find.byIcon(Icons.chevron_right_rounded), findsNothing);
     final stack = tester.getSize(find.byType(GroupAvatarStack).first);
     expect(stack.height, 38);
-    // Reserved slot is wider than the stack's own box, absorbing its bleed.
-    final slot = tester.getSize(
-      find
-          .ancestor(
-            of: find.byType(GroupAvatarStack).first,
-            matching: find.byType(Stack),
-          )
-          .first,
-    );
-    expect(slot.width, greaterThan(stack.width));
 
     await tester.runAsync(chatStore.saveAll);
     expect(tester.takeException(), isNull);

@@ -2,25 +2,30 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import '../services/app_colors.dart';
 import '../services/app_bootstrap.dart';
 import '../services/auth_service.dart';
 import '../services/app_strings.dart';
 import '../services/locale_service.dart';
-import '../services/theme_service.dart';
 import '../l10n/app_localizations.dart';
-import '../widgets/language_toggle.dart';
 import '../widgets/app_motion.dart';
+import '../widgets/clubup_design.dart';
+import '../widgets/landing_design.dart';
 import 'club_admin_auth_screen.dart';
 import 'forgot_password_screen.dart';
 import 'platform_admin_auth_screen.dart';
 
-/// Combined brand + sign-in entry screen (recreated from the
-/// "Login Screen v2" design handoff). It is the app's root: a centered crest
-/// under a radial accent glow, the ClubUp wordmark, neutral auth fields with a
-/// fixed "@ku.edu.tr" suffix, and a bottom action stack (gradient "Log in",
-/// outlined "Sign up", quiet club-admin link). "Sign up" hands off to the
-/// multi-step sign-up flow.
+/// `login-screen-light` / `login-screen` (Figma `495:5` / `485:5`) — the FİRST
+/// LANDİNG PAGE section, and the app's root.
+///
+/// Stripped to the frame: the KU crest, the "KOÇ UNIVERSITY" line and the
+/// "Sign in to continue" subtitle are gone, the field labels and leading icons
+/// with them. What is left is the wordmark, two placeholder-only inputs, the
+/// gradient Log In, Forgot password?, an OR rule, Sign Up, and the quiet
+/// "Club Admin Portal" footer — which still hides the five-tap platform-admin
+/// entry point.
+///
+/// The auth itself is untouched: students type the local part of a campus
+/// address and a 6-digit PIN, and "@ku.edu.tr" stays pinned to the field.
 class LoginScreen extends StatefulWidget {
   final VoidCallback onLogin;
   final VoidCallback onSignUp;
@@ -59,10 +64,6 @@ class _LoginScreenState extends State<LoginScreen>
   Timer? _clubAdminTapTimer;
 
   static const _clubAdminTapWindow = Duration(milliseconds: 700);
-
-  bool get _canSubmit =>
-      _emailController.text.trim().isNotEmpty &&
-      _passwordController.text.isNotEmpty;
 
   /// The campus-email field holds only the local part; "@ku.edu.tr" is a fixed
   /// suffix, so strip any domain off an incoming value (e.g. a pre-filled email
@@ -253,378 +254,246 @@ class _LoginScreenState extends State<LoginScreen>
 
   @override
   Widget build(BuildContext context) {
-    final isDark = themeService.isDark;
-    return Scaffold(
-      backgroundColor: AppColors.background,
-      body: Container(
-        // Radial accent glow bleeding down from the top edge (design's
-        // "radial-gradient(120% 60% at 50% -10%, accentDeep, transparent)").
-        decoration: BoxDecoration(
-          gradient: RadialGradient(
-            center: const Alignment(0, -1.25),
-            radius: 1.3,
-            colors: [
-              AppColors.darkRed.withValues(alpha: isDark ? 0.42 : 0.18),
-              AppColors.darkRed.withValues(alpha: 0),
-            ],
-            stops: const [0, 0.62],
-          ),
-        ),
-        child: SafeArea(
-          child: LayoutBuilder(
-            builder: (context, constraints) => SingleChildScrollView(
-              physics: const BouncingScrollPhysics(),
-              child: ConstrainedBox(
-                constraints: BoxConstraints(minHeight: constraints.maxHeight),
-                child: IntrinsicHeight(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.stretch,
-                    children: [
-                      Padding(
-                        padding: const EdgeInsets.fromLTRB(8, 8, 16, 0),
-                        child: Row(
-                          children: [
-                            if (widget.onBack != null)
-                              BackButton(
-                                color: AppColors.text,
-                                onPressed: widget.onBack,
-                              ),
-                            const Spacer(),
-                            LanguageToggle(onLanguageSelected: _switchLanguage),
-                          ],
-                        ),
-                      ),
+    final l10n = AppLocalizations.of(context)!;
 
-                      // ── Brand header: crest + university + wordmark ───────
-                      _languageTransition(
-                        child: _MotionEntrance(
-                          animation: _brandEntrance,
-                          begin: const Offset(0, -0.035),
-                          child: Padding(
-                            padding: EdgeInsets.fromLTRB(24, 18, 24, 0),
-                            child: Column(
-                              children: [
-                                const _Crest(size: 60),
-                                const SizedBox(height: 18),
-                                Text(
-                                  AppLocalizations.of(
-                                    context,
-                                  )!.kocUniversityWordmark,
-                                  style: TextStyle(
-                                    fontSize: 10.5,
-                                    letterSpacing: 2,
-                                    fontWeight: FontWeight.w600,
-                                    fontFamily: 'Menlo',
-                                    color: AppColors.secondaryText,
-                                  ),
+    return Scaffold(
+      backgroundColor: LandingColors.background,
+      body: SafeArea(
+        child: LayoutBuilder(
+          builder: (context, constraints) => SingleChildScrollView(
+            physics: const BouncingScrollPhysics(),
+            child: ConstrainedBox(
+              constraints: BoxConstraints(minHeight: constraints.maxHeight),
+              child: IntrinsicHeight(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    // ── language-switcher ────────────────────────────────
+                    Padding(
+                      padding: const EdgeInsets.fromLTRB(8, 2, 24, 0),
+                      child: Row(
+                        children: [
+                          if (widget.onBack != null)
+                            BackButton(
+                              color: LandingColors.text,
+                              onPressed: widget.onBack,
+                            ),
+                          const Spacer(),
+                          LandingLanguageToggle(
+                            languageCode: localeService.languageCode,
+                            onSelected: _switchLanguage,
+                          ),
+                        ],
+                      ),
+                    ),
+
+                    // `spacer-top` and the spacer under `btn-signup` are the
+                    // same height in the frame: the block is centred, and the
+                    // footer is pinned to the bottom.
+                    const Spacer(),
+
+                    Padding(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: kLandingPagePadding,
+                      ),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                        children: [
+                          // ── brand-header ─────────────────────────────────
+                          _languageTransition(
+                            child: _MotionEntrance(
+                              animation: _brandEntrance,
+                              begin: const Offset(0, -0.035),
+                              child: Text(
+                                'ClubUp',
+                                textAlign: TextAlign.center,
+                                style: figtree(
+                                  size: 32,
+                                  weight: FontWeight.w800,
+                                  color: LandingColors.accent,
+                                  letterSpacing: -0.5,
                                 ),
-                                const SizedBox(height: 6),
-                                Text(
-                                  'ClubUp',
-                                  style: TextStyle(
-                                    fontSize: 30,
-                                    fontWeight: FontWeight.w800,
-                                    letterSpacing: -1,
-                                    color: AppColors.text,
-                                  ),
-                                ),
-                                const SizedBox(height: 10),
-                                Text(
-                                  AppLocalizations.of(
-                                    context,
-                                  )!.signInToContinueSubtitle,
-                                  style: TextStyle(
-                                    fontSize: 14,
-                                    color: AppColors.text.withValues(
-                                      alpha: 0.76,
-                                    ),
-                                  ),
-                                ),
-                              ],
+                              ),
                             ),
                           ),
-                        ),
-                      ),
+                          const SizedBox(height: 24),
 
-                      // ── Form ─────────────────────────────────────────────
-                      _languageTransition(
-                        child: Padding(
-                          padding: const EdgeInsets.fromLTRB(22, 30, 22, 0),
-                          child: ShakeOnChange(
-                            trigger: _errorShakeTrigger,
+                          // ── fields + cta-block ───────────────────────────
+                          _languageTransition(
                             child: _MotionEntrance(
                               animation: _formEntrance,
                               begin: const Offset(0, 0.045),
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  _AuthField(
-                                    label: AppLocalizations.of(
-                                      context,
-                                    )!.campusEmailLabel,
-                                    controller: _emailController,
-                                    hint: AppLocalizations.of(
-                                      context,
-                                    )!.usernameHint,
-                                    icon: Icons.mail_outline_rounded,
-                                    keyboardType: TextInputType.text,
-                                    suffixText: '@ku.edu.tr',
-                                    inputFormatters: [_NoDomainFormatter()],
-                                    onChanged: (_) =>
-                                        setState(() => _error = null),
-                                    onSubmitted: (_) => _handleLogin(),
-                                  ),
-                                  const SizedBox(height: 14),
-                                  _AuthField(
-                                    label: AppLocalizations.of(
-                                      context,
-                                    )!.passwordFieldLabel,
-                                    controller: _passwordController,
-                                    hint: AppLocalizations.of(
-                                      context,
-                                    )!.digitPinHint(6),
-                                    icon: Icons.lock_outline_rounded,
-                                    obscureText: _obscurePassword,
-                                    keyboardType: TextInputType.number,
-                                    inputFormatters: [
-                                      FilteringTextInputFormatter.digitsOnly,
-                                      LengthLimitingTextInputFormatter(6),
-                                    ],
-                                    onChanged: (_) =>
-                                        setState(() => _error = null),
-                                    onSubmitted: (_) => _handleLogin(),
-                                    trailing: GestureDetector(
-                                      onTap: () => setState(
-                                        () => _obscurePassword =
-                                            !_obscurePassword,
-                                      ),
-                                      child: Icon(
-                                        _obscurePassword
-                                            ? Icons.visibility_outlined
-                                            : Icons.visibility_off_outlined,
-                                        size: 19,
-                                        color: AppColors.secondaryText,
-                                      ),
+                              child: ShakeOnChange(
+                                trigger: _errorShakeTrigger,
+                                child: Column(
+                                  crossAxisAlignment:
+                                      CrossAxisAlignment.stretch,
+                                  children: [
+                                    LandingField(
+                                      controller: _emailController,
+                                      hint: l10n.campusEmailLabel,
+                                      semanticLabel: l10n.campusEmailLabel,
+                                      suffixText: '@ku.edu.tr',
+                                      keyboardType: TextInputType.text,
+                                      inputFormatters: [_NoDomainFormatter()],
+                                      onChanged: (_) =>
+                                          setState(() => _error = null),
+                                      onSubmitted: (_) => _handleLogin(),
                                     ),
-                                  ),
-                                  const SizedBox(height: 10),
-                                  Align(
-                                    alignment: Alignment.centerRight,
-                                    child: TextButton(
-                                      onPressed: _openForgotPassword,
-                                      style: TextButton.styleFrom(
-                                        padding: const EdgeInsets.symmetric(
-                                          horizontal: 4,
-                                          vertical: 4,
+                                    const SizedBox(height: 16),
+                                    LandingField(
+                                      controller: _passwordController,
+                                      hint: l10n.passwordFieldLabel,
+                                      obscureText: _obscurePassword,
+                                      keyboardType: TextInputType.number,
+                                      inputFormatters: [
+                                        FilteringTextInputFormatter.digitsOnly,
+                                        LengthLimitingTextInputFormatter(6),
+                                      ],
+                                      onChanged: (_) =>
+                                          setState(() => _error = null),
+                                      onSubmitted: (_) => _handleLogin(),
+                                      // Not in the frame: a 6-digit PIN typed
+                                      // blind is easy to fat-finger, and there
+                                      // is no other way to check it.
+                                      trailing: GestureDetector(
+                                        onTap: () => setState(
+                                          () => _obscurePassword =
+                                              !_obscurePassword,
                                         ),
-                                        minimumSize: const Size(0, 0),
-                                        tapTargetSize:
-                                            MaterialTapTargetSize.shrinkWrap,
-                                      ),
-                                      child: Text(
-                                        AppLocalizations.of(
-                                          context,
-                                        )!.forgotPassword,
-                                        style: TextStyle(
-                                          fontSize: 13,
-                                          fontWeight: FontWeight.w700,
-                                          color: AppColors.primaryRed,
+                                        child: Icon(
+                                          _obscurePassword
+                                              ? Icons.visibility_outlined
+                                              : Icons.visibility_off_outlined,
+                                          size: 18,
+                                          color: LandingColors.placeholder,
                                         ),
                                       ),
                                     ),
-                                  ),
 
-                                  // Inline error (kept from the previous screen —
-                                  // the design has no failure state of its own).
-                                  if (_error != null) ...[
-                                    const SizedBox(height: 2),
-                                    Row(
-                                      children: [
-                                        Icon(
-                                          Icons.error_outline_rounded,
-                                          size: 15,
-                                          color: AppColors.primaryRed,
-                                        ),
-                                        const SizedBox(width: 6),
-                                        Expanded(
-                                          child: Text(
-                                            _error!,
-                                            style: TextStyle(
-                                              fontSize: 12.5,
-                                              color: AppColors.primaryRed,
-                                              fontWeight: FontWeight.w600,
+                                    // The frame has no failure state; the
+                                    // inline error is kept from the screen this
+                                    // replaces.
+                                    if (_error != null) ...[
+                                      const SizedBox(height: 10),
+                                      Row(
+                                        children: [
+                                          Icon(
+                                            Icons.error_outline_rounded,
+                                            size: 15,
+                                            color: LandingColors.accentText,
+                                          ),
+                                          const SizedBox(width: 6),
+                                          Expanded(
+                                            child: Text(
+                                              _error!,
+                                              style: figtree(
+                                                size: 12.5,
+                                                weight: FontWeight.w600,
+                                                color: LandingColors.accentText,
+                                              ),
                                             ),
                                           ),
-                                        ),
-                                      ],
-                                    ),
+                                        ],
+                                      ),
+                                    ],
                                   ],
+                                ),
+                              ),
+                            ),
+                          ),
+                          const SizedBox(height: 24),
+
+                          _languageTransition(
+                            child: _MotionEntrance(
+                              animation: _actionsEntrance,
+                              begin: const Offset(0, 0.06),
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.stretch,
+                                children: [
+                                  // The frame draws the CTA on its gradient in
+                                  // every state, so it is never greyed out —
+                                  // an empty submit falls through to the same
+                                  // inline error the old screen showed.
+                                  LandingPrimaryButton(
+                                    label: l10n.logIn,
+                                    enabled: !_isSubmitting,
+                                    submitting: _isSubmitting,
+                                    onTap: _handleLogin,
+                                  ),
+                                  const SizedBox(height: 14),
+                                  GestureDetector(
+                                    onTap: _openForgotPassword,
+                                    behavior: HitTestBehavior.opaque,
+                                    child: Text(
+                                      l10n.forgotPassword,
+                                      textAlign: TextAlign.center,
+                                      style: figtree(
+                                        size: 14,
+                                        weight: FontWeight.w600,
+                                        color: LandingColors.accentText,
+                                      ),
+                                    ),
+                                  ),
+                                  const SizedBox(height: 24),
+                                  LandingOrDivider(label: S.landingOr),
+                                  const SizedBox(height: 24),
+                                  LandingSecondaryButton(
+                                    label: l10n.signUp,
+                                    onTap: widget.onSignUp,
+                                  ),
                                 ],
                               ),
                             ),
                           ),
-                        ),
+                        ],
                       ),
+                    ),
 
-                      const Spacer(),
+                    const Spacer(),
 
-                      // ── Bottom action area ───────────────────────────────
-                      _languageTransition(
-                        child: _MotionEntrance(
-                          animation: _actionsEntrance,
-                          begin: const Offset(0, 0.06),
-                          child: Padding(
-                            padding: const EdgeInsets.fromLTRB(22, 24, 22, 20),
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.stretch,
-                              children: [
-                                _SubmitButton(
-                                  enabled: _canSubmit,
-                                  submitting: _isSubmitting,
-                                  onTap: _handleLogin,
-                                ),
-                                Container(
-                                  height: 1,
-                                  color: AppColors.divider,
-                                  margin: const EdgeInsets.only(
-                                    top: 22,
-                                    bottom: 16,
+                    // ── footer ───────────────────────────────────────────
+                    // Five quick taps still reveal the platform-admin entry;
+                    // one tap opens the club portal.
+                    Padding(
+                      padding: const EdgeInsets.fromLTRB(
+                        kLandingPagePadding,
+                        0,
+                        kLandingPagePadding,
+                        12,
+                      ),
+                      child: Column(
+                        children: [
+                          GestureDetector(
+                            key: const ValueKey<String>(
+                              'club-admin-sign-in-trigger',
+                            ),
+                            behavior: HitTestBehavior.opaque,
+                            onTap: _handleClubAdminEntryTap,
+                            child: Text(
+                              S.landingClubAdminPortal,
+                              textAlign: TextAlign.center,
+                              style:
+                                  figtree(
+                                    size: 11,
+                                    weight: FontWeight.w500,
+                                    color: LandingColors.footerLink,
+                                  ).copyWith(
+                                    decoration: TextDecoration.underline,
+                                    decorationColor: LandingColors.footerLink,
                                   ),
-                                ),
-                                Text(
-                                  AppLocalizations.of(
-                                    context,
-                                  )!.newToKocUniversity,
-                                  textAlign: TextAlign.center,
-                                  style: TextStyle(
-                                    fontSize: 13.5,
-                                    color: AppColors.text.withValues(
-                                      alpha: 0.76,
-                                    ),
-                                  ),
-                                ),
-                                const SizedBox(height: 10),
-                                OutlinedButton(
-                                  onPressed: widget.onSignUp,
-                                  style: OutlinedButton.styleFrom(
-                                    minimumSize: const Size.fromHeight(50),
-                                    side: BorderSide(
-                                      color: AppColors.divider,
-                                      width: 1.5,
-                                    ),
-                                    shape: const RoundedRectangleBorder(
-                                      borderRadius: BorderRadius.all(
-                                        Radius.circular(15),
-                                      ),
-                                    ),
-                                  ),
-                                  child: Row(
-                                    mainAxisSize: MainAxisSize.min,
-                                    children: [
-                                      Text(
-                                        AppLocalizations.of(context)!.signUp,
-                                        style: TextStyle(
-                                          fontSize: 15,
-                                          fontWeight: FontWeight.w800,
-                                          letterSpacing: -0.2,
-                                          color: AppColors.text,
-                                        ),
-                                      ),
-                                      const SizedBox(width: 7),
-                                      Icon(
-                                        Icons.arrow_forward_rounded,
-                                        size: 17,
-                                        color: AppColors.text,
-                                      ),
-                                    ],
-                                  ),
-                                ),
-                                const SizedBox(height: 14),
-                                Wrap(
-                                  alignment: WrapAlignment.center,
-                                  children: [
-                                    Text(
-                                      '${AppLocalizations.of(context)!.runningAClub} ',
-                                      style: TextStyle(
-                                        fontSize: 12.5,
-                                        color: AppColors.secondaryText,
-                                      ),
-                                    ),
-                                    GestureDetector(
-                                      key: const ValueKey<String>(
-                                        'club-admin-sign-in-trigger',
-                                      ),
-                                      behavior: HitTestBehavior.opaque,
-                                      onTap: _handleClubAdminEntryTap,
-                                      child: Text(
-                                        AppLocalizations.of(
-                                          context,
-                                        )!.clubAdminSignIn,
-                                        style: TextStyle(
-                                          fontSize: 12.5,
-                                          fontWeight: FontWeight.w700,
-                                          color: AppColors.text.withValues(
-                                            alpha: 0.76,
-                                          ),
-                                          decoration: TextDecoration.underline,
-                                          decorationColor: AppColors.text
-                                              .withValues(alpha: 0.4),
-                                        ),
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                              ],
                             ),
                           ),
-                        ),
+                          const SizedBox(height: 16),
+                          Container(height: 1, color: LandingColors.border),
+                        ],
                       ),
-                    ],
-                  ),
+                    ),
+                  ],
                 ),
               ),
             ),
           ),
-        ),
-      ),
-    );
-  }
-}
-
-// ─── Gradient crest with "KU" initials (design's Crest component) ──────────────
-class _Crest extends StatelessWidget {
-  final double size;
-  const _Crest({required this.size});
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      width: size,
-      height: size,
-      decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(size * 0.3),
-        gradient: LinearGradient(
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-          colors: [AppColors.primaryRed, AppColors.darkRed],
-        ),
-        border: Border.all(color: Colors.white.withValues(alpha: 0.18)),
-        boxShadow: [
-          BoxShadow(
-            color: AppColors.primaryRed.withValues(alpha: 0.4),
-            blurRadius: 22,
-            offset: const Offset(0, 8),
-          ),
-        ],
-      ),
-      alignment: Alignment.center,
-      child: Text(
-        'KU',
-        style: TextStyle(
-          color: Colors.white,
-          fontWeight: FontWeight.w800,
-          fontSize: size * 0.36,
-          letterSpacing: -0.6,
         ),
       ),
     );
@@ -658,205 +527,6 @@ class _MotionEntrance extends StatelessWidget {
   }
 }
 
-// ─── Responsive text field (label + animated surface + leading icon) ──────────
-// Focus gently lifts and highlights the active input without shifting layout.
-class _AuthField extends StatefulWidget {
-  final String label;
-  final TextEditingController controller;
-  final String hint;
-  final IconData icon;
-  final bool obscureText;
-  final Widget? trailing;
-  final TextInputType? keyboardType;
-  final String? suffixText;
-  final List<TextInputFormatter>? inputFormatters;
-  final ValueChanged<String>? onChanged;
-  final ValueChanged<String>? onSubmitted;
-
-  const _AuthField({
-    required this.label,
-    required this.controller,
-    required this.hint,
-    required this.icon,
-    this.obscureText = false,
-    this.trailing,
-    this.keyboardType,
-    this.suffixText,
-    this.inputFormatters,
-    this.onChanged,
-    this.onSubmitted,
-  });
-
-  @override
-  State<_AuthField> createState() => _AuthFieldState();
-}
-
-class _AuthFieldState extends State<_AuthField> {
-  late final FocusNode _focusNode;
-  bool _focused = false;
-
-  @override
-  void initState() {
-    super.initState();
-    _focusNode = FocusNode()..addListener(_handleFocusChange);
-  }
-
-  void _handleFocusChange() {
-    if (mounted) setState(() => _focused = _focusNode.hasFocus);
-  }
-
-  @override
-  void dispose() {
-    _focusNode
-      ..removeListener(_handleFocusChange)
-      ..dispose();
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final label = widget.label;
-    final controller = widget.controller;
-    final hint = widget.hint;
-    final icon = widget.icon;
-    final obscureText = widget.obscureText;
-    final trailing = widget.trailing;
-    final keyboardType = widget.keyboardType;
-    final suffixText = widget.suffixText;
-    final inputFormatters = widget.inputFormatters;
-    final onChanged = widget.onChanged;
-    final onSubmitted = widget.onSubmitted;
-    final isDark = themeService.isDark;
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        DefaultTextStyle(
-          style: TextStyle(
-            fontSize: 11,
-            fontWeight: FontWeight.w700,
-            letterSpacing: 0.4,
-            color: AppColors.secondaryText,
-          ),
-          child: Text(label.toUpperCase()),
-        ),
-        const SizedBox(height: 7),
-        AnimatedScale(
-          scale: _focused ? 1.012 : 1,
-          duration: const Duration(milliseconds: 180),
-          curve: Curves.easeOutCubic,
-          child: AnimatedContainer(
-            key: ValueKey<String>('login-field-$label'),
-            duration: const Duration(milliseconds: 180),
-            curve: Curves.easeOutCubic,
-            height: 52,
-            padding: const EdgeInsets.symmetric(horizontal: 13),
-            decoration: BoxDecoration(
-              color: _focused
-                  ? AppColors.primaryRed.withValues(
-                      alpha: isDark ? 0.10 : 0.045,
-                    )
-                  : isDark
-                  ? Colors.white.withValues(alpha: 0.05)
-                  : Colors.transparent,
-              borderRadius: const BorderRadius.all(Radius.circular(14)),
-              border: Border.all(
-                color: _focused ? AppColors.primaryRed : AppColors.divider,
-                width: _focused ? 1.8 : 1.5,
-              ),
-              boxShadow: _focused
-                  ? [
-                      BoxShadow(
-                        color: AppColors.primaryRed.withValues(alpha: 0.13),
-                        blurRadius: 16,
-                        offset: const Offset(0, 5),
-                      ),
-                    ]
-                  : null,
-            ),
-            child: Row(
-              children: [
-                TweenAnimationBuilder<Color?>(
-                  tween: ColorTween(
-                    end: _focused
-                        ? AppColors.primaryRed
-                        : AppColors.secondaryText,
-                  ),
-                  duration: const Duration(milliseconds: 180),
-                  builder: (context, color, _) =>
-                      Icon(icon, size: 19, color: color),
-                ),
-                const SizedBox(width: 10),
-                Expanded(
-                  child: Theme(
-                    data: Theme.of(context).copyWith(
-                      focusColor: Colors.transparent,
-                      hoverColor: Colors.transparent,
-                      splashColor: Colors.transparent,
-                      highlightColor: Colors.transparent,
-                      textSelectionTheme: TextSelectionThemeData(
-                        cursorColor: AppColors.text,
-                        selectionColor: Colors.transparent,
-                        selectionHandleColor: Colors.transparent,
-                      ),
-                    ),
-                    child: TextField(
-                      focusNode: _focusNode,
-                      controller: controller,
-                      obscureText: obscureText,
-                      keyboardType: keyboardType,
-                      inputFormatters: inputFormatters,
-                      autocorrect: false,
-                      enableSuggestions: false,
-                      onChanged: onChanged,
-                      onSubmitted: onSubmitted,
-                      cursorColor: AppColors.text,
-                      cursorErrorColor: AppColors.text,
-                      style: TextStyle(
-                        fontSize: 15.5,
-                        color: AppColors.text,
-                        letterSpacing: -0.2,
-                      ),
-                      decoration: InputDecoration(
-                        isCollapsed: true,
-                        filled: false,
-                        fillColor: Colors.transparent,
-                        focusColor: Colors.transparent,
-                        hoverColor: Colors.transparent,
-                        border: InputBorder.none,
-                        enabledBorder: InputBorder.none,
-                        focusedBorder: InputBorder.none,
-                        disabledBorder: InputBorder.none,
-                        errorBorder: InputBorder.none,
-                        focusedErrorBorder: InputBorder.none,
-                        hintText: hint,
-                        hintStyle: TextStyle(
-                          fontSize: 15.5,
-                          color: AppColors.secondaryText,
-                          letterSpacing: -0.2,
-                        ),
-                      ),
-                    ),
-                  ),
-                ),
-                if (suffixText != null)
-                  Text(
-                    suffixText,
-                    style: TextStyle(
-                      fontSize: 15.5,
-                      color: AppColors.secondaryText,
-                      letterSpacing: -0.2,
-                    ),
-                  ),
-                if (trailing != null) ...[const SizedBox(width: 8), trailing],
-              ],
-            ),
-          ),
-        ),
-      ],
-    );
-  }
-}
-
 // ─── Email local-part formatter: drop anything from "@" onward ─────────────────
 class _NoDomainFormatter extends TextInputFormatter {
   @override
@@ -870,122 +540,6 @@ class _NoDomainFormatter extends TextInputFormatter {
     return TextEditingValue(
       text: text,
       selection: TextSelection.collapsed(offset: text.length),
-    );
-  }
-}
-
-// ─── Gradient submit button (enabled / disabled / submitting) ─────────────────
-class _SubmitButton extends StatefulWidget {
-  final bool enabled;
-  final bool submitting;
-  final VoidCallback onTap;
-
-  const _SubmitButton({
-    required this.enabled,
-    required this.submitting,
-    required this.onTap,
-  });
-
-  @override
-  State<_SubmitButton> createState() => _SubmitButtonState();
-}
-
-class _SubmitButtonState extends State<_SubmitButton> {
-  bool _pressed = false;
-
-  void _release() {
-    if (_pressed) setState(() => _pressed = false);
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final active = widget.enabled || widget.submitting;
-    final interactive = widget.enabled && !widget.submitting;
-    return GestureDetector(
-      onTapDown: interactive ? (_) => setState(() => _pressed = true) : null,
-      onTapUp: interactive ? (_) => _release() : null,
-      onTapCancel: interactive ? _release : null,
-      onTap: interactive
-          ? () {
-              HapticFeedback.lightImpact();
-              widget.onTap();
-            }
-          : null,
-      child: AnimatedScale(
-        scale: _pressed ? 0.975 : 1,
-        duration: const Duration(milliseconds: 120),
-        curve: Curves.easeOutCubic,
-        child: AnimatedContainer(
-          duration: const Duration(milliseconds: 220),
-          width: double.infinity,
-          height: 54,
-          decoration: BoxDecoration(
-            borderRadius: const BorderRadius.all(Radius.circular(15)),
-            gradient: active
-                ? LinearGradient(
-                    begin: Alignment.topLeft,
-                    end: Alignment.bottomRight,
-                    colors: [AppColors.darkRed, AppColors.primaryRed],
-                  )
-                : null,
-            color: active ? null : AppColors.surfaceAlt,
-            border: Border.all(
-              color: active ? Colors.transparent : AppColors.divider,
-              width: 1.5,
-            ),
-            boxShadow: active
-                ? [
-                    BoxShadow(
-                      color: AppColors.primaryRed.withValues(alpha: 0.30),
-                      blurRadius: _pressed ? 10 : 20,
-                      offset: Offset(0, _pressed ? 3 : 6),
-                    ),
-                  ]
-                : null,
-          ),
-          alignment: Alignment.center,
-          child: AnimatedSwitcher(
-            duration: const Duration(milliseconds: 180),
-            switchInCurve: Curves.easeOut,
-            switchOutCurve: Curves.easeIn,
-            child: widget.submitting
-                ? const SizedBox(
-                    key: ValueKey('login-progress'),
-                    width: 22,
-                    height: 22,
-                    child: CircularProgressIndicator(
-                      strokeWidth: 2.4,
-                      color: Colors.white,
-                    ),
-                  )
-                : Row(
-                    key: const ValueKey('login-label'),
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      if (widget.enabled) ...[
-                        const Icon(
-                          Icons.arrow_forward_rounded,
-                          size: 18,
-                          color: Colors.white,
-                        ),
-                        const SizedBox(width: 8),
-                      ],
-                      Text(
-                        AppLocalizations.of(context)!.logIn,
-                        style: TextStyle(
-                          fontSize: 15.5,
-                          fontWeight: FontWeight.w800,
-                          letterSpacing: -0.2,
-                          color: active
-                              ? Colors.white
-                              : AppColors.secondaryText,
-                        ),
-                      ),
-                    ],
-                  ),
-          ),
-        ),
-      ),
     );
   }
 }

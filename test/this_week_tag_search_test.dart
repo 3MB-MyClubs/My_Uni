@@ -71,10 +71,8 @@ void main() {
     );
     await tester.pump();
 
-    final search = find.widgetWithText(
-      TextField,
-      'Search events, clubs, topics',
-    );
+    // The clubup-events redesign changed the events search hint.
+    final search = find.widgetWithText(TextField, 'Search events…');
 
     await tester.enterText(search, 'HACKATHON');
     await tester.pump();

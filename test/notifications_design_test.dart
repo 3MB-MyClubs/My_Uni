@@ -21,6 +21,9 @@ import 'package:flutter_application_1/services/people_service.dart';
 import 'package:flutter_application_1/services/theme_service.dart';
 import 'package:flutter_application_1/services/user_state.dart';
 import 'package:flutter_application_1/services/view_tracker.dart';
+import 'package:flutter_application_1/widgets/clubup_design.dart';
+import 'package:flutter_application_1/widgets/home_design.dart';
+import 'package:flutter_application_1/widgets/instagram_refresh_control.dart';
 import 'package:hive/hive.dart';
 
 /// Verifies the "UniHub Notifications" design: grouped chronological feed with
@@ -614,7 +617,7 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
-  testWidgets('the Home bell reacts to new alerts and opens with a badge', (
+  testWidgets('the Home bell carries the unread dot and opens alerts', (
     tester,
   ) async {
     await tester.pumpWidget(
@@ -628,9 +631,16 @@ void main() {
     );
     await tester.pump(const Duration(milliseconds: 700));
 
+    // `notification-trigger` in `home-feed-alt`: a 36pt chip whose unread
+    // state is an 8pt burgundy dot, not a count.
     final bell = find.byKey(const ValueKey('home-notifications-bell'));
+    final badge = find.byKey(const ValueKey('home-bell-badge'));
     expect(bell, findsOneWidget);
-    expect(find.text('2'), findsOneWidget);
+    expect(badge, findsOneWidget);
+    expect(
+      (tester.widget<Container>(badge).decoration! as BoxDecoration).color,
+      ClubUpColors.accent,
+    );
 
     userState.addNotification(
       AppNotification(
@@ -641,39 +651,18 @@ void main() {
       ),
     );
     await tester.pump();
-    await tester.pump();
     await tester.pump(const Duration(milliseconds: 60));
+    expect(badge, findsOneWidget);
 
-    expect(find.text('3'), findsOneWidget);
-    expect(
-      tester
-          .widget<Transform>(find.byKey(const ValueKey('top-bar-icon-motion')))
-          .transform
-          .storage[1]
-          .abs(),
-      greaterThan(0.01),
-    );
-    expect(find.byKey(const ValueKey('top-bar-badge-3')), findsOneWidget);
-
-    // Pressing while the automatic jiggle is active should still open alerts.
     await tester.tap(bell);
     await tester.pump();
-    await tester.pump(const Duration(milliseconds: 60));
-
-    final bellMotion = tester.widget<Transform>(
-      find.byKey(const ValueKey('top-bar-icon-motion')),
-    );
-    expect(bellMotion.transform.storage[1].abs(), greaterThan(0.01));
-    expect(find.byType(NotificationsScreen), findsNothing);
-
-    await tester.pump(const Duration(milliseconds: 100));
     await tester.pump(const Duration(milliseconds: 450));
 
     expect(find.byType(NotificationsScreen), findsOneWidget);
     expect(tester.takeException(), isNull);
   });
 
-  testWidgets('the Home refresh indicator shares the ClubUp title row', (
+  testWidgets('Home refresh uses temporary pull space above the header', (
     tester,
   ) async {
     await tester.pumpWidget(
@@ -687,33 +676,46 @@ void main() {
     );
     await tester.pump(const Duration(milliseconds: 700));
 
-    final titleRow = find.byKey(const ValueKey('home-top-bar-row'));
-    final logo = find.byKey(const ValueKey('home-clubup-logo'));
-    final refresh = find.byKey(const ValueKey('home-refresh-indicator'));
+    final header = find.byType(HomeFeedHeader);
+    final logo = find.byKey(const ValueKey('home-header-greeting'));
+    final restingHeaderTop = tester.getTopLeft(header).dy;
 
-    expect(titleRow, findsOneWidget);
-    expect(find.ancestor(of: logo, matching: titleRow), findsOneWidget);
-    expect(find.ancestor(of: refresh, matching: titleRow), findsOneWidget);
-    expect(
-      tester.getCenter(refresh).dx,
-      moreOrLessEquals(tester.getCenter(titleRow).dx, epsilon: 0.1),
-    );
-    expect(tester.widget<AnimatedOpacity>(refresh).opacity, 0);
+    expect(header, findsOneWidget);
+    expect(find.descendant(of: header, matching: logo), findsOneWidget);
 
     final gesture = await tester.startGesture(
       tester.getCenter(find.byType(CustomScrollView)),
     );
-    await gesture.moveBy(const Offset(0, 100));
+    await gesture.moveBy(const Offset(0, 150));
     await tester.pump();
 
-    expect(tester.widget<AnimatedOpacity>(refresh).opacity, 1);
+    final refresh = find.byKey(const ValueKey('home-refresh-indicator'));
+    expect(refresh, findsOneWidget);
+    expect(find.descendant(of: header, matching: refresh), findsNothing);
+    expect(
+      tester.getRect(refresh).bottom,
+      lessThanOrEqualTo(tester.getRect(header).top + 0.1),
+    );
+    expect(
+      tester.widget<InstagramRefreshSpinner>(refresh).progress,
+      greaterThan(0),
+    );
+    expect(tester.widget<InstagramRefreshSpinner>(refresh).spinning, isTrue);
 
     await gesture.up();
-    await tester.pump(const Duration(milliseconds: 900));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 300));
+    expect(tester.widget<InstagramRefreshSpinner>(refresh).spinning, isTrue);
+
+    await tester.pump(const Duration(milliseconds: 1200));
+    expect(
+      tester.getTopLeft(header).dy,
+      moreOrLessEquals(restingHeaderTop, epsilon: 0.1),
+    );
     expect(tester.takeException(), isNull);
   });
 
-  testWidgets('the ClubUp header stays active over the scrolling feed', (
+  testWidgets('the Home header stays stable during a feed drag', (
     tester,
   ) async {
     tester.view.physicalSize = const Size(390, 520);
@@ -732,18 +734,12 @@ void main() {
     );
     await tester.pump(const Duration(milliseconds: 700));
 
-    final logo = find.byKey(const ValueKey('home-clubup-logo'));
-    final scrollable = find.descendant(
-      of: find.byType(CustomScrollView),
-      matching: find.byType(Scrollable),
-    );
+    final logo = find.byKey(const ValueKey('home-header-greeting'));
     final logoTop = tester.getTopLeft(logo).dy;
     final gesture = await tester.startGesture(tester.getCenter(logo));
-    await gesture.moveBy(const Offset(0, -180));
+    await gesture.moveBy(const Offset(0, 180));
     await tester.pump();
 
-    final position = tester.state<ScrollableState>(scrollable).position;
-    expect(position.pixels, greaterThan(1));
     expect(tester.getTopLeft(logo).dy, moreOrLessEquals(logoTop, epsilon: 0.1));
     expect(
       tester
@@ -766,7 +762,7 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
-  testWidgets('the ClubUp header crossfades between flat and floating', (
+  testWidgets('the ClubUp header stays a flat band while the feed scrolls', (
     tester,
   ) async {
     tester.view.physicalSize = const Size(390, 520);
@@ -785,67 +781,48 @@ void main() {
     );
     await tester.pump(const Duration(milliseconds: 700));
 
-    final background = find.byKey(
-      const ValueKey('home-feed-header-background'),
-    );
-    final logo = find.byKey(const ValueKey('home-clubup-logo'));
+    final header = find.byType(HomeFeedHeader);
+    final logo = find.byKey(const ValueKey('home-header-greeting'));
     final bell = find.byKey(const ValueKey('home-notifications-bell'));
-    final blur = find.descendant(
-      of: background,
-      matching: find.byType(BackdropFilter),
-    );
 
-    Container panel() => tester.widget<Container>(
-      find.descendant(of: background, matching: find.byType(Container)).first,
-    );
+    BoxDecoration band() =>
+        tester
+                .widget<Container>(
+                  find
+                      .descendant(of: header, matching: find.byType(Container))
+                      .first,
+                )
+                .decoration!
+            as BoxDecoration;
 
-    // State A — parked at the top: flat panel in the scaffold background,
-    // with no blur layer.
-    expect(blur, findsNothing);
-    expect(panel().color!.toARGB32(), AppColors.background.toARGB32());
+    // `premium-header-container` — a flat band on the page background. The old
+    // glass header's scrolled-under crossfade is gone, so the band must look
+    // identical parked and scrolled.
+    expect(band().color, ClubUpColors.background);
+    expect(band().border, isNull);
     final logoRect = tester.getRect(logo);
     final bellRect = tester.getRect(bell);
 
-    // State B — scrolled into the posts: the full-width panel fades away over
-    // 180ms, leaving only the wordmark and floating bell above the feed.
     final gesture = await tester.startGesture(tester.getCenter(logo));
     await gesture.moveBy(const Offset(0, -200));
     await tester.pump();
-    expect(blur, findsNothing);
-    await tester.pump(const Duration(milliseconds: 60));
-    expect(panel().color!.a, lessThan(1));
-    expect(panel().color!.a, greaterThan(0));
-    await tester.pump(const Duration(milliseconds: 200));
-    expect(panel().color!.a, 0);
+    await tester.pump(const Duration(milliseconds: 260));
 
-    // The logo and the bell are untouched by the background fade.
+    expect(band().color, ClubUpColors.background);
     expect(tester.getRect(logo), logoRect);
     expect(tester.getRect(bell), bellRect);
 
-    // Rapid flicks across the boundary stay on the animation, never throw.
+    // Rapid flicks across the boundary never throw.
     for (var i = 0; i < 4; i++) {
       await gesture.moveBy(const Offset(0, 220));
       await tester.pump(const Duration(milliseconds: 16));
       await gesture.moveBy(const Offset(0, -220));
       await tester.pump(const Duration(milliseconds: 16));
     }
-    expect(tester.takeException(), isNull);
 
-    // Scrolling back to the very top reverses to state A exactly.
     await gesture.up();
     await tester.pumpAndSettle();
-    tester
-        .state<ScrollableState>(
-          find.descendant(
-            of: find.byType(CustomScrollView),
-            matching: find.byType(Scrollable),
-          ),
-        )
-        .position
-        .jumpTo(0);
-    await tester.pumpAndSettle();
-    expect(blur, findsNothing);
-    expect(panel().color!.toARGB32(), AppColors.background.toARGB32());
+    expect(band().color, ClubUpColors.background);
     expect(tester.takeException(), isNull);
   });
 }

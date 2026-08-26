@@ -30,6 +30,7 @@ import '../services/student_profile_service.dart' as remote_profile;
 import '../services/student_club_role_service.dart';
 import '../services/supabase_club_service.dart';
 import '../services/user_prefs_service.dart';
+import '../services/user_profile_link.dart';
 import '../services/user_state.dart';
 import '../widgets/academic_program_picker.dart';
 import '../widgets/loading_skeleton.dart';
@@ -508,8 +509,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
   /// Copies a shareable profile link to the clipboard and confirms via snackbar.
   void _shareProfile(String userId, String name) {
-    final handle = userState.usernameFor(userId) ?? userId;
-    Clipboard.setData(ClipboardData(text: 'kuclubs://user/$handle'));
+    Clipboard.setData(ClipboardData(text: UserProfileLink.build(userId)));
     if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
@@ -979,13 +979,16 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
           final clubDetails = followedClubs.map((club) {
             final memberCount = clubMemberCount(club.id);
-            final role =
-                studentClubRoleService.roleTitleFor(club, user.id) ??
-                AppLocalizations.of(context)!.memberRoleFallback;
+            final boardRole = studentClubRoleService.roleTitleFor(
+              club,
+              user.id,
+            );
             return StudentClubDetail(
               club: club,
               memberCount: memberCount,
-              role: role,
+              role:
+                  boardRole ?? AppLocalizations.of(context)!.memberRoleFallback,
+              boardRole: boardRole,
             );
           }).toList();
 

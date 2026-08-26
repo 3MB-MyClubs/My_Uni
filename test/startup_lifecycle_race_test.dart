@@ -42,9 +42,7 @@ void main() {
       expect(checkCount, 1);
       expect(find.byKey(AppLaunchScreen.progressKey), findsOneWidget);
 
-      tester.binding.handleAppLifecycleStateChanged(
-        AppLifecycleState.resumed,
-      );
+      tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.resumed);
       await tester.pump();
       expect(checkCount, 2);
 

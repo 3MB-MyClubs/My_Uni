@@ -2,11 +2,10 @@ import 'package:flutter/material.dart';
 import 'theme_service.dart';
 
 // ─── Raw dark-theme constants (used in ThemeData builder, not widget code) ────
-// Warm near-black palette from the "Login Screen v2" design handoff: the base
-// is a red-tinted black (#0C0608) and every surface is white layered over it,
-// replacing the old neutral #121212 grays.
+// Warm near-black palette from the "Login Screen v2" design handoff. Surfaces
+// are layered over the neutral #121212 dark-mode background.
 class DarkColors {
-  static const Color background = Color(0xFF0C0608);
+  static const Color background = Color(0xFF121212);
   static const Color card = Color(0xFF191416);
   static const Color surfaceAlt = Color(0xFF241F21);
   static const Color primaryRed = Color(0xFF9E2045);

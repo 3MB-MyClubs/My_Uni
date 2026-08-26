@@ -14,6 +14,7 @@ import 'package:flutter_application_1/services/mock_data.dart';
 import 'package:flutter_application_1/services/theme_service.dart';
 import 'package:flutter_application_1/services/people_service.dart';
 import 'package:flutter_application_1/services/user_state.dart';
+import 'package:flutter_application_1/widgets/chats_design.dart';
 
 void main() {
   setUpAll(() {
@@ -66,7 +67,7 @@ void main() {
     await tester.pump();
 
     expect(find.byType(ChatsScreen), findsOneWidget);
-    expect(AppColors.background, const Color(0xFF0C0608));
+    expect(AppColors.background, const Color(0xFF121212));
     expect(AppColors.card, const Color(0xFF191416));
     expect(AppColors.surfaceAlt, const Color(0xFF241F21));
     expect(AppColors.divider, const Color(0xFF332E30));
@@ -90,32 +91,41 @@ void main() {
     );
     await tester.pump();
 
-    expect(find.byKey(const ValueKey('chat-filter-students')), findsOneWidget);
-    expect(find.byKey(const ValueKey('chat-filter-clubs')), findsOneWidget);
-    expect(find.byKey(const ValueKey('chat-filter-solo')), findsNothing);
-    final initialIndicator = tester.widget<AnimatedAlign>(
-      find.byKey(const ValueKey('chat-filter-liquid-indicator')),
-    );
-    expect(initialIndicator.alignment, Alignment.centerLeft);
-    expect(initialIndicator.duration, const Duration(milliseconds: 420));
-    expect(find.text(S.searchPeople), findsOneWidget);
-    expect(find.byIcon(Icons.edit_square), findsOneWidget);
+    // `chats-light` 243:475 — one pill that opens a Clubs / Friends menu,
+    // where the old header carried a two-up segmented control.
+    final dropdown = find.byKey(const ValueKey('chats-filter-dropdown'));
+    expect(dropdown, findsOneWidget);
+    expect(find.byKey(const ValueKey('chat-filter-students')), findsNothing);
+    expect(find.text(S.chatsTabFriends), findsOneWidget);
+    expect(find.text(S.searchConversations), findsOneWidget);
+    // The compose pencil is on both tabs now; the frame draws it either way.
+    expect(find.byIcon(Icons.edit_rounded), findsOneWidget);
 
-    await tester.tap(find.byKey(const ValueKey('chat-filter-clubs')));
+    await tester.tap(dropdown);
     await tester.pump();
 
-    final movedIndicator = tester.widget<AnimatedAlign>(
-      find.byKey(const ValueKey('chat-filter-liquid-indicator')),
+    expect(
+      find.byKey(const ValueKey('chats-filter-option-clubs')),
+      findsOneWidget,
     );
-    expect(movedIndicator.alignment, Alignment.centerRight);
-    expect(find.text(S.searchClubChats), findsOneWidget);
-    expect(find.byIcon(Icons.edit_square), findsNothing);
+    expect(
+      find.byKey(const ValueKey('chats-filter-option-students')),
+      findsOneWidget,
+    );
+
+    await tester.tap(find.byKey(const ValueKey('chats-filter-option-clubs')));
+    await tester.pumpAndSettle();
+
+    expect(find.text(S.chatsTabClubs), findsOneWidget);
+    expect(
+      find.byKey(const ValueKey('chats-filter-option-clubs')),
+      findsNothing,
+    );
 
     controller.showStudents();
     await tester.pump();
 
-    expect(find.text(S.searchPeople), findsOneWidget);
-    expect(find.byIcon(Icons.edit_square), findsOneWidget);
+    expect(find.text(S.chatsTabFriends), findsOneWidget);
     expect(tester.takeException(), isNull);
   });
 
@@ -145,12 +155,12 @@ void main() {
     final inboxSearch = tester.widget<TextField>(
       find.byKey(const ValueKey('chat-search-students')),
     );
-    expect(inboxSearch.decoration?.hintText, S.searchPeople);
+    expect(inboxSearch.decoration?.hintText, S.searchConversations);
     expect(inboxSearch.decoration?.focusedBorder, InputBorder.none);
     expect(find.text('Computer Engineering · 3rd Year'), findsNothing);
     expect(find.text(S.sayHello), findsNothing);
 
-    await tester.tap(find.byIcon(Icons.edit_square));
+    await tester.tap(find.byIcon(Icons.edit_outlined));
     await tester.pumpAndSettle();
 
     final pickerFinder = find.byKey(const ValueKey('new-chat-search'));
@@ -220,7 +230,7 @@ void main() {
       const ProviderScope(child: MaterialApp(home: ChatsScreen())),
     );
     await tester.pump();
-    await tester.tap(find.byIcon(Icons.edit_square));
+    await tester.tap(find.byIcon(Icons.edit_outlined));
     await tester.pumpAndSettle();
 
     final continueButton = find.byKey(const ValueKey('new-chat-continue'));
@@ -274,8 +284,10 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
-  testWidgets('ChatsScreen also renders in light mode', (tester) async {
-    await themeService.setDark(false);
+  testWidgets('student chat header adapts when light and dark mode change', (
+    tester,
+  ) async {
+    await themeService.setDark(false, persistToAccount: false);
     authService.login('alice@ku.edu.tr', '111111');
 
     await tester.pumpWidget(
@@ -284,6 +296,21 @@ void main() {
     await tester.pump();
 
     expect(find.byType(ChatsScreen), findsOneWidget);
+    Text friendsLabel() => tester.widget<Text>(find.text(S.chatsTabFriends));
+    Icon composePen() => tester.widget<Icon>(find.byIcon(Icons.edit_rounded));
+
+    expect(friendsLabel().style?.color, const Color(0xFF18181B));
+    expect(composePen().color, const Color(0xFF18181B));
+    expect(friendsLabel().style?.color, ChatsColors.text);
+    expect(composePen().color, ChatsColors.text);
+
+    await themeService.setDark(true, persistToAccount: false);
+    await tester.pump();
+
+    expect(friendsLabel().style?.color, const Color(0xFFFAFAFA));
+    expect(composePen().color, const Color(0xFFFAFAFA));
+    expect(friendsLabel().style?.color, ChatsColors.text);
+    expect(composePen().color, ChatsColors.text);
     expect(tester.takeException(), isNull);
   });
 
@@ -342,16 +369,20 @@ void main() {
       greaterThanOrEqualTo(47),
     );
     expect(find.text(S.searchStudents), findsNothing);
-    expect(find.byKey(const ValueKey('chat-filter-students')), findsNothing);
-    expect(find.byKey(const ValueKey('chat-filter-clubs')), findsNothing);
-    expect(find.byIcon(Icons.edit_square), findsNothing);
+    expect(find.byKey(const ValueKey('chats-filter-dropdown')), findsNothing);
+    expect(find.byIcon(Icons.edit_outlined), findsNothing);
     expect(find.byIcon(Icons.arrow_back_ios_new_rounded), findsNothing);
 
-    await tester.tap(find.byKey(const ValueKey('club-lane-solo')));
+    // CLUB CHATS `543:32`: the lane pill replaced the segmented switch, and on
+    // the club side Direct is an inbox — `admin-dm-list` 335:6 — which titles
+    // itself rather than repeating the club.
+    await tester.tap(find.byKey(const ValueKey('club-lane-pill')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('club-lane-option-direct')));
     await tester.pumpAndSettle();
 
-    expect(find.byKey(const ValueKey('club-solo-chat-empty')), findsOneWidget);
-    expect(find.text(S.soloChatAllTitle), findsOneWidget);
+    expect(find.text(S.clubDirectInboxTitle), findsOneWidget);
+    expect(find.text(S.clubDirectInboxEmpty), findsOneWidget);
     expect(find.byKey(const ValueKey('club-solo-chat-start')), findsNothing);
     expect(tester.takeException(), isNull);
   });
@@ -398,8 +429,7 @@ void main() {
     expect(find.text('Dağcılık Kulübü (KUDAK)'), findsOneWidget);
     expect(find.text('Bilgisayar Kulübü (KUACM)'), findsNothing);
     expect(find.byType(TextField), findsOneWidget);
-    expect(find.byKey(const ValueKey('chat-filter-students')), findsNothing);
-    expect(find.byKey(const ValueKey('chat-filter-clubs')), findsNothing);
+    expect(find.byKey(const ValueKey('chats-filter-dropdown')), findsNothing);
     expect(tester.takeException(), isNull);
   });
 

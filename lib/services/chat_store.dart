@@ -181,7 +181,9 @@ class ChatStore extends ChangeNotifier {
       _rateLimitFailureMessage =
           '${limited.displayMessage} Your message is saved and will be retried.';
     }
-    if (message.kind == ChatMessageKind.photo) {
+    if (message.kind == ChatMessageKind.photo ||
+        (message.kind == ChatMessageKind.announcement &&
+            (message.attachmentPath?.trim().isNotEmpty ?? false))) {
       _attachmentUploadFailed = true;
     } else if (limited == null) {
       return;
@@ -338,10 +340,10 @@ class ChatStore extends ChangeNotifier {
     return message.senderClubId!;
   }
 
-  /// A board member can write a private inbox message from either identity:
-  /// their personal account or the linked club account. Keep that choice in
-  /// the local optimistic message so the remote flush cannot change the
-  /// sender if the account switcher changes before the network request runs.
+  /// Shared club-room posts follow the account switcher because they may be
+  /// authored personally or as the club. Private club-inbox replies are
+  /// different: a board member is answering a student on behalf of the club,
+  /// and the database policy requires that club identity for that reply.
   bool _sendsAsClub(String clubId, String actorId) {
     if (clubId.isEmpty || actorId.isEmpty) return false;
     if (managedClubForAdmin(actorId)?.id == clubId) return true;
@@ -349,8 +351,22 @@ class ChatStore extends ChangeNotifier {
         accountSwitcherService.activeClub?.id == clubId;
   }
 
-  bool _sendsClubInboxAsClub(String clubId, String actorId) =>
-      _sendsAsClub(clubId, actorId);
+  bool _sendsClubInboxAsClub(String clubId, String actorId) {
+    if (_sendsAsClub(clubId, actorId)) return true;
+    final club = clubForId(clubId);
+    return authService.currentUser?.id == actorId &&
+        (club?.boardMemberIds.contains(actorId) ?? false);
+  }
+
+  /// Installs a server-shaped inbox snapshot without weakening any access
+  /// checks. Production snapshots normally arrive through Chat v2; tests use
+  /// this seam to exercise the same navigation and authorization paths without
+  /// connecting to a Supabase project.
+  @visibleForTesting
+  void debugCacheClubInboxConversation(ClubInboxConversation conversation) {
+    _clubInboxes[conversation.id] = conversation;
+    notifyListeners();
+  }
 
   List<String> groupParticipants(String threadId) =>
       groupForThread(threadId)?.memberIds ?? const [];
@@ -680,7 +696,10 @@ class ChatStore extends ChangeNotifier {
         _upsertChatV2Message(message);
       }
     }
-    if (_chatV2.summaries.isNotEmpty || _chatV2.loadedThreadIds.isNotEmpty) {
+    final normalizedPins = _normalizePinnedMessages();
+    if (_chatV2.summaries.isNotEmpty ||
+        _chatV2.loadedThreadIds.isNotEmpty ||
+        normalizedPins) {
       scheduleSave();
     }
     notifyListeners();
@@ -731,6 +750,7 @@ class ChatStore extends ChangeNotifier {
         ),
       );
     }
+    final normalizedPins = _normalizePinnedMessages();
     final rawLastRead = box.get('lastRead');
     if (rawLastRead is Map) {
       for (final entry in rawLastRead.entries) {
@@ -869,7 +889,7 @@ class ChatStore extends ChangeNotifier {
         .whereType<String>()
         .toSet();
     unawaited(_sweepStagedAttachments(activeAttachmentPaths));
-    if (removedMockChats || migratedAdminMessaging) {
+    if (removedMockChats || migratedAdminMessaging || normalizedPins) {
       unawaited(saveAll());
     }
   }
@@ -1284,8 +1304,9 @@ class ChatStore extends ChangeNotifier {
           notifyRecipient: false,
         );
       }
+      final normalizedPins = _normalizePinnedMessages();
       await _reconcileRemoteClubPollVotes(client, rows, actorId);
-      if (pruned) {
+      if (pruned || normalizedPins) {
         scheduleSave();
         notifyListeners();
       }
@@ -1421,6 +1442,7 @@ class ChatStore extends ChangeNotifier {
       return;
     }
     _messages.add(message);
+    _normalizePinnedMessages(threadId: message.threadId);
     _pendingRemoteClubMessageIds.remove(id);
     if (notifyRecipient && senderId != actorId) {
       final clubName = clubForId(clubId)?.name ?? '';
@@ -2287,10 +2309,15 @@ class ChatStore extends ChangeNotifier {
     ChatMessage message,
   ) async {
     final attachmentPath = message.attachmentPath?.trim() ?? '';
-    final isPhoto = message.kind == ChatMessageKind.photo;
+    final attachmentName = message.attachmentName ?? attachmentPath;
+    final isPhoto =
+        message.kind == ChatMessageKind.photo ||
+        (message.kind == ChatMessageKind.announcement &&
+            isImageMediaPath(attachmentName));
     final isVideo =
-        message.kind == ChatMessageKind.file &&
-        isVideoMediaPath(message.attachmentName ?? attachmentPath);
+        (message.kind == ChatMessageKind.file ||
+            message.kind == ChatMessageKind.announcement) &&
+        isVideoMediaPath(attachmentName);
     if ((!isPhoto && !isVideo) || attachmentPath.isEmpty) {
       return message;
     }
@@ -2888,10 +2915,9 @@ class ChatStore extends ChangeNotifier {
           );
           continue;
         }
-        // Preserve the identity chosen when the message was created. A board
-        // member writing from Personal must remain a profile sender; only a
-        // selected linked Club account (or a dedicated club session) writes
-        // as the club.
+        // Preserve the identity chosen when the message was created. Board
+        // replies are marked as club-authored at creation time even when the
+        // board member is using their personal app account.
         final sendingAsClub = remoteMessage.senderClubId != null;
         await client.from('club_inbox_messages').insert({
           'id': remoteMessage.id,
@@ -3084,9 +3110,9 @@ class ChatStore extends ChangeNotifier {
       if (conversation == null || !canAccessThread(threadId, userId)) {
         return false;
       }
-      // A personal sender may write their own club inbox. Moderation replies
-      // must use the selected linked club account (or a dedicated club
-      // session), matching the Supabase insert policy.
+      // A student may write their own club inbox. Board members and the linked
+      // club session answer every visible student thread as the club, matching
+      // the Supabase insert policy.
       return conversation.profileId == userId ||
           _sendsClubInboxAsClub(conversation.clubId, userId);
     }
@@ -3992,6 +4018,44 @@ class ChatStore extends ChangeNotifier {
         _messages[i] = message.copyWith(pinned: false);
       }
     }
+  }
+
+  /// Repairs old cache or synchronization data that contains more than one
+  /// pin. A thread has one shared pin across ordinary messages and Board
+  /// announcements; the newest pinned item wins deterministically.
+  bool _normalizePinnedMessages({String? threadId}) {
+    final winnerByThread = <String, int>{};
+    for (var i = 0; i < _messages.length; i++) {
+      final candidate = _messages[i];
+      if (!candidate.pinned ||
+          (threadId != null && candidate.threadId != threadId)) {
+        continue;
+      }
+      final winnerIndex = winnerByThread[candidate.threadId];
+      if (winnerIndex == null) {
+        winnerByThread[candidate.threadId] = i;
+        continue;
+      }
+      final winner = _messages[winnerIndex];
+      final timeOrder = candidate.createdAt.compareTo(winner.createdAt);
+      if (timeOrder > 0 ||
+          (timeOrder == 0 && candidate.id.compareTo(winner.id) > 0)) {
+        winnerByThread[candidate.threadId] = i;
+      }
+    }
+
+    var changed = false;
+    for (var i = 0; i < _messages.length; i++) {
+      final message = _messages[i];
+      if (!message.pinned ||
+          (threadId != null && message.threadId != threadId) ||
+          winnerByThread[message.threadId] == i) {
+        continue;
+      }
+      _messages[i] = message.copyWith(pinned: false);
+      changed = true;
+    }
+    return changed;
   }
 
   /// Pins one message to the top of its thread; only one pin per thread.

@@ -19,6 +19,7 @@ import '../services/chat_store.dart';
 import '../services/club_admin_access.dart';
 import '../services/club_community_info_controller.dart';
 import '../services/locale_service.dart';
+import '../services/mock_clubup_profile.dart';
 import '../services/mock_data.dart';
 import '../services/notification_inbox_service.dart';
 import '../services/notification_service.dart';
@@ -28,21 +29,27 @@ import '../services/image_cache_service.dart';
 import '../services/image_aspect_ratio.dart';
 import '../services/media_delivery_service.dart';
 import '../services/theme_service.dart';
+import '../services/user_profile_link.dart';
 import '../services/user_state.dart';
 import '../widgets/chat_campus_backdrop.dart';
+import '../widgets/chats_design.dart';
+import '../widgets/clubup_design.dart';
 import '../widgets/chat_video_player.dart';
 import '../widgets/club_avatar.dart';
 import '../widgets/group_avatar_stack.dart';
 import '../widgets/user_avatar.dart';
+import '../widgets/user_profile_link_text.dart';
 import '../widgets/app_network_image.dart';
 import '../widgets/app_pressable.dart';
 import '../widgets/shared_post_message_card.dart';
 import '../widgets/shared_event_message_card.dart';
+import '../widgets/shared_user_profile_message_card.dart';
 import '../widgets/sent_message_entrance.dart';
 import '../widgets/swipe_to_reply.dart';
 import 'club_community_screen.dart';
 import 'group_info_screen.dart';
 import 'media_preview_screen.dart';
+import 'user_profile_screen.dart';
 
 /// What the composer's "+" sheet can attach to a student message.
 enum _ChatAttachment { photo, camera }
@@ -78,6 +85,13 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
   ClubCommunityInfoController? _communityInfo;
   String? _animatingSentMessageId;
   ChatMessage? _replyingTo;
+
+  // In-thread message search — `search-results` 110:84. Client-side over the
+  // messages already loaded for this thread; nothing is queried remotely.
+  bool _searchOpen = false;
+  final TextEditingController _searchController = TextEditingController();
+  final Map<String, GlobalKey> _searchAnchors = {};
+  int _searchCursor = 0;
 
   String get _myId =>
       authService.currentUser?.id ?? authService.currentAdmin?.id ?? '';
@@ -124,6 +138,15 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
   User? get _peer {
     final peerId = ChatStore.dmPeerOf(widget.threadId, _myId);
     return peerId == null ? null : _userForId(peerId);
+  }
+
+  Future<void> _openSharedUserProfile(String userIdentifier) async {
+    final user = await resolveUserProfileLink(userIdentifier);
+    if (!mounted || user == null) return;
+    await Navigator.of(
+      context,
+    ).push(ChatPageRoute<void>(builder: (_) => UserProfileScreen(user: user)));
+    if (mounted) _markVisibleMessagesSeen();
   }
 
   static const List<Color> _clubColors = [
@@ -193,6 +216,7 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
     _inputController.dispose();
     _inputFocusNode.dispose();
     _scrollController.dispose();
+    _searchController.dispose();
     super.dispose();
   }
 
@@ -990,16 +1014,22 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
   }
 
   void _openGroupInfo() {
-    Navigator.push(
+    Navigator.push<GroupInfoOutcome>(
       context,
       ChatPageRoute(
         builder: (_) => GroupInfoScreen(threadId: widget.threadId, myId: _myId),
       ),
-    ).then((leftGroup) {
-      if (leftGroup == true && mounted) {
-        Navigator.pop(context);
-      } else {
-        _markVisibleMessagesSeen();
+    ).then((outcome) {
+      if (!mounted) return;
+      switch (outcome) {
+        case GroupInfoOutcome.left:
+          Navigator.pop(context);
+        case GroupInfoOutcome.search:
+          // `group-info`'s Search quick action lands on `search-results`,
+          // which lives in the thread.
+          _openThreadSearch();
+        case null:
+          _markVisibleMessagesSeen();
       }
     });
   }
@@ -1017,6 +1047,956 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
     ).then((_) => _markVisibleMessagesSeen());
   }
 
+  // ── CHATS handoff: the student thread ──────────────────────────────────────
+  // `chat-dm` 102:7, `chat-group` 102:123, `chats-clubs` 225:5 and
+  // `search-results` 110:84. Flat bubbles on a flat page: no wallpaper, no
+  // gradient, no tail, no shadow, and a 36pt composer.
+  //
+  // The `CLUB CHATS` section (label `543:32`) added the club side of one of
+  // these: `admin-direct-messages` 335:255 / 331:438 is a private inbox read
+  // by the club rather than by the student, and draws through the same header
+  // and bubbles. It is the only thread a club login opens — everything else it
+  // can reach is the room itself, which `ClubCommunityScreen` draws.
+
+  bool get _designChat {
+    if (widget.embedded) return false;
+    if (authService.isStudentSession) return true;
+    final admin = authService.currentAdmin;
+    return _isClubInbox && admin != null && !isClubUpAdmin(admin);
+  }
+
+  double _designBubbleMaxWidth(BuildContext context, {required bool inset}) {
+    final available = MediaQuery.sizeOf(context).width - 32 - (inset ? 36 : 0);
+    return available * (inset ? 0.83 : 0.776);
+  }
+
+  List<ChatMessage> _designSearchMatches(List<ChatMessage> messages) {
+    final needle = _searchController.text.trim().toLowerCase();
+    if (needle.isEmpty) return const <ChatMessage>[];
+    return messages
+        .where((m) => m.content.toLowerCase().contains(needle))
+        .toList();
+  }
+
+  void _openThreadSearch() {
+    setState(() {
+      _searchOpen = true;
+      _searchCursor = 0;
+      _searchController.clear();
+    });
+  }
+
+  void _closeThreadSearch() {
+    setState(() {
+      _searchOpen = false;
+      _searchCursor = 0;
+      _searchController.clear();
+      _searchAnchors.clear();
+    });
+  }
+
+  void _stepSearch(int delta, List<ChatMessage> matches) {
+    if (matches.isEmpty) return;
+    final next = (_searchCursor + delta) % matches.length;
+    setState(() => _searchCursor = next < 0 ? next + matches.length : next);
+    final anchor = _searchAnchors[matches[_searchCursor].id];
+    final anchorContext = anchor?.currentContext;
+    if (anchorContext != null) {
+      Scrollable.ensureVisible(
+        anchorContext,
+        alignment: 0.4,
+        duration: const Duration(milliseconds: 220),
+        curve: Curves.easeOutCubic,
+      );
+    }
+  }
+
+  Widget _buildDesignThread() {
+    return Scaffold(
+      backgroundColor: ChatsColors.background,
+      resizeToAvoidBottomInset: true,
+      body: ListenableBuilder(
+        listenable: Listenable.merge([chatStore, userState, ?_communityInfo]),
+        builder: (context, _) {
+          if (!chatStore.canAccessThread(widget.threadId, _myId)) {
+            return SafeArea(
+              bottom: false,
+              child: _buildUnavailableConversation(),
+            );
+          }
+          final messages = chatStore.messagesFor(
+            widget.threadId,
+            viewerId: _myId,
+          );
+          final matches = _searchOpen
+              ? _designSearchMatches(messages)
+              : const <ChatMessage>[];
+          return Column(
+            children: [
+              if (_searchOpen)
+                _buildDesignSearchBar(matches)
+              else
+                _buildDesignThreadHeader(),
+              Expanded(
+                child: messages.isEmpty
+                    ? _buildNewChatIntro()
+                    : _buildDesignMessageList(messages, matches),
+              ),
+              if (!_searchOpen)
+                ChatComposerBar(
+                  controller: _inputController,
+                  focusNode: _inputFocusNode,
+                  enabled: chatStore.canWriteThread(widget.threadId, _myId),
+                  hint: S.typeMessage,
+                  // Club-side inboxes use a single attachment entry point.
+                  // The sheet then separates library media from a live camera
+                  // capture, matching the familiar WhatsApp flow. Keep the
+                  // student-facing club inbox icon unchanged.
+                  attachIcon: _isClubInbox && !_isClubInboxBoardViewer
+                      ? Icons.photo_camera_outlined
+                      : Icons.attach_file_rounded,
+                  onAttach: _openAttachSheet,
+                  onSend: _send,
+                  banner: _replyingTo == null
+                      ? null
+                      : _designReplyBanner(_replyingTo!),
+                )
+              else
+                const SizedBox.shrink(),
+            ],
+          );
+        },
+      ),
+    );
+  }
+
+  // ── Header ─────────────────────────────────────────────────────────────────
+
+  Widget _buildDesignThreadHeader() {
+    if (_isGroup) return _buildDesignGroupHeader();
+    if (_isClubInbox) return _buildDesignClubInboxHeader();
+    final peer = _peer;
+    final peerId = ChatStore.dmPeerOf(widget.threadId, _myId);
+    final name = peer != null
+        ? userState.displayNameFor(peer.id, peer.name)
+        : '';
+    // `chat-dm` 102:18 — a chevron, a 38pt avatar and the name. The peer's
+    // programme, which the previous header carried, is not on the frame.
+    return _designHeaderShell(
+      tapKey: const ValueKey('dm-chat-header'),
+      onTap: peer == null ? null : () => _openSharedUserProfile(peer.id),
+      leading: UserAvatar(
+        userId: peer?.id ?? peerId ?? '',
+        name: peer?.name ?? '',
+        size: 38,
+        fontSize: 15,
+      ),
+      leadingWidth: 38,
+      title: name,
+    );
+  }
+
+  Widget _buildDesignGroupHeader() {
+    final memberIds = chatStore.groupParticipants(widget.threadId);
+    final visibleIds = memberIds.where((id) => id != _myId).toList();
+    // `chat-group` 102:138 — the stack is 48 wide inside a 38 tall box.
+    return _designHeaderShell(
+      tapKey: const ValueKey('group-chat-header'),
+      onTap: _openGroupInfo,
+      leading: GroupAvatarStack(
+        memberIds: visibleIds,
+        nameForUser: (id) => _senderInfo(id).$1,
+        photoPath: chatStore.groupForThread(widget.threadId)?.photoUrl,
+        size: 38,
+      ),
+      leadingWidth: 48,
+      title: chatStore.groupDisplayName(widget.threadId, _myId),
+      subtitle: S.chatsFriendsCount(memberIds.length),
+    );
+  }
+
+  Widget _buildDesignClubInboxHeader() {
+    final conversation = _clubInbox;
+    final club = _club;
+    final showingStudent =
+        conversation != null && conversation.profileId != _myId;
+    final student = showingStudent ? _userForId(conversation.profileId) : null;
+    final title = showingStudent
+        ? userState.displayNameFor(conversation.profileId, student?.name ?? '')
+        : club?.name ?? '';
+    return _designHeaderShell(
+      tapKey: const ValueKey('club-inbox-profile-header'),
+      leading: showingStudent
+          ? UserAvatar(
+              userId: conversation.profileId,
+              name: title,
+              size: 38,
+              fontSize: 15,
+            )
+          : club == null
+          ? const SizedBox(width: 38, height: 38)
+          : ClubAvatar(
+              clubId: club.id,
+              clubName: club.name,
+              color: _colorForClub(club.id),
+              imageUrl: club.logoUrl,
+              size: 38,
+              fontSize: 15,
+              shape: 'circle',
+            ),
+      leadingWidth: 38,
+      title: title,
+      subtitle: S.chatsDmWithAdmins,
+      // `234:412` draws this as a dropdown. The app has exactly one lane for a
+      // club inbox — the private one — so it is a badge here rather than a
+      // switcher that would have nothing to switch to.
+      trailing: Container(
+        key: const ValueKey('club-inbox-lane-badge'),
+        height: 32,
+        padding: const EdgeInsets.symmetric(horizontal: 12),
+        decoration: BoxDecoration(
+          color: ChatsColors.accent,
+          borderRadius: BorderRadius.circular(999),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Icon(
+              Icons.lock_outline_rounded,
+              size: 14,
+              color: ChatsColors.onAccent,
+            ),
+            const SizedBox(width: 8),
+            Text(
+              S.chatsDirectLane,
+              style: figtree(
+                size: 13,
+                weight: FontWeight.w700,
+                color: ChatsColors.onAccent,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  /// The 62pt bar `chat-dm` 102:18 and `chat-group` 102:134 share: a hairline
+  /// underneath, no fill of its own, no shadow.
+  Widget _designHeaderShell({
+    required Widget leading,
+    required double leadingWidth,
+    required String title,
+    String? subtitle,
+    Widget? trailing,
+    Key? tapKey,
+    VoidCallback? onTap,
+  }) {
+    return Container(
+      padding: EdgeInsets.only(top: MediaQuery.viewPaddingOf(context).top),
+      decoration: BoxDecoration(
+        color: ChatsColors.background,
+        border: Border(bottom: BorderSide(color: ChatsColors.border)),
+      ),
+      child: SizedBox(
+        height: 62,
+        child: Row(
+          children: [
+            const SizedBox(width: 16),
+            Semantics(
+              button: true,
+              label: MaterialLocalizations.of(context).backButtonTooltip,
+              child: GestureDetector(
+                key: const ValueKey('chat-thread-back'),
+                behavior: HitTestBehavior.opaque,
+                onTap: () => Navigator.maybePop(context),
+                child: SizedBox(
+                  width: 24,
+                  height: 62,
+                  child: Icon(
+                    Icons.chevron_left_rounded,
+                    size: 24,
+                    color: ChatsColors.accentText,
+                  ),
+                ),
+              ),
+            ),
+            const SizedBox(width: 10),
+            Expanded(
+              child: GestureDetector(
+                key: tapKey,
+                behavior: HitTestBehavior.opaque,
+                onTap: onTap,
+                child: Row(
+                  children: [
+                    SizedBox(width: leadingWidth, height: 38, child: leading),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            title,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: figtree(
+                              size: 15,
+                              weight: FontWeight.w700,
+                              color: ChatsColors.text,
+                              letterSpacing: -0.2,
+                            ),
+                          ),
+                          if (subtitle != null) ...[
+                            const SizedBox(height: 2),
+                            Text(
+                              subtitle,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: figtree(
+                                size: 11,
+                                weight: FontWeight.w500,
+                                color: ChatsColors.muted,
+                              ),
+                            ),
+                          ],
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+            if (trailing != null) ...[
+              const SizedBox(width: 8),
+              trailing,
+            ] else
+              GestureDetector(
+                key: const ValueKey('chat-thread-search-button'),
+                behavior: HitTestBehavior.opaque,
+                onTap: _openThreadSearch,
+                child: SizedBox(
+                  width: 36,
+                  height: 62,
+                  child: Icon(
+                    Icons.search_rounded,
+                    size: 20,
+                    color: ChatsColors.muted,
+                  ),
+                ),
+              ),
+            const SizedBox(width: 16),
+          ],
+        ),
+      ),
+    );
+  }
+
+  /// `search-results` 110:95 + 110:104 — the header becomes a field with a
+  /// Cancel, and a 46pt panel below counts the hits and steps through them.
+  Widget _buildDesignSearchBar(List<ChatMessage> matches) {
+    final hasQuery = _searchController.text.trim().isNotEmpty;
+    return Container(
+      padding: EdgeInsets.only(top: MediaQuery.viewPaddingOf(context).top),
+      decoration: BoxDecoration(
+        color: ChatsColors.background,
+        border: Border(bottom: BorderSide(color: ChatsColors.border)),
+      ),
+      child: Column(
+        children: [
+          SizedBox(
+            height: 60,
+            child: Row(
+              children: [
+                const SizedBox(width: 16),
+                GestureDetector(
+                  behavior: HitTestBehavior.opaque,
+                  onTap: _closeThreadSearch,
+                  child: SizedBox(
+                    width: 24,
+                    height: 60,
+                    child: Icon(
+                      Icons.chevron_left_rounded,
+                      size: 24,
+                      color: ChatsColors.accentText,
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Container(
+                    height: 36,
+                    padding: const EdgeInsets.symmetric(horizontal: 12),
+                    decoration: BoxDecoration(
+                      color: ChatsColors.fill,
+                      borderRadius: BorderRadius.circular(18),
+                    ),
+                    child: Row(
+                      children: [
+                        Icon(
+                          Icons.search_rounded,
+                          size: 14,
+                          color: ChatsColors.muted,
+                        ),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: TextField(
+                            key: const ValueKey('chat-thread-search-field'),
+                            controller: _searchController,
+                            autofocus: true,
+                            onChanged: (_) => setState(() => _searchCursor = 0),
+                            style: figtree(
+                              size: 13,
+                              weight: FontWeight.w500,
+                              color: ChatsColors.text,
+                            ),
+                            decoration: InputDecoration(
+                              hintText: S.chatsSearchMessages,
+                              hintStyle: figtree(
+                                size: 13,
+                                weight: FontWeight.w400,
+                                color: ChatsColors.muted,
+                              ),
+                              isDense: true,
+                              filled: false,
+                              border: InputBorder.none,
+                              enabledBorder: InputBorder.none,
+                              focusedBorder: InputBorder.none,
+                              contentPadding: EdgeInsets.zero,
+                            ),
+                          ),
+                        ),
+                        if (hasQuery)
+                          GestureDetector(
+                            behavior: HitTestBehavior.opaque,
+                            onTap: () => setState(() {
+                              _searchController.clear();
+                              _searchCursor = 0;
+                            }),
+                            child: Icon(
+                              Icons.cancel_rounded,
+                              size: 14,
+                              color: ChatsColors.muted,
+                            ),
+                          ),
+                      ],
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 12),
+                GestureDetector(
+                  key: const ValueKey('chat-thread-search-cancel'),
+                  behavior: HitTestBehavior.opaque,
+                  onTap: _closeThreadSearch,
+                  child: Text(
+                    S.cancel,
+                    style: figtree(
+                      size: 13,
+                      weight: FontWeight.w600,
+                      color: ChatsColors.accentText,
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 16),
+              ],
+            ),
+          ),
+          if (hasQuery)
+            SizedBox(
+              height: 46,
+              child: Row(
+                children: [
+                  const SizedBox(width: 16),
+                  Text(
+                    matches.isEmpty
+                        ? S.chatsNoResultsFound
+                        : S.chatsResultsFound(matches.length),
+                    style: figtree(
+                      size: 12,
+                      weight: FontWeight.w600,
+                      color: ChatsColors.muted,
+                    ),
+                  ),
+                  const Spacer(),
+                  _searchStepButton(
+                    Icons.keyboard_arrow_up_rounded,
+                    matches.isEmpty ? null : () => _stepSearch(-1, matches),
+                    const ValueKey('chat-thread-search-prev'),
+                  ),
+                  const SizedBox(width: 16),
+                  _searchStepButton(
+                    Icons.keyboard_arrow_down_rounded,
+                    matches.isEmpty ? null : () => _stepSearch(1, matches),
+                    const ValueKey('chat-thread-search-next'),
+                  ),
+                  const SizedBox(width: 16),
+                ],
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+
+  Widget _searchStepButton(IconData icon, VoidCallback? onTap, Key key) {
+    return GestureDetector(
+      key: key,
+      behavior: HitTestBehavior.opaque,
+      onTap: onTap,
+      child: Container(
+        width: 26,
+        height: 26,
+        alignment: Alignment.center,
+        decoration: BoxDecoration(
+          color: ChatsColors.fill,
+          shape: BoxShape.circle,
+        ),
+        child: Icon(
+          icon,
+          size: 14,
+          color: onTap == null ? ChatsColors.muted : ChatsColors.accentText,
+        ),
+      ),
+    );
+  }
+
+  // ── Message list ───────────────────────────────────────────────────────────
+
+  Widget _buildDesignMessageList(
+    List<ChatMessage> messages,
+    List<ChatMessage> matches,
+  ) {
+    final matchIds = matches.map((m) => m.id).toSet();
+    _searchAnchors.removeWhere((id, _) => !matchIds.contains(id));
+    for (final id in matchIds) {
+      _searchAnchors.putIfAbsent(id, GlobalKey.new);
+    }
+    final items = <Widget>[];
+    for (var i = 0; i < messages.length; i++) {
+      final m = messages[i];
+      final prev = i > 0 ? messages[i - 1] : null;
+      if (prev == null || !_sameDay(prev.createdAt, m.createdAt)) {
+        items.add(ChatDayDivider(label: _dayLabel(m.createdAt)));
+      }
+      items.add(
+        SentMessageEntrance(
+          key: ValueKey('sent-message-entrance-${m.id}'),
+          animate: m.id == _animatingSentMessageId,
+          onCompleted: () => _finishSentMessageEntrance(m.id),
+          child: _designBubbleRow(m, anchor: _searchAnchors[m.id]),
+        ),
+      );
+    }
+    return ListView.builder(
+      controller: _scrollController,
+      reverse: true,
+      padding: const EdgeInsets.fromLTRB(16, 12, 16, 12),
+      itemCount: items.length,
+      itemBuilder: (context, i) => items[items.length - 1 - i],
+    );
+  }
+
+  /// One message. The handoff repeats the sender name and avatar on **every**
+  /// incoming group message rather than grouping runs, and gives outgoing
+  /// messages neither, so there is no first/last-of-run bookkeeping here.
+  Widget _designBubbleRow(ChatMessage m, {GlobalKey? anchor}) {
+    final mine = chatStore.isMessageOwner(m, _myId);
+    final senderId = chatStore.senderIdForViewer(m, _myId);
+    final (senderName, senderIsAdmin) = _senderInfo(senderId);
+    final club = _club;
+    final showAvatar = _isGroup && !mine;
+    final showSenderName = (_isGroup || _isClubInbox) && !mine;
+    // `chats-clubs` is the only frame that stamps a time under each bubble.
+    final showTime = _isClubInbox;
+
+    final linkedEventId = m.linkedEventId;
+    final hasEventPreview = linkedEventId != null;
+    final userLinkMatches = UserProfileLink.matchesIn(m.content);
+    final sharedUserLink = userLinkMatches.isEmpty
+        ? null
+        : userLinkMatches.first;
+    final isStandaloneUserLink =
+        sharedUserLink != null &&
+        UserProfileLink.isStandalone(m.content, sharedUserLink);
+    final hasText =
+        m.content.trim().isNotEmpty &&
+        !hasEventPreview &&
+        !isStandaloneUserLink;
+    final photoPath = m.kind == ChatMessageKind.photo ? m.attachmentPath : null;
+    final attachedFilePath = m.kind == ChatMessageKind.file
+        ? m.attachmentPath
+        : null;
+    final videoPath =
+        attachedFilePath != null &&
+            isVideoMediaPath(m.attachmentName ?? attachedFilePath)
+        ? attachedFilePath
+        : null;
+    final filePath = videoPath == null ? attachedFilePath : null;
+    final hasMedia = photoPath != null || videoPath != null || filePath != null;
+
+    final bubble = ChatBubbleShell(
+      key: ValueKey('chat-message-bubble-${m.id}'),
+      mine: mine,
+      maxWidth: _designBubbleMaxWidth(context, inset: showAvatar),
+      padding: photoPath != null
+          ? const EdgeInsets.all(2)
+          : hasMedia
+          ? const EdgeInsets.all(4)
+          : const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          if (m.replyToMessageId != null)
+            _designReplyQuote(m, mine: mine, hasBody: hasMedia || hasText),
+          if (m.kind == ChatMessageKind.postShare && m.sharedPostId != null)
+            SharedPostMessageCard(
+              postId: m.sharedPostId!,
+              onDarkBackground: mine,
+            ),
+          if (hasEventPreview)
+            SharedEventMessageCard(
+              eventId: linkedEventId,
+              onDarkBackground: mine,
+            ),
+          if (photoPath != null) _photoAttachment(m),
+          if (videoPath != null) _videoAttachment(videoPath),
+          if (filePath != null) _fileAttachment(m, mine: mine),
+          if (hasText)
+            Padding(
+              padding: EdgeInsets.fromLTRB(
+                hasMedia ? 10 : 0,
+                hasMedia ? 8 : 0,
+                hasMedia ? 10 : 0,
+                hasMedia ? 4 : 0,
+              ),
+              child: _designBubbleText(m, mine: mine),
+            ),
+          if (sharedUserLink != null)
+            Padding(
+              padding: EdgeInsets.only(top: hasText ? 8 : 0),
+              child: SharedUserProfileMessageCard(
+                userIdentifier: sharedUserLink.userIdentifier,
+                onDarkBackground: mine,
+                onOpenProfile: _openSharedUserProfile,
+              ),
+            ),
+        ],
+      ),
+    );
+
+    final column = Column(
+      crossAxisAlignment: mine
+          ? CrossAxisAlignment.end
+          : CrossAxisAlignment.start,
+      children: [
+        if (showSenderName)
+          Padding(
+            padding: const EdgeInsets.only(bottom: 3),
+            child: GestureDetector(
+              key: ValueKey('chat-sender-profile-name-${m.id}'),
+              behavior: HitTestBehavior.opaque,
+              onTap: !senderIsAdmin && _userForId(m.senderId) != null
+                  ? () => _openDirectChatById(m.senderId)
+                  : null,
+              child: Text(
+                senderName,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: figtree(
+                  size: 11,
+                  weight: FontWeight.w600,
+                  color: senderIsAdmin && club != null
+                      ? ChatsColors.accentText
+                      // A club inbox has exactly two parties, so cycling the
+                      // group palette would make one arbitrary colour look
+                      // meaningful: both `chats-clubs` 225:5 and
+                      // `admin-direct-messages` 335:255 draw this name in
+                      // `#71717A`. Groups keep their per-speaker colours.
+                      : _isClubInbox
+                      ? ChatsColors.muted
+                      : chatSenderAccent(senderId),
+                ),
+              ),
+            ),
+          ),
+        SwipeToReply(
+          key: ValueKey('chat-swipe-reply-${m.id}'),
+          enabled: chatStore.canWriteThread(widget.threadId, _myId),
+          onReply: () => _beginReply(m),
+          child: GestureDetector(
+            key: ValueKey('chat-message-${m.id}'),
+            behavior: HitTestBehavior.opaque,
+            onLongPress: () => _openMessageLongPress(m),
+            child: bubble,
+          ),
+        ),
+        if (m.reactions.isNotEmpty)
+          Padding(
+            padding: const EdgeInsets.only(top: 4),
+            child: _designReactionChips(m, alignEnd: mine),
+          ),
+        if (showTime)
+          Padding(
+            padding: const EdgeInsets.only(top: 4),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(
+                  _timeLabel(m.createdAt),
+                  style: figtree(
+                    size: 10,
+                    weight: FontWeight.w500,
+                    color: ChatsColors.muted,
+                  ),
+                ),
+                if (mine && (_isDirect || _isGroup)) ...[
+                  const SizedBox(width: 5),
+                  _messageStatusIndicator(m),
+                ],
+              ],
+            ),
+          ),
+      ],
+    );
+
+    return Padding(
+      key: anchor,
+      padding: const EdgeInsets.only(top: 8),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.end,
+        mainAxisAlignment: mine
+            ? MainAxisAlignment.end
+            : MainAxisAlignment.start,
+        children: [
+          if (showAvatar)
+            Padding(
+              // Bottom-aligned beside the bubble, as on `102:152`.
+              padding: EdgeInsets.only(right: 8, bottom: showTime ? 20 : 0),
+              child: GestureDetector(
+                key: ValueKey('group-message-avatar-${m.id}'),
+                behavior: HitTestBehavior.opaque,
+                onTap: _userForId(m.senderId) == null
+                    ? null
+                    : () => _openDirectChatById(m.senderId),
+                child: UserAvatar(
+                  userId: senderId,
+                  name: senderName,
+                  size: 28,
+                  fontSize: 11,
+                ),
+              ),
+            ),
+          Flexible(child: column),
+        ],
+      ),
+    );
+  }
+
+  /// Bubble body text, with search hits picked out in bold when the in-thread
+  /// search is open — `search-results` bolds the matched word in place.
+  Widget _designBubbleText(ChatMessage m, {required bool mine}) {
+    final base = chatBubbleTextStyle(mine: mine);
+    final needle = _searchOpen
+        ? _searchController.text.trim().toLowerCase()
+        : '';
+    if (needle.isEmpty) {
+      return UserProfileLinkText(
+        key: ValueKey('chat-message-text-${m.id}'),
+        text: m.content,
+        style: base,
+        linkStyle: base.copyWith(
+          fontWeight: FontWeight.w700,
+          decoration: TextDecoration.underline,
+          decorationColor: mine ? ChatsColors.onAccent : ChatsColors.accentText,
+          color: mine ? ChatsColors.onAccent : ChatsColors.accentText,
+        ),
+        onUserLinkTap: _openSharedUserProfile,
+      );
+    }
+    final hit = base.copyWith(fontWeight: FontWeight.w800);
+    final spans = <TextSpan>[];
+    final lower = m.content.toLowerCase();
+    var cursor = 0;
+    while (true) {
+      final at = lower.indexOf(needle, cursor);
+      if (at < 0) break;
+      if (at > cursor) {
+        spans.add(TextSpan(text: m.content.substring(cursor, at)));
+      }
+      spans.add(
+        TextSpan(text: m.content.substring(at, at + needle.length), style: hit),
+      );
+      cursor = at + needle.length;
+    }
+    if (cursor < m.content.length) {
+      spans.add(TextSpan(text: m.content.substring(cursor)));
+    }
+    return Text.rich(
+      TextSpan(children: spans),
+      key: ValueKey('chat-message-text-${m.id}'),
+      style: base,
+    );
+  }
+
+  Widget _designReplyQuote(
+    ChatMessage message, {
+    required bool mine,
+    required bool hasBody,
+  }) {
+    final repliedSenderId = message.replyToSenderId ?? '';
+    final repliedSenderName = repliedSenderId == _myId
+        ? S.you
+        : _senderInfo(repliedSenderId).$1;
+    final onAccent = mine ? ChatsColors.onAccent : ChatsColors.text;
+    return Container(
+      key: ValueKey('chat-reply-quote-${message.id}'),
+      width: double.infinity,
+      margin: EdgeInsets.only(bottom: hasBody ? 7 : 0),
+      padding: const EdgeInsets.fromLTRB(10, 7, 9, 7),
+      decoration: BoxDecoration(
+        color: mine
+            ? Colors.black.withValues(alpha: 0.18)
+            : ChatsColors.card.withValues(alpha: 0.7),
+        borderRadius: BorderRadius.circular(10),
+        border: Border(
+          left: BorderSide(
+            color: mine ? ChatsColors.onAccent : ChatsColors.accent,
+            width: 3,
+          ),
+        ),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            repliedSenderName,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: figtree(
+              size: 11,
+              weight: FontWeight.w700,
+              color: mine ? ChatsColors.onAccent : ChatsColors.accentText,
+            ),
+          ),
+          const SizedBox(height: 2),
+          Text(
+            message.replyToPreview ?? S.message,
+            maxLines: 2,
+            overflow: TextOverflow.ellipsis,
+            style: figtree(
+              size: 11,
+              weight: FontWeight.w400,
+              color: onAccent.withValues(alpha: 0.82),
+              height: 1.3,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _designReactionChips(ChatMessage m, {required bool alignEnd}) {
+    final entries = m.reactions.entries.toList()
+      ..sort((a, b) => b.value.length.compareTo(a.value.length));
+    return Wrap(
+      spacing: 5,
+      alignment: alignEnd ? WrapAlignment.end : WrapAlignment.start,
+      children: [
+        for (final entry in entries)
+          GestureDetector(
+            key: ValueKey('chat-reaction-${m.id}-${entry.key}'),
+            onTap: () => chatStore.toggleReaction(
+              messageId: m.id,
+              userId: _myId,
+              emoji: entry.key,
+            ),
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
+              decoration: BoxDecoration(
+                color: ChatsColors.card,
+                borderRadius: BorderRadius.circular(999),
+                border: Border.all(
+                  color: entry.value.contains(_myId)
+                      ? ChatsColors.accent
+                      : ChatsColors.border,
+                ),
+              ),
+              child: Text(
+                entry.value.length > 1
+                    ? '${entry.key} ${entry.value.length}'
+                    : entry.key,
+                style: figtree(
+                  size: 12,
+                  weight: FontWeight.w600,
+                  color: ChatsColors.muted,
+                ),
+              ),
+            ),
+          ),
+      ],
+    );
+  }
+
+  Widget _designReplyBanner(ChatMessage message) {
+    final senderName = message.senderId == _myId
+        ? S.you
+        : _senderInfo(message.senderId).$1;
+    return Container(
+      key: const ValueKey('chat-reply-composer-preview'),
+      padding: const EdgeInsets.fromLTRB(12, 8, 6, 8),
+      decoration: BoxDecoration(
+        color: ChatsColors.fill,
+        borderRadius: BorderRadius.circular(kChatCardRadius),
+        border: Border(left: BorderSide(color: ChatsColors.accent, width: 3)),
+      ),
+      child: Row(
+        children: [
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  S.replyingTo(senderName),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: figtree(
+                    size: 11,
+                    weight: FontWeight.w700,
+                    color: ChatsColors.accentText,
+                  ),
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  message.content.trim().isEmpty ? S.message : message.content,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: figtree(
+                    size: 12,
+                    weight: FontWeight.w400,
+                    color: ChatsColors.muted,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          GestureDetector(
+            key: const ValueKey('chat-cancel-reply'),
+            behavior: HitTestBehavior.opaque,
+            onTap: () => setState(() => _replyingTo = null),
+            child: Padding(
+              padding: const EdgeInsets.all(6),
+              child: Icon(
+                Icons.close_rounded,
+                size: 16,
+                color: ChatsColors.muted,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
   // ── Build ───────────────────────────────────────────────────────────────────
 
   @override
@@ -1029,6 +2009,7 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
         embedded: widget.embedded,
       );
     }
+    if (_designChat) return _buildDesignThread();
     return Scaffold(
       backgroundColor: AppColors.background,
       body: Stack(
@@ -1703,7 +2684,17 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
 
     final linkedEventId = m.linkedEventId;
     final hasEventPreview = linkedEventId != null;
-    final hasText = m.content.trim().isNotEmpty && !hasEventPreview;
+    final userLinkMatches = UserProfileLink.matchesIn(m.content);
+    final sharedUserLink = userLinkMatches.isEmpty
+        ? null
+        : userLinkMatches.first;
+    final isStandaloneUserLink =
+        sharedUserLink != null &&
+        UserProfileLink.isStandalone(m.content, sharedUserLink);
+    final hasText =
+        m.content.trim().isNotEmpty &&
+        !hasEventPreview &&
+        !isStandaloneUserLink;
     final photoPath = m.kind == ChatMessageKind.photo ? m.attachmentPath : null;
     final attachedFilePath = m.kind == ChatMessageKind.file
         ? m.attachmentPath
@@ -1792,14 +2783,34 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
                 hasMedia ? 8 : 0,
                 hasMedia ? 3 : 0,
               ),
-              child: Text(
-                m.content,
+              child: UserProfileLinkText(
+                key: ValueKey('chat-message-text-${m.id}'),
+                text: m.content,
                 style: TextStyle(
                   fontSize: 14.5,
                   height: 1.45,
                   letterSpacing: -0.1,
                   color: mine ? Colors.white : AppColors.text,
                 ),
+                linkStyle: TextStyle(
+                  fontSize: 14.5,
+                  height: 1.45,
+                  letterSpacing: -0.1,
+                  fontWeight: FontWeight.w700,
+                  decoration: TextDecoration.underline,
+                  decorationColor: mine ? Colors.white : AppColors.primaryRed,
+                  color: mine ? Colors.white : AppColors.primaryRed,
+                ),
+                onUserLinkTap: _openSharedUserProfile,
+              ),
+            ),
+          if (sharedUserLink != null)
+            Padding(
+              padding: EdgeInsets.only(top: hasText ? 8 : 0),
+              child: SharedUserProfileMessageCard(
+                userIdentifier: sharedUserLink.userIdentifier,
+                onDarkBackground: mine,
+                onOpenProfile: _openSharedUserProfile,
               ),
             ),
         ],

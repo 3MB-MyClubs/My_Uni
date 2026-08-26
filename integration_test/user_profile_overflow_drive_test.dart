@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:integration_test/integration_test.dart';
 
+import 'package:flutter_application_1/l10n/app_localizations.dart';
 import 'package:flutter_application_1/models/user.dart';
 import 'package:flutter_application_1/screens/user_profile_screen.dart';
 import 'package:flutter_application_1/services/auth_service.dart';
@@ -50,6 +51,8 @@ void main() {
         child: MaterialApp(
           debugShowCheckedModeBanner: false,
           theme: ThemeData(brightness: Brightness.dark),
+          localizationsDelegates: AppLocalizations.localizationsDelegates,
+          supportedLocales: AppLocalizations.supportedLocales,
           home: UserProfileScreen(user: efe),
         ),
       ),
@@ -59,7 +62,7 @@ void main() {
     await tester.pump();
     await binding.takeScreenshot('user-profile-long-major');
 
-    expect(find.text('Efe Dinc'), findsWidgets); // app bar title + header
+    expect(find.text('Efe Dinc'), findsOneWidget); // `profile-hero` name
     expect(
       tester.takeException(),
       isNull,

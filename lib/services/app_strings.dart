@@ -1155,4 +1155,637 @@ class S {
 
   static String monthShort(int month) =>
       _t(_monthsEn[(month - 1) % 12], _monthsTr[(month - 1) % 12]);
+
+  // ── HOME area (ClubUp-Desings handoff) ─────────────────────────────────────
+  /// `categories-horizontal-track` greeting prefix, e.g. "Hi, Hakan".
+  static String get hiPrefix => _t('Hi,', 'Merhaba,');
+  static String get unfollow => _t('Unfollow', 'Takibi bırak');
+  static String get repliesTitle => _t('Replies', 'Yanıtlar');
+  static String get replyAction => _t('Reply', 'Yanıtla');
+  static String get noRepliesYetLine =>
+      _t('No replies yet. Start the thread!', 'Henüz yanıt yok. İlk sen yaz!');
+  static String replyToHint(String name) =>
+      _t('Reply to $name…', '$name kişisine yanıt ver…');
+  static String get shareSheetTitle => _t('Share', 'Paylaş');
+  static String get quickSendLabel => _t('QUICK SEND', 'HIZLI GÖNDER');
+  static String get shareResultsLabel => _t('RESULTS', 'SONUÇLAR');
+  static String get shareSearchHint => _t('Search chats…', 'Sohbetlerde ara…');
+  static String get sendAction => _t('Send', 'Gönder');
+  static String get copyLinkAction => _t('Copy Link', 'Bağlantıyı kopyala');
+  static String get noShareMatches =>
+      _t('No chats match that name.', 'Bu ada uyan sohbet yok.');
+
+  // ── PROFILE area (ClubUp-Desings handoff) ──────────────────────────────────
+  /// `mutual-clubs` section header on `profile-menu`.
+  static String get mutualClubs => _t('Mutual Clubs', 'Ortak Kulüpler');
+
+  /// `hosting` section header — upcoming events at clubs where this student
+  /// holds a board role.
+  static String get hostingNext => _t('Hosting Next', 'Sırada Düzenliyor');
+
+  /// The `badge` beside a peer's handle when they already follow you.
+  static String get followsYou => _t('Follows you', 'Seni takip ediyor');
+
+  /// Quiet placeholders — the frames have no empty state for these sections.
+  static String get noClubsYetLine =>
+      _t('No clubs yet. Find one to join!', 'Henüz kulüp yok. Birine katıl!');
+  static String get noUpcomingEventsLine =>
+      _t('Nothing on the calendar yet.', 'Takvimde henüz bir şey yok.');
+
+  // ── CHATS area (ClubUp-Desings handoff) ────────────────────────────────────
+  // The header dropdown on `chats-light` 243:475. `S.clubChats` /
+  // `S.studentChats` are the old segmented control's labels and say
+  // "Clubs" / "Students"; the handoff says "Clubs" / "Friends".
+  static String get chatsTabClubs => _t('Clubs', 'Kulüpler');
+  static String get chatsTabFriends => _t('Friends', 'Arkadaşlar');
+
+  /// `search-bar` placeholder on `chats-light` 243:489.
+  static String get searchConversations =>
+      _t('Search conversations…', 'Sohbetlerde ara…');
+
+  /// The three round quick actions on `group-info` 104:36.
+  static String get chatsMuteAction => _t('Mute', 'Sessize al');
+  static String get chatsUnmuteAction => _t('Unmute', 'Sesi aç');
+  static String get chatsMediaAction => _t('Media', 'Medya');
+
+  /// Card labels on `group-info` 104:50 / 104:53 and `edit-group-info`
+  /// 107:37 / 107:42.
+  static String get chatsDescriptionLabel => _t('Description', 'Açıklama');
+  static String get chatsMembersLabel => _t('Members', 'Üyeler');
+  static String get chatsGroupNameLabel => _t('Group Name', 'Grup Adı');
+  static String chatsMembersCount(int count) =>
+      _t('Members ($count)', 'Üyeler ($count)');
+  static String get chatsAddMemberRow => _t('Add member', 'Üye ekle');
+
+  /// A group description is **device-local** — `ChatGroup` has no such field,
+  /// so there is nothing to sync it with. See `chat_group_prefs.dart`.
+  static String get chatsDescriptionHint =>
+      _t('Add a description…', 'Bir açıklama ekle…');
+  static String get chatsDescriptionLocalNote =>
+      _t('Saved on this device only.', 'Yalnızca bu cihazda kaydedilir.');
+
+  /// `group-menu` sheet rows, 105:62.
+  static String get chatsEditGroupInfo =>
+      _t('Edit Group Info', 'Grup Bilgisini Düzenle');
+  static String get chatsAddToFavorites =>
+      _t('Add to Favorites', 'Favorilere Ekle');
+  static String get chatsRemoveFromFavorites =>
+      _t('Remove from Favorites', 'Favorilerden Çıkar');
+  static String get chatsMuteNotifications =>
+      _t('Mute Notifications', 'Bildirimleri Sessize Al');
+  static String get chatsUnmuteNotifications =>
+      _t('Unmute Notifications', 'Bildirimleri Aç');
+  static String get chatsReportGroup => _t('Report Group', 'Grubu Bildir');
+  static String get chatsLeaveGroup => _t('Leave Group', 'Gruptan Ayrıl');
+  static String get chatsExitGroup => _t('Exit Group', 'Gruptan Çık');
+
+  /// `leave-group` dialog, 105:474.
+  static String get chatsLeaveGroupQuestion =>
+      _t('Leave Group?', 'Gruptan ayrılınsın mı?');
+  static String chatsLeaveGroupBody(String name) => _t(
+    'You will no longer receive messages from $name. This action cannot be undone.',
+    '$name grubundan artık mesaj almayacaksın. Bu işlem geri alınamaz.',
+  );
+
+  /// `shared-media` 105:189.
+  static String get chatsSharedMedia => _t('Shared Media', 'Paylaşılan Medya');
+  static String get chatsMediaTab => _t('Media', 'Medya');
+  static String get chatsLinksTab => _t('Links', 'Bağlantılar');
+  static String get chatsDocsTab => _t('Docs', 'Belgeler');
+  static String get chatsNoSharedMedia =>
+      _t('No photos shared yet.', 'Henüz fotoğraf paylaşılmadı.');
+  static String get chatsNoSharedLinks =>
+      _t('No links shared yet.', 'Henüz bağlantı paylaşılmadı.');
+  static String get chatsNoSharedDocs =>
+      _t('No files shared yet.', 'Henüz dosya paylaşılmadı.');
+
+  /// `edit-group-info` 107:35 / 107:83.
+  static String get chatsChangeGroupPhoto =>
+      _t('Change Group Photo', 'Grup Fotoğrafını Değiştir');
+  static String get chatsSaveChanges =>
+      _t('Save Changes', 'Değişiklikleri Kaydet');
+
+  /// `add-member` 105:346 / 105:350 / 105:356.
+  static String get chatsSearchContacts =>
+      _t('Search contacts…', 'Kişilerde ara…');
+  static String get chatsSuggested => _t('Suggested', 'Önerilen');
+
+  /// `member-actions` sheet rows, 108:70.
+  static String get chatsMakeAdmin => _t('Make Admin', 'Yönetici Yap');
+  static String get chatsDismissAdmin =>
+      _t('Dismiss as Admin', 'Yöneticilikten Çıkar');
+  static String get chatsRemoveFromGroup =>
+      _t('Remove from Group', 'Gruptan Çıkar');
+  static String get chatsMemberRole => _t('Member', 'Üye');
+
+  /// `search-results` 110:105 — the in-thread message search.
+  static String get chatsSearchMessages =>
+      _t('Search messages…', 'Mesajlarda ara…');
+  static String chatsResultsFound(int count) => _t(
+    count == 1 ? '1 result found' : '$count results found',
+    '$count sonuç bulundu',
+  );
+  static String get chatsNoResultsFound => _t('No matches', 'Eşleşme yok');
+
+  /// `chats-clubs` 234:412 / 225:27 — the private lane a student shares with a
+  /// club's admins.
+  static String get chatsDirectLane => _t('Direct', 'Özel');
+  static String get chatsDmWithAdmins =>
+      _t('Direct message with admins', 'Yöneticilerle özel mesaj');
+
+  /// `chat-group` header subtitle, 102:144.
+  static String chatsFriendsCount(int count) =>
+      _t(count == 1 ? '1 friend' : '$count friends', '$count arkadaş');
+
+  /// The old create-group screen hard-coded this in English.
+  static String get chatsSelectAtLeastTwo =>
+      _t('Select at least 2', 'En az 2 kişi seç');
+
+  /// `time-ago` on an inbox row, 243:497.
+  static String chatsTimeAgo(String amount) =>
+      _t('$amount ago', '$amount önce');
+  static String get chatsJustNow => _t('now', 'şimdi');
+
+  // ── CLUB CHATS INSIDE area (ClubUp-Desings handoff) ────────────────────────
+  // The lane dropdown on `club-header` 221:363. `S.clubBoardTab` /
+  // `S.clubChatTab` / `S.clubSoloChatTab` are the old segmented control's
+  // labels ("Board" / "Chat" / "Solo Chat"); the handoff reads
+  // "Board" / "Chats" / "Direct".
+  static String get clubLaneBoard => _t('Board', 'Pano');
+  static String get clubLaneChats => _t('Chats', 'Sohbet');
+  static String get clubLaneDirect => _t('Direct', 'Özel');
+
+  /// `announcement-card` 143:240 — the notice's reply count.
+  static String clubReplyCount(int count) =>
+      _t(count == 1 ? '1 reply' : '$count replies', '$count yanıt');
+
+  /// `composer-locked` 143:279.
+  static String get clubOnlyAdminsPost => _t(
+    'Only admins can post in announcements',
+    'Duyurulara yalnızca yöneticiler yazabilir',
+  );
+
+  /// `system-message` 143:37 — the Chats lane's pinned notice.
+  static String clubPinnedByLine(String name) =>
+      _t('$name pinned a message', '$name bir mesaj sabitledi');
+
+  /// `143:66` — the receipt under an outgoing club message.
+  static String clubSeenBy(int count) =>
+      _t('Seen by $count', '$count kişi gördü');
+
+  /// `club-attachment-sheet` 146:298.
+  static String clubShareToTitle(String clubName) =>
+      _t('Share to $clubName', '$clubName ile paylaş');
+  static String clubShareVisibility(int members) => _t(
+    'Everything you send is visible to all $members members',
+    'Gönderdiğin her şey $members üyenin tamamına görünür',
+  );
+  static String get clubShareEvent => _t('Event', 'Etkinlik');
+
+  /// `club-message-actions` 146:3 rows that are not already in `S`.
+  static String get clubPinMessage => _t('Pin Message', 'Mesajı Sabitle');
+  static String get clubUnpinMessage =>
+      _t('Unpin Message', 'Sabitlemeyi Kaldır');
+  static String get clubSaveMessage => _t('Save Message', 'Mesajı Kaydet');
+  static String get clubUnsaveMessage =>
+      _t('Remove from Saved', 'Kayıtlılardan Çıkar');
+  static String get clubReportMessage => _t('Report Message', 'Mesajı Bildir');
+  static String get clubDeleteForEveryone =>
+      _t('Delete for Everyone', 'Herkesten Sil');
+  static String get clubMessageSaved =>
+      _t('Saved on this device.', 'Bu cihazda kaydedildi.');
+
+  /// `club-chats-empty` 140:31.
+  static String get clubChatsEmptyBody => _t(
+    'Join a club and its group chat shows up here. Say hello, plan events and '
+        'share photos.',
+    'Bir kulübe katıl, grup sohbeti burada görünsün. Selam ver, etkinlik '
+        'planla, fotoğraf paylaş.',
+  );
+  static String get clubChatsExploreClubs =>
+      _t('Explore Clubs', 'Kulüpleri Keşfet');
+  static String get clubChatsBrowseEvents =>
+      _t('Browse Events', 'Etkinliklere Bak');
+  static String get clubChatsFriendsHint => _t(
+    'Friends chats live in the Friends tab',
+    'Arkadaş sohbetleri Arkadaşlar sekmesinde',
+  );
+
+  /// `club-chats-search` 141:33 — the section label over club hits.
+  static String get clubSearchSectionLabel => _t('Clubs', 'Kulüpler');
+  static String clubMembersAndUnread(int members, int unread) => _t(
+    unread > 0 ? '$members members · $unread unread' : '$members members',
+    unread > 0 ? '$members üye · $unread okunmamış' : '$members üye',
+  );
+
+  /// `club-member-list` 142:231.
+  static String get clubMembersTitle => _t('Members', 'Üyeler');
+  static String get clubSearchMembers => _t('Search members', 'Üye ara');
+  static String get clubSectionAdmins => _t('Admins', 'Yöneticiler');
+  static String get clubSectionModerators => _t('Moderators', 'Moderatörler');
+  static String get clubSectionMembers => _t('Members', 'Üyeler');
+  static String get clubRoleMod => _t('Mod', 'Mod');
+  static String get clubRoleYou => _t('You', 'Sen');
+  static String get clubCreatedTheClub =>
+      _t('Created the club', 'Kulübü kurdu');
+  static String get clubMemberRole => _t('Member', 'Üye');
+  static String get clubNoMemberMatches =>
+      _t('No members match that name.', 'Bu ada uyan üye yok.');
+
+  /// The Chats lane before anyone has spoken — `club-chat-reply` has no empty
+  /// state of its own.
+  static String get clubChatEmptyLine => _t(
+    'No messages yet. Say hello to the club.',
+    'Henüz mesaj yok. Kulübe merhaba de.',
+  );
+
+  /// `club-chats-empty` 140:36. `S.noClubChats` says "No club conversations
+  /// yet"; the frame is shorter.
+  static String get clubChatsEmptyTitle =>
+      _t('No club chats yet', 'Henüz kulüp sohbeti yok');
+
+  // ── SETTINGS area (`profile-settings` 120:3 / 120:144)
+  /// Section labels. `Account` already exists on [AppLocalizations]; these
+  /// three do not.
+  static String get settingsPreferences => _t('Preferences', 'Tercihler');
+  static String get settingsSupport => _t('Support', 'Destek');
+  static String get settingsDangerZone => _t('Danger Zone', 'Tehlikeli Alan');
+
+  /// `row-edit-profile` reads "Name, username, bio and photo" in the frame;
+  /// students have no username field, so the line names what is really there.
+  static String get settingsEditProfileSubtitle =>
+      _t('Name, bio and photo', 'Ad, biyografi ve fotoğraf');
+
+  /// `row-privacy-security`. The frame's "Private account, blocking" promises a
+  /// private-account switch the app has no field for — blocking is what this
+  /// row actually opens.
+  static String get settingsPrivacy => _t('Privacy', 'Gizlilik');
+  static String get settingsPrivacySubtitle =>
+      _t('Blocked people and clubs', 'Engellenen kişiler ve kulüpler');
+
+  static String get settingsSavedItems => _t('Saved Items', 'Kaydedilenler');
+  static String get settingsReportProblem =>
+      _t('Report a Problem', 'Sorun Bildir');
+  static String get settingsAboutClubUp =>
+      _t('About ClubUp', 'ClubUp Hakkında');
+
+  /// `sec-support`, added on top of the frame: the browser build of ClubUp.
+  /// Title-only and link-glyphed like every other row in that section.
+  static String get settingsWebVersion => _t('Web Version', 'Web Sürümü');
+  static String get settingsLightOption => _t('Light', 'Açık');
+  static String get settingsDarkOption => _t('Dark', 'Koyu');
+
+  /// The footer under `sec-danger-zone`.
+  static String settingsVersionLine(String version, String build) =>
+      _t('ClubUp v$version (build $build)', 'ClubUp v$version (yapı $build)');
+
+  // ── FİRST LANDİNG PAGE (`login-screen` 495:5 / 485:5)
+  /// `divider` — between Log In and Sign Up.
+  static String get landingOr => _t('OR', 'VEYA');
+
+  /// `footer/admin-link`. One tap opens the club portal; five quick taps still
+  /// reveal the platform-admin entry.
+  static String get landingClubAdminPortal =>
+      _t('Club Admin Portal', 'Kulüp Yönetici Portalı');
+
+  // ── CLUB HOME area (`home-feed-alt` 272:31 / 272:200, `admin-compose` 298:5)
+  /// The compose card's placeholder. The old prompt read "What's happening at
+  /// your club?"; the frame's card is shorter.
+  static String get clubHomeComposerHint =>
+      _t("What's happening?", 'Neler oluyor?');
+
+  // ── EVENT WIZARD area (`wz-*` chain: 310:11, 310:62, 310:133, 324:978)
+  /// `nav-right` — the step chip, e.g. "1 of 3".
+  static String eventWizardStepOf(int step, int total) =>
+      _t('$step of $total', '$step / $total');
+
+  /// The three `nav-bar` titles, then the preview page.
+  static String get eventWizardStepOneTitle =>
+      _t('Create Event', 'Etkinlik Oluştur');
+  static String get eventWizardStepTwoTitle =>
+      _t('Speakers & Tags', 'Konuşmacılar ve Etiketler');
+  static String get eventWizardStepThreeTitle =>
+      _t('Programme & Preview', 'Program ve Önizleme');
+  static String get eventWizardPreviewTitle =>
+      _t('Event Preview', 'Etkinlik Önizlemesi');
+  static String get eventWizardPreviewBadge => _t('Preview', 'Önizleme');
+
+  /// `bottom-action` labels.
+  static String get eventWizardNextStep => _t('Next Step', 'Sonraki Adım');
+  static String get eventWizardCreateEvent =>
+      _t('Create Event', 'Etkinlik Oluştur');
+  static String get eventWizardPublish =>
+      _t('Publish Event', 'Etkinliği Yayınla');
+  static String get eventWizardSaveChanges =>
+      _t('Save Changes', 'Değişiklikleri Kaydet');
+
+  /// `photo-uploader` 315:32. The frame mocks a filled cover with the event
+  /// name; an empty uploader has to say what it takes.
+  static String get eventWizardCoverHint =>
+      _t('Add event cover', 'Etkinlik kapağı ekle');
+
+  /// Step 1 fields.
+  static String get eventWizardTitleLabel => _t('Event Title', 'Etkinlik Adı');
+  static String get eventWizardTitleHint =>
+      _t('e.g. Sunset DJ Session & Mixer', 'örn. Gün Batımı DJ Seansı');
+  static String get eventWizardLocationLabel => _t('Location', 'Konum');
+  static String get eventWizardLocationHint =>
+      _t('Search address or venue', 'Adres veya mekân ara');
+  static String get eventWizardDescriptionLabel =>
+      _t('Description', 'Açıklama');
+  static String get eventWizardDescriptionHint => _t(
+    'What is this event about? Share key highlights and guidelines...',
+    'Bu etkinlik ne hakkında? Öne çıkanları ve kuralları paylaş...',
+  );
+  static String get eventWizardStarts => _t('Starts', 'Başlangıç');
+  static String get eventWizardEnds => _t('Ends', 'Bitiş');
+  static String get eventWizardDate => _t('Date', 'Tarih');
+  static String get eventWizardTime => _t('Time', 'Saat');
+  static String get eventWizardSelectStartDate =>
+      _t('Select start date', 'Başlangıç tarihi');
+  static String get eventWizardSelectEndDate =>
+      _t('Select end date', 'Bitiş tarihi');
+  static String get eventWizardSelectStart => _t('Select start', 'Başlangıç');
+  static String get eventWizardSelectEnd => _t('Select end', 'Bitiş');
+
+  /// The two picker sheets, `319:7` and `315:71`.
+  static String get eventWizardSelectDate => _t('Select Date', 'Tarih Seç');
+  static String get eventWizardSelectStartTime =>
+      _t('Select Start Time', 'Başlangıç Saati');
+  static String get eventWizardSelectEndTime =>
+      _t('Select End Time', 'Bitiş Saati');
+
+  /// Step 2.
+  static String get eventWizardTagsLabel => _t('Event Tags', 'Etiketler');
+  static String get eventWizardTagHint =>
+      _t('Enter tag name...', 'Etiket adı gir...');
+  static String get eventWizardAddSpeaker =>
+      _t('Add Speaker', 'Konuşmacı Ekle');
+  static String get eventWizardAddAnotherSpeaker =>
+      _t('Add another speaker', 'Başka bir konuşmacı ekle');
+  static String get eventWizardAddRegistrationLink =>
+      _t('Add Registration Link', 'Kayıt Bağlantısı Ekle');
+  static String get eventWizardRegistrationLabel =>
+      _t('Registration Link (Optional)', 'Kayıt Bağlantısı (İsteğe bağlı)');
+  static String get eventWizardRegistrationHint =>
+      _t('e.g. ticket-link.com/event', 'örn. bilet-linki.com/etkinlik');
+
+  /// `add-speaker-modal` 325:154.
+  static String get eventWizardFullName => _t('Full Name', 'Ad Soyad');
+  static String get eventWizardFullNameHint =>
+      _t('e.g. Sarah Chen', 'örn. Elif Yılmaz');
+  static String get eventWizardRoleTitle => _t('Role / Title', 'Rol / Unvan');
+  static String get eventWizardRoleTitleHint =>
+      _t('e.g. Resident DJ & Producer', 'örn. Kulüp DJ ve Yapımcı');
+  static String get eventWizardLinkedinLabel =>
+      _t('LinkedIn Profile', 'LinkedIn Profili');
+  static String get eventWizardLinkedinHint =>
+      _t('linkedin.com/in/username', 'linkedin.com/in/kullanici');
+  static String get eventWizardSaveSpeaker =>
+      _t('Save Speaker', 'Konuşmacıyı Kaydet');
+
+  /// Step 3 and `add-session` 325:485.
+  static String get eventWizardProgrammeSchedule =>
+      _t('Programme Schedule', 'Program Akışı');
+  static String get eventWizardAddSession => _t('Add Session', 'Oturum Ekle');
+  static String get eventWizardSessionName => _t('Session Name', 'Oturum Adı');
+  static String get eventWizardSessionNameHint =>
+      _t('e.g. Keynote Panel Discussion', 'örn. Açılış Paneli');
+  static String get eventWizardSessionSpeaker =>
+      _t('Speaker / Presenter', 'Konuşmacı / Sunucu');
+  static String get eventWizardSessionSpeakerHint =>
+      _t('e.g. Sarah Chen', 'örn. Elif Yılmaz');
+  static String get eventWizardStartTime => _t('Start Time', 'Başlangıç Saati');
+  static String get eventWizardSaveSession =>
+      _t('Save Session', 'Oturumu Kaydet');
+  static String eventWizardSessionSpeakerLine(String name) =>
+      _t('Speaker: $name', 'Konuşmacı: $name');
+  static String get eventWizardNoSessions => _t(
+    'No sessions yet. Add the first one.',
+    'Henüz oturum yok. İlkini ekle.',
+  );
+
+  /// `Live Event Preview` and the preview page.
+  static String get eventWizardLivePreview =>
+      _t('Live Event Preview', 'Canlı Etkinlik Önizlemesi');
+  static String eventWizardSpeakerCount(int count) =>
+      _t('$count ${count == 1 ? 'Speaker' : 'Speakers'}', '$count Konuşmacı');
+  static String eventWizardSessionCount(int count) =>
+      _t('$count ${count == 1 ? 'Session' : 'Sessions'}', '$count Oturum');
+  static String get eventWizardAbout =>
+      _t('About this Event', 'Bu Etkinlik Hakkında');
+  static String get eventWizardUntitled =>
+      _t('Untitled event', 'Adsız etkinlik');
+
+  /// Why a step will not advance. The frame draws no disabled button, so the
+  /// CTA stays solid and says what is missing instead.
+  static String get eventWizardNeedTitleAndPlace =>
+      _t('Add a title and a location first.', 'Önce bir ad ve konum ekle.');
+  static String get eventWizardNeedValidRange => _t(
+    'The end has to come after the start.',
+    'Bitiş, başlangıçtan sonra olmalı.',
+  );
+
+  /// `plus-menu` 297:8 — the create sheet.
+  static String get eventWizardCreateNew => _t('Create New', 'Yeni Oluştur');
+  static String get eventWizardCreatePost =>
+      _t('Create Post', 'Gönderi Oluştur');
+  static String get eventWizardCreatePostSubtitle => _t(
+    'Share updates with your community',
+    'Topluluğunla güncellemeleri paylaş',
+  );
+  static String get eventWizardCreateEventSubtitle =>
+      _t('Plan and host a new event', 'Yeni bir etkinlik planla');
+
+  // ── CLUB CHATS area ─────────────────────────────────────────────────────────
+  // Section label `543:32`: the club side of a room a student already sees.
+  // Everything else on those frames reuses the CHATS and CLUB CHATS INSIDE
+  // strings, so this block is deliberately short.
+
+  /// `admin-dm-list` 335:6 — the Direct lane titles itself "Messages" on the
+  /// board side, where the header carries an inbox rather than one club.
+  static String get clubDirectInboxTitle => _t('Messages', 'Mesajlar');
+  static String get clubDirectNoMatches =>
+      _t('No conversations match that name.', 'Bu ada uyan sohbet yok.');
+  static String get clubDirectInboxEmpty => _t(
+    'No student has written to the club yet.',
+    'Kulübe henüz yazan öğrenci yok.',
+  );
+
+  /// `admin-chats-list` 331:136 — the Board lane's composer, which the student
+  /// frame draws only as a locked strip.
+  static String get clubBoardComposerHint =>
+      _t('Write an announcement…', 'Duyuru yaz…');
+
+  // ── CLUB PROFILE area ───────────────────────────────────────────────────────
+  // Section label `555:33`. Everything else on these frames reuses existing
+  // l10n keys (Members / Events / Board Members / View), so this block only
+  // carries what the handoff added and the profile-specific Timeline label.
+
+  /// `chat-header` `332:2208` — the frames title the club's own profile
+  /// rather than repeating the club name, which the identity card already
+  /// carries.
+  static String get clubProfileTitle => _t('Club Profile', 'Kulüp Profili');
+
+  /// The club profile presents posts as a chronological stream, so its label
+  /// is distinct from the generic Posts wording used elsewhere in the app.
+  static String get clubProfileTimeline => _t('Timeline', 'Akış');
+
+  /// `board-header` `332:2015` — opens the full `board-members-all` list.
+  static String get clubProfileViewAll => _t('View all', 'Tümünü gör');
+
+  /// `board-members-all` `346:24` / `346:30`.
+  static String get clubProfileBoardMembersTitle =>
+      _t('Board Members', 'Yönetim Kurulu');
+  static String get clubProfileSearchMembers =>
+      _t('Search members…', 'Üye ara…');
+  static String get clubProfileNoMembersMatch => _t(
+    'No board member matches that name.',
+    'Bu ada uyan yönetim üyesi yok.',
+  );
+
+  /// The frames draw no per-row controls, so the club's own edit/remove
+  /// actions live behind a long press and this line says so.
+  static String get clubProfileBoardHint => _t(
+    'Press and hold a member to change their title or remove them.',
+    'Unvanını değiştirmek veya çıkarmak için üyeye basılı tut.',
+  );
+
+  /// The event cards carry no control either, for the same reason.
+  static String get clubProfileEventHint => _t(
+    'Press and hold an event to delete it.',
+    'Silmek için etkinliğe basılı tut.',
+  );
+
+  /// `insights` `347:24` and its four metric tiles.
+  static String get clubInsightsTitle =>
+      _t('Club Insights', 'Kulüp İstatistikleri');
+  static String get clubInsightsAllTimeFollowers =>
+      _t('All-Time Followers', 'Toplam Takipçi');
+  static String get clubInsightsTotalRsvps =>
+      _t('Total RSVPs', 'Toplam Katılım');
+  static String get clubInsightsTotalLikes =>
+      _t('Total Likes', 'Toplam Beğeni');
+  static String get clubInsightsTotalViews =>
+      _t('Total Views', 'Toplam Görüntülenme');
+  static String get clubInsightsPostPerformance =>
+      _t('Post Performance', 'Gönderi Performansı');
+  static String get clubInsightsMostPopular => _t('Most Popular', 'En Popüler');
+
+  // ── Manage Board Members — `board-members-light/dark` `413:7` / `413:105`.
+  // The frame reachable from Settings ▸ Manage Board Members. Its accent is
+  // drawn `#1DA1F2` in Figma — a mockup default; the screen uses the club
+  // burgundy like every other frame in this section.
+
+  /// `section-label` `413:29`.
+  static String get clubBoardAddSection =>
+      _t('ADD BOARD MEMBER', 'YÖNETİM ÜYESİ EKLE');
+
+  /// `search-field` `413:34`.
+  static String get clubBoardSearchByName =>
+      _t('Search by name…', 'İsme göre ara…');
+
+  /// `role-input-container` `413:45` and the field's placeholder `413:47`,
+  /// which the frame fills with a sample title.
+  static String get clubBoardRoleLabel => _t('Role *', 'Unvan *');
+  static String get clubBoardRoleHint => _t('Treasurer', 'Sayman');
+  static String get clubBoardRoleRequired => _t(
+    'Write a role before adding this member.',
+    'Bu üyeyi eklemeden önce bir unvan yazın.',
+  );
+
+  /// `add-to-board-btn` `413:49`.
+  static String get clubBoardAddToBoard => _t('Add to Board', 'Yönetime Ekle');
+
+  /// `section-label` `413:52` — the frame prints the live count in the label.
+  static String clubBoardCurrentCount(int count) =>
+      _t('CURRENT BOARD MEMBERS ($count)', 'MEVCUT YÖNETİM ÜYELERİ ($count)');
+
+  /// The dropdown lists the club's members who are not on the board yet.
+  static String get clubBoardNoCandidates => _t(
+    'Everyone who follows this club is already on the board.',
+    'Bu kulübü takip eden herkes zaten yönetimde.',
+  );
+  static String get clubBoardNoCandidateMatch =>
+      _t('No member matches that name.', 'Bu ada uyan üye yok.');
+
+  /// Shown under the list: the frame draws only a trash button, so changing a
+  /// title stays on the long press this section uses everywhere else.
+  static String get clubBoardManageHint => _t(
+    'Press and hold a member to change their title.',
+    'Unvanını değiştirmek için üyeye basılı tut.',
+  );
+
+  /// The `Add to Board` button acts on the row you tapped in the dropdown.
+  static String get clubBoardPickSomeone =>
+      _t('Pick someone from the list first.', 'Önce listeden birini seç.');
+
+  // ── CLUB SETTINGS sub-flow ──────────────────────────────────────────────────
+  // `settings` `350:6` / `350:184` and everything it opens: `edit-category`
+  // `367:61`, `edit-description` `367:157`, `settings-language` `417:208` and
+  // `blocked-students`/`blocked-clubs` `414:*`. Same story as the board screen:
+  // every accent on these frames is drawn `#1DA1F2`, a mockup default, and is
+  // rendered in the club burgundy instead.
+
+  /// `section-label` `350:31` / `350:69` — the frame's two new section names;
+  /// Preferences, Support and Danger Zone already exist above.
+  static String get clubSettingsProfileSection =>
+      _t('Club Profile', 'Kulüp Profili');
+  static String get clubSettingsManagementSection =>
+      _t('Management', 'Yönetim');
+  static String get clubSettingsLegalSection => _t('Legal', 'Yasal');
+
+  /// `change-photo-btn` `350:43` — the chip on the identity card.
+  static String get clubSettingsEditPhoto => _t('Edit', 'Düzenle');
+
+  /// `settings-row` `350:83` — one row for both blocked lists.
+  static String get clubSettingsBlockedRow =>
+      _t('Blocked People & Clubs', 'Engellenen Kişiler ve Kulüpler');
+
+  /// `settings-language` `417:208` — the sheet behind the Language row.
+  static String get clubSettingsChooseLanguage =>
+      _t('Choose Language', 'Dil Seç');
+
+  /// `edit-category` `367:61`.
+  static String get clubCategoryTitle => _t('Category', 'Kategori');
+  static String get clubCategorySearchHint =>
+      _t('Search or create a tag…', 'Etiket ara veya oluştur…');
+  static String get clubCategorySuggested => _t('Suggested', 'Önerilen');
+  static String get clubCategoryAdded => _t('Added', 'Eklenen');
+  static String get clubCategoryAdd => _t('Add Category', 'Kategori Ekle');
+  static String get clubCategoryNoneAdded =>
+      _t('No categories yet.', 'Henüz kategori yok.');
+
+  /// `edit-description` `367:157`. The frame prints 300; the app's field has
+  /// always capped at 240 and raising it is a backend question, so the limit
+  /// is passed in rather than written into the string.
+  static String get clubDescriptionTitle => _t('Description', 'Açıklama');
+  static String clubDescriptionMax(int max) =>
+      _t('Maximum $max characters', 'En fazla $max karakter');
+  static String clubDescriptionCounter(int used, int max) => '$used / $max';
+
+  /// `blocked-students` / `blocked-clubs` `414:8` / `414:103`.
+  static String get blockedSearchHint =>
+      _t('Search blocked…', 'Engellenenlerde ara…');
+  static String get blockedStudentsTab => _t('Students', 'Öğrenciler');
+  static String get blockedClubsTab => _t('Clubs', 'Kulüpler');
+  static String get bannedStudentsLabel =>
+      _t('Banned Students', 'Engellenen Öğrenciler');
+  static String get bannedClubsLabel =>
+      _t('Banned Clubs', 'Engellenen Kulüpler');
+  static String get blockedNoMatch =>
+      _t('Nothing matches that name.', 'Bu ada uyan bir şey yok.');
+  static String blockedClubMembers(int count) =>
+      _t('$count Members', '$count Üye');
+
+  /// The name sheet on `settings` `421:9`.
+  static String get clubEditNameTitle =>
+      _t('Edit Club Name', 'Kulüp Adını Düzenle');
+  static String get clubEditNameSubtitle => _t(
+    'Changes are updated instantly for all members.',
+    'Değişiklikler tüm üyeler için anında güncellenir.',
+  );
+  static String get clubEditNameField => _t('Club Name', 'Kulüp Adı');
+  static String get clubEditNameSave =>
+      _t('Save Changes', 'Değişiklikleri Kaydet');
 }

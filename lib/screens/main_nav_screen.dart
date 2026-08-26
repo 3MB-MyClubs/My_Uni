@@ -26,6 +26,7 @@ import '../onboarding/starter_checklist_service.dart';
 import '../widgets/lazy_indexed_stack.dart';
 import '../widgets/app_pressable.dart';
 import '../widgets/account_switcher_sheet.dart';
+import '../widgets/event_wizard_design.dart';
 import 'feed_screen.dart';
 import 'this_week_screen.dart';
 // my_calendar_screen is used from feed_screen, not nav;
@@ -37,119 +38,6 @@ import 'create_event_screen.dart';
 import 'create_post_screen.dart';
 import 'notifications_screen.dart';
 import 'moderation_center_screen.dart';
-
-/// Presents the club-admin create chooser for posts and events.
-Future<void> showClubCreateSheet(
-  BuildContext context, {
-  required VoidCallback onPost,
-  required VoidCallback onEvent,
-}) {
-  return showModalBottomSheet<void>(
-    context: context,
-    backgroundColor: Colors.transparent,
-    barrierColor: Colors.black.withValues(alpha: 0.42),
-    isScrollControlled: true,
-    useSafeArea: true,
-    builder: (sheetContext) {
-      final theme = Theme.of(sheetContext);
-      final isDark = theme.brightness == Brightness.dark;
-      final surface = isDark ? DarkColors.card : Colors.white;
-      final primaryText = isDark ? Colors.white : AppColors.text;
-      final secondaryText = isDark
-          ? Colors.white.withValues(alpha: 0.68)
-          : AppColors.secondaryText;
-
-      void choose(VoidCallback callback) {
-        Navigator.of(sheetContext).pop();
-        callback();
-      }
-
-      return SafeArea(
-        top: false,
-        child: Padding(
-          padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
-          child: DecoratedBox(
-            decoration: BoxDecoration(
-              color: surface,
-              borderRadius: const BorderRadius.all(Radius.circular(28)),
-              border: Border.all(
-                color: Colors.white.withValues(alpha: isDark ? 0.08 : 0.45),
-              ),
-              boxShadow: [
-                BoxShadow(
-                  color: Colors.black.withValues(alpha: isDark ? 0.35 : 0.12),
-                  blurRadius: 28,
-                  offset: const Offset(0, 16),
-                ),
-              ],
-            ),
-            child: Padding(
-              padding: const EdgeInsets.fromLTRB(22, 18, 22, 20),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Center(
-                    child: Container(
-                      width: 42,
-                      height: 4,
-                      decoration: BoxDecoration(
-                        color: secondaryText.withValues(alpha: 0.34),
-                        borderRadius: BorderRadius.circular(999),
-                      ),
-                    ),
-                  ),
-                  const SizedBox(height: 18),
-                  Text(
-                    AppLocalizations.of(sheetContext)!.createSheetTitle,
-                    style: theme.textTheme.headlineSmall?.copyWith(
-                      color: primaryText,
-                      fontWeight: FontWeight.w800,
-                    ),
-                  ),
-                  const SizedBox(height: 4),
-                  Text(
-                    AppLocalizations.of(sheetContext)!.updateYourCommunity,
-                    style: theme.textTheme.bodyMedium?.copyWith(
-                      color: secondaryText,
-                      fontWeight: FontWeight.w600,
-                    ),
-                  ),
-                  const SizedBox(height: 18),
-                  Text(
-                    AppLocalizations.of(sheetContext)!.createSomethingInspiring,
-                    style: theme.textTheme.titleMedium?.copyWith(
-                      color: primaryText,
-                      fontWeight: FontWeight.w700,
-                    ),
-                  ),
-                  const SizedBox(height: 14),
-                  _CreateSheetAction(
-                    icon: Icons.article_outlined,
-                    title: AppLocalizations.of(sheetContext)!.post,
-                    subtitle: AppLocalizations.of(
-                      sheetContext,
-                    )!.shareUpdateWithFollowers,
-                    onTap: () => choose(onPost),
-                  ),
-                  const SizedBox(height: 10),
-                  _CreateSheetAction(
-                    icon: Icons.event_available_outlined,
-                    title: AppLocalizations.of(sheetContext)!.eventLabel,
-                    subtitle: AppLocalizations.of(
-                      sheetContext,
-                    )!.addEventToCampusCalendar,
-                    onTap: () => choose(onEvent),
-                  ),
-                ],
-              ),
-            ),
-          ),
-        ),
-      );
-    },
-  );
-}
 
 class MainNavScreen extends ConsumerStatefulWidget {
   final bool isAdmin;
@@ -205,7 +93,12 @@ class _MainNavScreenState extends ConsumerState<MainNavScreen>
     if (_isPlatformModerator)
       const ModerationCenterScreen() // 3
     else
-      ChatsScreen(isTutorialHost: true, controller: _chatsController), // 3
+      ChatsScreen(
+        isTutorialHost: true,
+        controller: _chatsController,
+        // `club-chats-empty` 140:39 / 140:43 route out to Search and This Week.
+        onSelectTab: _selectNavIndex,
+      ), // 3
     ProfileScreen(onLogout: () => widget.onLogout?.call()), // 4
     if (widget.isAdmin) AdminDashboard(onLogout: widget.onLogout), // 5
   ];
@@ -473,9 +366,11 @@ class _MainNavScreenState extends ConsumerState<MainNavScreen>
         _navUpwardDelta = 0;
         _navShrinkController.stop();
         _navExpanding = false;
-        _navShrinkController.value = (_navShrinkController.value +
-                delta / _navShrinkDistance)
-            .clamp(0.0, 1.0);
+        _navShrinkController.value =
+            (_navShrinkController.value + delta / _navShrinkDistance).clamp(
+              0.0,
+              1.0,
+            );
       } else if (delta < 0) {
         // A deliberate upward move restores the bar; the sub-pixel jitter of a
         // settling fling or a bounce does not.
@@ -644,6 +539,8 @@ class _MainNavScreenState extends ConsumerState<MainNavScreen>
     );
   }
 
+  // Posts are authored inline on Club Home. The center + is reserved for the
+  // event workflow for both dedicated admins and linked club accounts.
   void _openCreatePost() {
     Navigator.of(context).push(
       MaterialPageRoute(
@@ -653,13 +550,12 @@ class _MainNavScreenState extends ConsumerState<MainNavScreen>
     );
   }
 
-  // Both dedicated club-admin sessions and linked club accounts can publish
-  // posts. Keep the center action useful for events as well, but make posting
-  // available from the same obvious entry point.
   void _onAddTap() {
     _resetNavShrink();
+    // `plus-menu` 297:8 — the handoff's + opens a chooser; Create Post was
+    // previously unreachable from here.
     unawaited(
-      showClubCreateSheet(
+      showEventWizardCreateSheet(
         context,
         onPost: _openCreatePost,
         onEvent: _openCreateEvent,
@@ -920,7 +816,7 @@ class _MainNavScreenState extends ConsumerState<MainNavScreen>
                         key: onboardingAnchors.keyFor(
                           OnboardingAnchors.clubCreateButton,
                         ),
-                        label: AppLocalizations.of(context)!.createSheetTitle,
+                        label: AppLocalizations.of(context)!.newEventTitle,
                         onTap: _onAddTap,
                       )
                     else
@@ -1624,87 +1520,6 @@ class _NavItem extends StatelessWidget {
     );
   }
 }
-
-class _CreateSheetAction extends StatelessWidget {
-  final IconData icon;
-  final String title;
-  final String subtitle;
-  final VoidCallback onTap;
-
-  const _CreateSheetAction({
-    required this.icon,
-    required this.title,
-    required this.subtitle,
-    required this.onTap,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final isDark = theme.brightness == Brightness.dark;
-    final titleColor = isDark ? Colors.white : AppColors.text;
-    final subtitleColor = isDark
-        ? Colors.white.withValues(alpha: 0.64)
-        : AppColors.secondaryText;
-
-    return Material(
-      color: isDark
-          ? Colors.white.withValues(alpha: 0.06)
-          : AppColors.lightRed.withValues(alpha: 0.55),
-      borderRadius: const BorderRadius.all(Radius.circular(18)),
-      child: InkWell(
-        borderRadius: const BorderRadius.all(Radius.circular(18)),
-        onTap: onTap,
-        child: Padding(
-          padding: const EdgeInsets.all(14),
-          child: Row(
-            children: [
-              Container(
-                width: 42,
-                height: 42,
-                decoration: BoxDecoration(
-                  color: AppColors.primaryRed.withValues(alpha: 0.14),
-                  borderRadius: const BorderRadius.all(Radius.circular(14)),
-                ),
-                child: Icon(icon, color: AppColors.primaryRed, size: 22),
-              ),
-              const SizedBox(width: 13),
-              Expanded(
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      title,
-                      style: theme.textTheme.titleSmall?.copyWith(
-                        color: titleColor,
-                        fontWeight: FontWeight.w800,
-                      ),
-                    ),
-                    const SizedBox(height: 2),
-                    Text(
-                      subtitle,
-                      maxLines: 2,
-                      overflow: TextOverflow.ellipsis,
-                      style: theme.textTheme.bodySmall?.copyWith(
-                        color: subtitleColor,
-                        fontWeight: FontWeight.w500,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-              const SizedBox(width: 8),
-              Icon(Icons.chevron_right_rounded, color: subtitleColor, size: 22),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-// ─── Center Add Button ────────────────────────────────────────────────────────
 
 class _CenterAddButton extends StatefulWidget {
   final VoidCallback onTap;

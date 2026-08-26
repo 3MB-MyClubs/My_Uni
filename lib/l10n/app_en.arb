@@ -636,6 +636,7 @@
   "boardMemberFallbackTitle": "Board Member",
   "boardMemberLabel": "Board Member",
   "boardMembersPublicHint": "Followers added here are shown publicly in the Board tab.",
+  "boardMemberships": "Board Memberships",
   "bothInClub": "Both in {club}",
   "@bothInClub": {
     "placeholders": {
@@ -697,7 +698,7 @@
   },
   "calendarRsvpdBadge": "RSVP'D",
   "calendarYoursTapToEdit": "Yours · tap to edit",
-  "campusEmailLabel": "Campus email",
+  "campusEmailLabel": "Email",
   "campusEventFallback": "Campus event",
   "campusFallbackLocation": "Campus",
   "campusPostFallback": "Campus post",
@@ -2156,7 +2157,6 @@
   "addGroupPhoto": "Add group photo",
   "changeGroupPhoto": "Change group photo",
   "groupPhotoSheetTitle": "Group photo",
-  "removePhoto": "Remove photo",
   "photoEditorOpenFailed": "Could not open the photo editor.",
   "startChat": "Start Chat",
   "conversationUnavailableTitle": "Conversation unavailable",
@@ -2212,5 +2212,47 @@
   "academicYearGraduate": "Graduate",
   "@academicYearGraduate": {
     "description": "Full label for a graduate student."
+  },
+  "trendingClubs": "Trending Clubs",
+  "suggestedClubs": "Suggested Clubs",
+  "suggestedProfiles": "Suggested Profiles",
+  "searchEverythingHint": "Search clubs, people, events...",
+  "filtersTitle": "Filters",
+  "searchInLabel": "Search In",
+  "sortByLabel": "Sort By",
+  "categoriesLabel": "Categories",
+  "sortMostMembers": "Most Members",
+  "sortRecentlyActive": "Recently Active",
+  "applyLabel": "Apply",
+  "selectMajorTitle": "Select Major",
+  "clearAll": "Clear All",
+  "doneCount": "Done ({n})",
+  "@doneCount": {
+    "placeholders": {
+      "n": {
+        "type": "int"
+      }
+    }
+  },
+  "hostedByClub": "hosted by {club}",
+  "@hostedByClub": {
+    "placeholders": {
+      "club": {
+        "type": "String"
+      }
+    }
+  },
+  "shareAction": "Share",
+  "imGoing": "I'm Going",
+  "remindMe": "Remind Me",
+  "shareWithFriends": "Share with Friends",
+  "sendToMoreFriends": "Send to More Friends",
+  "peopleYouFollowCount": "{n,plural, one{1 person you follow} other{{n} people you follow}}",
+  "@peopleYouFollowCount": {
+    "placeholders": {
+      "n": {
+        "type": "int"
+      }
+    }
   }
 }

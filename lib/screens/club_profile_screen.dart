@@ -1,18 +1,21 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:intl/intl.dart';
 import '../l10n/app_localizations.dart';
 import '../models/club.dart';
 import '../models/event.dart';
 import '../models/news_post.dart';
 import '../models/user.dart';
 import '../navigation/chat_page_route.dart';
+import '../services/account_switcher_service.dart';
 import '../services/app_colors.dart';
 import '../services/app_strings.dart';
 import '../services/auth_service.dart';
 import '../services/club_admin_access.dart';
 import '../services/club_follow_service.dart';
 import '../services/club_role_localization.dart';
+import '../services/mock_clubup_profile.dart';
 import '../services/mock_data.dart';
 import '../services/moderation_service.dart';
 import '../services/people_service.dart';
@@ -28,9 +31,14 @@ import '../onboarding/onboarding_anchors.dart';
 import '../services/chat_store.dart';
 import '../widgets/club_avatar.dart';
 import '../widgets/club_follow_button.dart';
+import '../widgets/club_profile_design.dart';
+import '../widgets/event_cover_image.dart';
+import '../widgets/home_design.dart';
 import '../widgets/moderation_reason_sheet.dart';
 import 'chat_thread_screen.dart';
+import 'club_board_members_screen.dart';
 import 'club_insights_screen.dart';
+import 'club_profile_members_screen.dart';
 import 'event_detail_screen.dart';
 import 'post_detail_screen.dart';
 import 'user_profile_screen.dart';
@@ -93,6 +101,10 @@ class _ClubProfileScreenState extends State<ClubProfileScreen>
     with SingleTickerProviderStateMixin {
   late final TabController _tabController;
 
+  /// Mirrors [_tabController]'s index so the design frame's segmented pill can
+  /// repaint on a swipe as well as a tap.
+  int _tabIndex = 0;
+
   @override
   void initState() {
     super.initState();
@@ -101,10 +113,28 @@ class _ClubProfileScreenState extends State<ClubProfileScreen>
       initialIndex: widget.initialTabIndex,
       vsync: this,
     );
+    _tabIndex = widget.initialTabIndex;
+    _tabController.addListener(_syncTabIndex);
+  }
+
+  void _syncTabIndex() {
+    if (!mounted || _tabController.index == _tabIndex) return;
+    setState(() => _tabIndex = _tabController.index);
+  }
+
+  /// The CLUB PROFİLE frames are the club's own point of view, so they run for
+  /// a club-admin login and for a student switched to their club account —
+  /// the same pair CLUB HOME and CLUB CHATS branch on. A student browsing a
+  /// club, and the ClubUp platform moderator, keep the previous screen.
+  bool get _isClubSession {
+    if (accountSwitcherService.isClubAccountActive) return true;
+    final admin = authService.currentAdmin;
+    return admin != null && !isClubUpAdmin(admin);
   }
 
   @override
   void dispose() {
+    _tabController.removeListener(_syncTabIndex);
     _tabController.dispose();
     super.dispose();
   }
@@ -142,6 +172,9 @@ class _ClubProfileScreenState extends State<ClubProfileScreen>
   List<User> get _membersForThisClub {
     final byId = <String, User>{
       for (final member in clubMembers(widget.club.id)) member.id: member,
+      for (final member in peopleService.cachedPeople)
+        if (member.subscribedClubIds.contains(widget.club.id))
+          member.id: member,
     };
     final currentUser = authService.currentUser;
     if (currentUser != null && userState.isFollowing(widget.club.id)) {
@@ -157,22 +190,16 @@ class _ClubProfileScreenState extends State<ClubProfileScreen>
     return members;
   }
 
-  void _openMembersSheet() {
-    showModalBottomSheet<void>(
-      context: context,
-      isScrollControlled: true,
-      backgroundColor: Colors.transparent,
-      builder: (_) => _ClubMembersSheet(
-        club: widget.club,
-        color: widget.color,
-        members: _membersForThisClub,
-        totalCount: clubMemberCount(widget.club.id),
+  void _openMembersDirectory() {
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => ClubProfileMembersScreen(
+          club: widget.club,
+          initialMembers: _membersForThisClub,
+        ),
       ),
-    ).then((_) {
-      // Roles assigned inside the sheet change the board — rebuild so the
-      // BOARD tab and header stats reflect them immediately.
-      if (mounted) setState(() {});
-    });
+    );
   }
 
   Future<void> _blockClub() async {
@@ -271,6 +298,176 @@ class _ClubProfileScreenState extends State<ClubProfileScreen>
         .toList();
   }
 
+  void _openInsights() => Navigator.push(
+    context,
+    MaterialPageRoute(
+      builder: (_) =>
+          ClubInsightsScreen(club: widget.club, accent: widget.color),
+    ),
+  );
+
+  /// `club-profile` / `events` / `board` — Figma `337:8`, `343:12`,
+  /// `332:1963`. One scroll: the header bar pins, the identity card, stat
+  /// cells and segmented tabs scroll away above the selected stream.
+  ///
+  /// The old Club Chat shortcut stays in the Chats tab. Members and the board
+  /// list open as full searchable pages from their profile entry points.
+  Widget _buildDesignProfile({
+    required List<dynamic> clubPosts,
+    required List<Event> clubEvents,
+    required int memberCount,
+    required String handle,
+  }) {
+    final l10n = AppLocalizations.of(context)!;
+    final isOwner = isCurrentAdminForClub(widget.club);
+
+    return Scaffold(
+      backgroundColor: ClubProfileColors.page,
+      body: NestedScrollView(
+        headerSliverBuilder: (context, _) => [
+          SliverAppBar(
+            pinned: true,
+            toolbarHeight: 60,
+            backgroundColor: ClubProfileColors.page,
+            surfaceTintColor: Colors.transparent,
+            elevation: 0,
+            scrolledUnderElevation: 0,
+            automaticallyImplyLeading: false,
+            flexibleSpace: SafeArea(
+              bottom: false,
+              child: ClubProfileHeaderBar(
+                title: S.clubProfileTitle,
+                onBack: Navigator.canPop(context)
+                    ? () => Navigator.pop(context)
+                    : null,
+                actions: [
+                  if (isOwner)
+                    ClubProfileCircleButton(
+                      key: const ValueKey('club-profile-insights'),
+                      icon: Icons.bar_chart_rounded,
+                      semanticLabel: S.clubInsightsTitle,
+                      onTap: _openInsights,
+                    ),
+                  if (widget.onSettings != null)
+                    ClubProfileCircleButton(
+                      // Same singleton guard as the legacy header: only the
+                      // logged-in club's own Profile tab root may own the
+                      // onboarding anchor's GlobalKey.
+                      key: onboardingAnchors.keyFor(
+                        OnboardingAnchors.clubProfileSettings,
+                      ),
+                      icon: Icons.settings_outlined,
+                      semanticLabel: l10n.settings,
+                      onTap: () => widget.onSettings!(),
+                    ),
+                ],
+              ),
+            ),
+          ),
+          SliverToBoxAdapter(
+            child: ListenableBuilder(
+              listenable: userState,
+              builder: (context, _) => Padding(
+                padding: const EdgeInsets.fromLTRB(
+                  kClubProfileGutter,
+                  8,
+                  kClubProfileGutter,
+                  14,
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    ClubProfileIdentityCard(
+                      avatar: ClubAvatar(
+                        clubId: widget.club.id,
+                        clubName: widget.club.name,
+                        color: widget.color,
+                        imageUrl: widget.club.logoUrl,
+                        size: 60,
+                        fontSize: 24,
+                        borderRadius: 999,
+                      ),
+                      name: widget.club.name,
+                      handle: handle,
+                      description: widget.club.description,
+                      categories: _categoryTagsFor(widget.club),
+                    ),
+                    const SizedBox(height: 14),
+                    ClubProfileStatsRow(
+                      cells: [
+                        ClubProfileStat(
+                          value: '${clubPosts.length}',
+                          label: S.clubProfileTimeline,
+                        ),
+                        ClubProfileStat(
+                          value: '$memberCount',
+                          label: l10n.members,
+                          onTap: _openMembersDirectory,
+                        ),
+                        ClubProfileStat(
+                          value: '${clubEvents.length}',
+                          label: l10n.events,
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 14),
+                    ClubProfileSegmentedTabs(
+                      key: widget.onSettings != null
+                          ? onboardingAnchors.keyFor(
+                              OnboardingAnchors.clubProfileTabs,
+                            )
+                          : null,
+                      labels: [S.clubProfileTimeline, l10n.events, l10n.board],
+                      index: _tabIndex,
+                      onChanged: (i) {
+                        if (_tabController.index == i) return;
+                        _tabController.animateTo(i);
+                        setState(() => _tabIndex = i);
+                      },
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        ],
+        body: TabBarView(
+          controller: _tabController,
+          children: [
+            _PostsTab(
+              posts: clubPosts,
+              club: widget.club,
+              clubColor: widget.color,
+              isAdmin: _isThisClubAdmin,
+              designed: true,
+              onChanged: () {
+                if (mounted) setState(() {});
+              },
+            ),
+            _EventsTab(
+              clubId: widget.club.id,
+              events: clubEvents,
+              monthAbbr: _monthAbbr,
+              clubColor: widget.color,
+              isAdmin: _isThisClubAdmin,
+              designed: true,
+              onChanged: () {
+                if (mounted) setState(() {});
+              },
+            ),
+            _BoardTab(
+              club: widget.club,
+              designed: true,
+              onBoardChanged: () {
+                if (mounted) setState(() {});
+              },
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final memberCount = clubMemberCount(widget.club.id);
@@ -286,6 +483,14 @@ class _ClubProfileScreenState extends State<ClubProfileScreen>
     final panelText = AppColors.text;
     final bodyText = _clubPageBodyText(context);
     final handle = _handleFor(widget.club);
+    if (_isClubSession) {
+      return _buildDesignProfile(
+        clubPosts: clubPosts,
+        clubEvents: clubEvents,
+        memberCount: memberCount,
+        handle: handle,
+      );
+    }
     final showFollowAction = authService.isStudentSession && !_isThisClubAdmin;
     return Scaffold(
       backgroundColor: bg,
@@ -312,8 +517,9 @@ class _ClubProfileScreenState extends State<ClubProfileScreen>
             title: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
-                Text(
-                  '@$handle',
+                ClubVerifiedName(
+                  name: '@$handle',
+                  badgeSize: 14,
                   style: TextStyle(
                     fontSize: 15,
                     fontWeight: FontWeight.w700,
@@ -321,24 +527,13 @@ class _ClubProfileScreenState extends State<ClubProfileScreen>
                     letterSpacing: -0.3,
                   ),
                 ),
-                Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Icon(
-                      Icons.verified_rounded,
-                      size: 10,
-                      color: AppColors.primaryRed,
-                    ),
-                    const SizedBox(width: 3),
-                    Text(
-                      AppLocalizations.of(context)!.officialClubLabel,
-                      style: TextStyle(
-                        fontSize: 10,
-                        color: AppColors.primaryRed,
-                        fontWeight: FontWeight.w600,
-                      ),
-                    ),
-                  ],
+                Text(
+                  AppLocalizations.of(context)!.officialClubLabel,
+                  style: TextStyle(
+                    fontSize: 10,
+                    color: AppColors.primaryRed,
+                    fontWeight: FontWeight.w600,
+                  ),
                 ),
               ],
             ),
@@ -509,7 +704,7 @@ class _ClubProfileScreenState extends State<ClubProfileScreen>
                                         context,
                                       )!.members,
                                       dark: true,
-                                      onTap: _openMembersSheet,
+                                      onTap: _openMembersDirectory,
                                     ),
                                     Container(
                                       width: 1,
@@ -695,7 +890,7 @@ class _ClubProfileScreenState extends State<ClubProfileScreen>
                 tabs: [
                   _IconTab(
                     icon: Icons.view_agenda_outlined,
-                    label: AppLocalizations.of(context)!.posts.toUpperCase(),
+                    label: S.clubProfileTimeline.toUpperCase(),
                   ),
                   _IconTab(
                     icon: Icons.event_rounded,
@@ -760,16 +955,54 @@ class _PostsTab extends StatelessWidget {
   final bool isAdmin;
   final VoidCallback onChanged;
 
+  /// CLUB PROFİLE chrome. Posts use a full-width timeline with the newest
+  /// post first, matching the reading flow of the Home feed.
+  final bool designed;
+
   const _PostsTab({
     required this.posts,
     required this.club,
     required this.clubColor,
     required this.isAdmin,
     required this.onChanged,
+    this.designed = false,
   });
+
+  Widget _buildDesigned(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
+    final ordered = [...posts]
+      ..sort(
+        (a, b) => (b.createdAt as DateTime).compareTo(a.createdAt as DateTime),
+      );
+    if (ordered.isEmpty) {
+      return ListView(
+        children: [
+          ClubProfileEmptyState(
+            icon: Icons.article_outlined,
+            title: l10n.noPostsYet,
+            message: l10n.whenClubPostsHint(club.name),
+          ),
+        ],
+      );
+    }
+    return ListView.builder(
+      key: const ValueKey('club-profile-posts'),
+      padding: const EdgeInsets.only(bottom: 96),
+      itemCount: ordered.length,
+      itemBuilder: (context, i) => _ClubPostCompact(
+        post: ordered[i],
+        club: club,
+        clubColor: clubColor,
+        isAdmin: isAdmin,
+        designed: true,
+        onChanged: onChanged,
+      ),
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
+    if (designed) return _buildDesigned(context);
     if (posts.isEmpty) {
       return ListView(
         children: [
@@ -894,10 +1127,8 @@ class _FeedLabel extends StatelessWidget {
 
 // ─── Club post card (compact) ─────────────────────────────────────────────────
 
-/// Compact post row for the club profile — smaller than the home feed. Shows a
-/// thumbnail (or accent tile), time, a short snippet and like count; tapping
-/// opens the full post. The club's own admin gets a ⋯ menu to pin or delete
-/// the post.
+/// Post row for the club profile. The redesigned profile uses a full timeline
+/// card; the student-facing legacy profile keeps its compact list treatment.
 class _ClubPostCompact extends StatelessWidget {
   final dynamic post;
   final Club club;
@@ -905,12 +1136,15 @@ class _ClubPostCompact extends StatelessWidget {
   final bool isAdmin;
   final VoidCallback onChanged;
 
+  final bool designed;
+
   const _ClubPostCompact({
     required this.post,
     required this.club,
     required this.clubColor,
     required this.isAdmin,
     required this.onChanged,
+    this.designed = false,
   });
 
   String _timeAgo(BuildContext context, DateTime dt) {
@@ -998,8 +1232,75 @@ class _ClubPostCompact extends StatelessWidget {
     }
   }
 
+  /// The redesigned club profile uses the exact Home feed card so typography,
+  /// media sizing, captions, polls and interaction rows cannot drift apart.
+  Widget _buildDesigned(BuildContext context) {
+    final postId = post.id as String;
+    final typedPost = post as NewsPost;
+
+    return ListenableBuilder(
+      listenable: userState,
+      builder: (context, _) {
+        final pinned = userState.isPostPinned(postId);
+        return HomeFeedPostCard(
+          key: ValueKey('club-profile-post-$postId'),
+          post: typedPost,
+          clubContext: true,
+          onChanged: onChanged,
+          onTap: () => _openDetail(context),
+          headerTrailing: isAdmin ? _designMenu(context, pinned) : null,
+        );
+      },
+    );
+  }
+
+  Widget _designMenu(BuildContext context, bool pinned) {
+    final l10n = AppLocalizations.of(context)!;
+    return PopupMenuButton<String>(
+      key: ValueKey('club-profile-post-menu-${post.id}'),
+      padding: EdgeInsets.zero,
+      constraints: const BoxConstraints(minWidth: 180),
+      iconSize: 18,
+      icon: Icon(
+        Icons.more_horiz_rounded,
+        size: 18,
+        color: ClubProfileColors.muted,
+      ),
+      color: ClubProfileColors.card,
+      onSelected: (v) {
+        if (v == 'pin') _togglePin();
+        if (v == 'delete') _confirmDelete(context);
+      },
+      itemBuilder: (_) => [
+        PopupMenuItem(
+          value: 'pin',
+          child: Text(
+            pinned ? l10n.unpinFromTop : l10n.pinToTop,
+            style: figtree(
+              size: 14,
+              weight: FontWeight.w600,
+              color: ClubProfileColors.text,
+            ),
+          ),
+        ),
+        PopupMenuItem(
+          value: 'delete',
+          child: Text(
+            l10n.deletePostMenuItem,
+            style: figtree(
+              size: 14,
+              weight: FontWeight.w600,
+              color: const Color(0xFFDC2626),
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
+    if (designed) return _buildDesigned(context);
     final postId = post.id as String;
     final content = (post.content as String).trim();
     final hasImage =
@@ -1189,6 +1490,9 @@ class _EventsTab extends StatefulWidget {
   final bool isAdmin;
   final VoidCallback onChanged;
 
+  /// CLUB PROFİLE chrome.
+  final bool designed;
+
   const _EventsTab({
     required this.clubId,
     required this.events,
@@ -1196,6 +1500,7 @@ class _EventsTab extends StatefulWidget {
     required this.clubColor,
     required this.isAdmin,
     required this.onChanged,
+    this.designed = false,
   });
 
   @override
@@ -1277,8 +1582,92 @@ class _EventsTabState extends State<_EventsTab> {
     }
   }
 
+  /// `events` `343:12`. The frame draws no filter, but the club's own history
+  /// is only reachable through one — `fetchPastEventsForClub` has no other
+  /// entry point — so the Upcoming / Past switch stays, in the frame's own
+  /// segmented language.
+  Widget _buildDesigned(BuildContext context) {
+    final loc = AppLocalizations.of(context)!;
+    final now = DateTime.now();
+    final shown = _shownEvents(now);
+    final segments = ['upcoming', 'past'];
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Padding(
+          padding: const EdgeInsets.fromLTRB(
+            kClubProfileGutter,
+            0,
+            kClubProfileGutter,
+            12,
+          ),
+          child: ClubProfileSegmentedTabs(
+            keyPrefix: 'club-events-filter',
+            compact: true,
+            labels: [loc.upcomingSegmentLabel, loc.past],
+            index: segments.indexOf(_filter),
+            onChanged: (i) => _selectFilter(segments[i]),
+          ),
+        ),
+        Expanded(
+          child: _filter == 'past' && _loadingPast && !_pastLoaded
+              ? const Center(child: CircularProgressIndicator())
+              : shown.isEmpty
+              ? ListView(
+                  children: [
+                    ClubProfileEmptyState(
+                      icon: Icons.event_outlined,
+                      title: _filter == 'past'
+                          ? loc.noPastEventsYet
+                          : loc.nothingHereRightNow,
+                      message: _filter == 'past'
+                          ? null
+                          : loc.checkBackSoonEvents,
+                    ),
+                  ],
+                )
+              : ListView.separated(
+                  key: const ValueKey('club-profile-events'),
+                  padding: const EdgeInsets.fromLTRB(
+                    kClubProfileGutter,
+                    0,
+                    kClubProfileGutter,
+                    96,
+                  ),
+                  itemCount: shown.length + (widget.isAdmin ? 1 : 0),
+                  separatorBuilder: (_, _) => const SizedBox(height: 12),
+                  itemBuilder: (context, i) {
+                    if (i == shown.length) {
+                      return Text(
+                        S.clubProfileEventHint,
+                        style: figtree(
+                          size: 12,
+                          weight: FontWeight.w400,
+                          color: ClubProfileColors.muted,
+                          height: 1.4,
+                        ),
+                      );
+                    }
+                    return _EventCardV2(
+                      event: shown[i],
+                      status: _statusOf(shown[i], now),
+                      monthAbbr: widget.monthAbbr,
+                      clubColor: widget.clubColor,
+                      isAdmin: widget.isAdmin,
+                      designed: true,
+                      onChanged: _handleEventChanged,
+                    );
+                  },
+                ),
+        ),
+      ],
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
+    if (widget.designed) return _buildDesigned(context);
     final loc = AppLocalizations.of(context)!;
     final segments = [
       ('upcoming', loc.upcomingSegmentLabel),
@@ -1431,12 +1820,16 @@ class _EventCardV2 extends StatelessWidget {
   final bool isAdmin;
   final VoidCallback onChanged;
 
+  /// CLUB PROFİLE chrome.
+  final bool designed;
+
   const _EventCardV2({
     required this.event,
     required this.status,
     required this.monthAbbr,
     required this.clubColor,
     this.isAdmin = false,
+    this.designed = false,
     this.onChanged = _noop,
   });
 
@@ -1510,8 +1903,50 @@ class _EventCardV2 extends StatelessWidget {
     }
   }
 
+  void _openDetail(BuildContext context) => Navigator.push(
+    context,
+    MaterialPageRoute(
+      builder: (_) =>
+          EventDetailScreen(event: event as dynamic, color: clubColor),
+    ),
+  );
+
+  /// Compact horizontal event row aligned with the main Events tab. A club
+  /// cannot RSVP to its own event, so the row and chevron open its details.
+  Widget _buildDesigned(BuildContext context) {
+    final loc = AppLocalizations.of(context)!;
+    final locale = Localizations.localeOf(context).toLanguageTag();
+    final typed = event as Event;
+    final isLive = status == 'now';
+    final isPast = status == 'past';
+
+    return ClubProfileEventCard(
+      key: ValueKey('club-event-card-${event.id}'),
+      cover: EventCoverImage(
+        event: typed,
+        color: clubColor,
+        fit: BoxFit.cover,
+        cacheWidth: 400,
+      ),
+      title: typed.title,
+      dateLabel: DateFormat('EEE, d MMM', locale).format(typed.dateTime),
+      timeLabel: _clock(typed.dateTime),
+      location: typed.location,
+      statusLabel: isLive
+          ? loc.happeningNowLabel
+          : isPast
+          ? loc.past
+          : null,
+      actionLabel: isPast ? loc.recapLabel : loc.viewLabel,
+      onAction: () => _openDetail(context),
+      onTap: () => _openDetail(context),
+      onLongPress: isAdmin ? () => _confirmDelete(context) : null,
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
+    if (designed) return _buildDesigned(context);
     final isLive = status == 'now';
     final isPast = status == 'past';
     final accent = isLive ? _green : AppColors.primaryRed;
@@ -2405,7 +2840,14 @@ class _BoardTab extends StatefulWidget {
   final Club club;
   final VoidCallback onBoardChanged;
 
-  const _BoardTab({required this.club, required this.onBoardChanged});
+  /// CLUB PROFİLE chrome.
+  final bool designed;
+
+  const _BoardTab({
+    required this.club,
+    required this.onBoardChanged,
+    this.designed = false,
+  });
 
   @override
   State<_BoardTab> createState() => _BoardTabState();
@@ -2559,8 +3001,124 @@ class _BoardTabState extends State<_BoardTab> {
     widget.onBoardChanged();
   }
 
+  /// Every board-member id resolved against the static user list and the
+  /// people-service cache, so a member added from the live members list still
+  /// renders for everyone.
+  List<User> get _resolvedMembers {
+    final pool = <String, User>{
+      for (final u in users) u.id: u,
+      for (final u in peopleService.cachedPeople) u.id: u,
+    };
+    return widget.club.boardMemberIds
+        .map((id) => pool[id])
+        .whereType<User>()
+        .toList();
+  }
+
+  String _roleFor(BuildContext context, User member) {
+    final title = widget.club.boardMemberTitles[member.id]?.trim() ?? '';
+    if (title.isEmpty) return AppLocalizations.of(context)!.boardMemberLabel;
+    return localizedClubRole(AppLocalizations.of(context)!, title);
+  }
+
+  Future<void> _openAllMembers(List<User> members) async {
+    final authorized = _isClubAdmin;
+    await Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => ClubBoardMembersScreen(
+          club: widget.club,
+          members: members,
+          onEditTitle: authorized ? _editTitle : null,
+          onRemove: authorized ? _confirmRemove : null,
+        ),
+      ),
+    );
+    if (mounted) setState(() {});
+  }
+
+  /// `board` `332:1963` — "Board members" over plain rows. The frame draws no
+  /// per-row control, so the club's edit-title / remove actions moved onto a
+  /// long press.
+  Widget _buildDesigned(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
+    final members = _resolvedMembers;
+    final authorized = _isClubAdmin;
+
+    return ListView(
+      key: const ValueKey('club-profile-board'),
+      padding: const EdgeInsets.fromLTRB(
+        kClubProfileGutter,
+        0,
+        kClubProfileGutter,
+        96,
+      ),
+      children: [
+        ClubProfileSectionHeader(
+          title: l10n.boardMembers,
+          actionLabel: members.isEmpty ? null : S.clubProfileViewAll,
+          onAction: () => _openAllMembers(members),
+        ),
+        const SizedBox(height: 12),
+        if (members.isEmpty)
+          ClubProfileEmptyState(
+            icon: Icons.shield_outlined,
+            title: l10n.noBoardMembers,
+            message: l10n.clubAdminsAddMembersHint,
+          )
+        else ...[
+          for (final member in members)
+            Padding(
+              padding: const EdgeInsets.only(bottom: 12),
+              child: ClubProfileMemberRow(
+                key: ValueKey('club-board-row-${member.id}'),
+                avatar: UserAvatar(
+                  userId: member.id,
+                  name: member.name,
+                  size: 44,
+                  fontSize: 18,
+                ),
+                name: userState.displayNameFor(member.id, member.name),
+                role: _roleFor(context, member),
+                onTap: () => Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (_) => UserProfileScreen(user: member),
+                  ),
+                ),
+                onLongPress: authorized
+                    ? () =>
+                          showClubBoardMemberActions(
+                            context: context,
+                            onEditTitle: () => _editTitle(member),
+                            onRemove: () => _confirmRemove(member),
+                          ).then((_) {
+                            if (mounted) setState(() {});
+                          })
+                    : null,
+              ),
+            ),
+          if (authorized)
+            Padding(
+              padding: const EdgeInsets.only(top: 4),
+              child: Text(
+                S.clubProfileBoardHint,
+                style: figtree(
+                  size: 12,
+                  weight: FontWeight.w400,
+                  color: ClubProfileColors.muted,
+                  height: 1.4,
+                ),
+              ),
+            ),
+        ],
+      ],
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
+    if (widget.designed) return _buildDesigned(context);
     // Resolve every board-member id against both the static user list and the
     // people-service cache, so a member added from the live members list (not
     // in the seed data) still shows up here for everyone.

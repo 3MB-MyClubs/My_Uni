@@ -15,6 +15,7 @@ import 'package:flutter_application_1/onboarding/onboarding_service.dart';
 import 'package:flutter_application_1/services/user_prefs_service.dart';
 import 'package:flutter_application_1/services/view_tracker.dart';
 import 'package:flutter_application_1/widgets/comments_sheet.dart';
+import 'package:flutter_application_1/widgets/home_comments_sheet.dart';
 
 /// Drives the Home feed's comment affordance: every post card carries a
 /// comment button and tapping it opens the sheet with a working composer.
@@ -74,26 +75,48 @@ void main() {
       await tester.pump(const Duration(milliseconds: 400));
     }
 
-    final commentButton = find.byKey(ValueKey('home-feed-comment-${post.id}'));
+    // A student session gets the redesigned HOME card and sheet
+    // (`home-feed-alt` / `comments` in ClubUp-Desings); club-admin sessions
+    // still get the pre-redesign card, so the harness checks whichever
+    // rendered.
+    final designHome = authService.isStudentSession;
+    final commentButton = find.byKey(
+      ValueKey(
+        designHome
+            ? 'home-post-comment-${post.id}'
+            : 'home-feed-comment-${post.id}',
+      ),
+    );
     expect(commentButton, findsOneWidget);
 
     await tester.tap(commentButton);
     await tester.pump(const Duration(milliseconds: 700));
-    expect(find.byType(CommentsSheet), findsOneWidget);
+    if (designHome) {
+      expect(find.byType(HomeCommentsSheet), findsOneWidget);
+    } else {
+      expect(find.byType(CommentsSheet), findsOneWidget);
+    }
 
     await binding.convertFlutterSurfaceToImage();
     await tester.pump();
     await binding.takeScreenshot('comments-sheet-empty');
 
-    // The composer is present and the send button only lights up once there is
+    // The composer is present, and there is no way to send until there is
     // something to send.
-    final sendButton = find.byKey(const ValueKey('post-comment-send'));
     expect(find.byType(TextField), findsOneWidget);
-    expect(tester.widget<IconButton>(sendButton).onPressed, isNull);
-
-    await tester.enterText(find.byType(TextField), 'Nice post!');
-    await tester.pump(const Duration(milliseconds: 200));
-    expect(tester.widget<IconButton>(sendButton).onPressed, isNotNull);
+    if (designHome) {
+      final sendButton = find.byKey(const ValueKey('home-comment-send'));
+      expect(sendButton, findsNothing);
+      await tester.enterText(find.byType(TextField), 'Nice post!');
+      await tester.pump(const Duration(milliseconds: 200));
+      expect(sendButton, findsOneWidget);
+    } else {
+      final sendButton = find.byKey(const ValueKey('post-comment-send'));
+      expect(tester.widget<IconButton>(sendButton).onPressed, isNull);
+      await tester.enterText(find.byType(TextField), 'Nice post!');
+      await tester.pump(const Duration(milliseconds: 200));
+      expect(tester.widget<IconButton>(sendButton).onPressed, isNotNull);
+    }
 
     await binding.takeScreenshot('comments-sheet-composing');
     expect(tester.takeException(), isNull);

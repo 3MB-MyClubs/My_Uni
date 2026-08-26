@@ -28,7 +28,7 @@ class OnboardingWelcomeView extends StatelessWidget {
   Widget build(BuildContext context) {
     final isDark = themeService.isDark;
     final background = isDark
-        ? const Color(0xFF0C0608)
+        ? const Color(0xFF121212)
         : const Color(0xFFFBF7F5);
     final titleColor = isDark ? Colors.white : const Color(0xFF1A0610);
     final bodyColor = isDark
