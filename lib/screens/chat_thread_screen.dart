@@ -1606,9 +1606,6 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
     final club = _club;
     final showAvatar = _isGroup && !mine;
     final showSenderName = (_isGroup || _isClubInbox) && !mine;
-    // `chats-clubs` is the only frame that stamps a time under each bubble.
-    final showTime = _isClubInbox;
-
     final linkedEventId = m.linkedEventId;
     final hasEventPreview = linkedEventId != null;
     final userLinkMatches = UserProfileLink.matchesIn(m.content);
@@ -1643,44 +1640,51 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
           : hasMedia
           ? const EdgeInsets.all(4)
           : const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          if (m.replyToMessageId != null)
-            _designReplyQuote(m, mine: mine, hasBody: hasMedia || hasText),
-          if (m.kind == ChatMessageKind.postShare && m.sharedPostId != null)
-            SharedPostMessageCard(
-              postId: m.sharedPostId!,
-              onDarkBackground: mine,
-            ),
-          if (hasEventPreview)
-            SharedEventMessageCard(
-              eventId: linkedEventId,
-              onDarkBackground: mine,
-            ),
-          if (photoPath != null) _photoAttachment(m),
-          if (videoPath != null) _videoAttachment(videoPath),
-          if (filePath != null) _fileAttachment(m, mine: mine),
-          if (hasText)
-            Padding(
-              padding: EdgeInsets.fromLTRB(
-                hasMedia ? 10 : 0,
-                hasMedia ? 8 : 0,
-                hasMedia ? 10 : 0,
-                hasMedia ? 4 : 0,
-              ),
-              child: _designBubbleText(m, mine: mine),
-            ),
-          if (sharedUserLink != null)
-            Padding(
-              padding: EdgeInsets.only(top: hasText ? 8 : 0),
-              child: SharedUserProfileMessageCard(
-                userIdentifier: sharedUserLink.userIdentifier,
+      child: _messageBodyWithTime(
+        message: m,
+        mine: mine,
+        designChat: true,
+        hasPhoto: photoPath != null,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            if (m.replyToMessageId != null)
+              _designReplyQuote(m, mine: mine, hasBody: hasMedia || hasText),
+            if (m.kind == ChatMessageKind.postShare && m.sharedPostId != null)
+              SharedPostMessageCard(
+                postId: m.sharedPostId!,
                 onDarkBackground: mine,
-                onOpenProfile: _openSharedUserProfile,
               ),
-            ),
-        ],
+            if (hasEventPreview)
+              SharedEventMessageCard(
+                eventId: linkedEventId,
+                onDarkBackground: mine,
+              ),
+            if (photoPath != null)
+              _photoAttachmentWithTime(m, mine: mine, designChat: true),
+            if (videoPath != null) _videoAttachment(videoPath),
+            if (filePath != null) _fileAttachment(m, mine: mine),
+            if (hasText)
+              Padding(
+                padding: EdgeInsets.fromLTRB(
+                  hasMedia ? 10 : 0,
+                  hasMedia ? 8 : 0,
+                  hasMedia ? 10 : 0,
+                  hasMedia ? 4 : 0,
+                ),
+                child: _designBubbleText(m, mine: mine),
+              ),
+            if (sharedUserLink != null)
+              Padding(
+                padding: EdgeInsets.only(top: hasText ? 8 : 0),
+                child: SharedUserProfileMessageCard(
+                  userIdentifier: sharedUserLink.userIdentifier,
+                  onDarkBackground: mine,
+                  onOpenProfile: _openSharedUserProfile,
+                ),
+              ),
+          ],
+        ),
       ),
     );
 
@@ -1735,27 +1739,6 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
             padding: const EdgeInsets.only(top: 4),
             child: _designReactionChips(m, alignEnd: mine),
           ),
-        if (showTime)
-          Padding(
-            padding: const EdgeInsets.only(top: 4),
-            child: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Text(
-                  _timeLabel(m.createdAt),
-                  style: figtree(
-                    size: 10,
-                    weight: FontWeight.w500,
-                    color: ChatsColors.muted,
-                  ),
-                ),
-                if (mine && (_isDirect || _isGroup)) ...[
-                  const SizedBox(width: 5),
-                  _messageStatusIndicator(m),
-                ],
-              ],
-            ),
-          ),
       ],
     );
 
@@ -1771,7 +1754,7 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
           if (showAvatar)
             Padding(
               // Bottom-aligned beside the bubble, as on `102:152`.
-              padding: EdgeInsets.only(right: 8, bottom: showTime ? 20 : 0),
+              padding: const EdgeInsets.only(right: 8),
               child: GestureDetector(
                 key: ValueKey('group-message-avatar-${m.id}'),
                 behavior: HitTestBehavior.opaque,
@@ -2757,63 +2740,70 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
                 ),
               ],
       ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          if (m.replyToMessageId != null)
-            _messageReplyQuote(m, mine: mine, hasMedia: hasMedia),
-          if (m.kind == ChatMessageKind.postShare && m.sharedPostId != null)
-            SharedPostMessageCard(
-              postId: m.sharedPostId!,
-              onDarkBackground: mine,
-            ),
-          if (hasEventPreview)
-            SharedEventMessageCard(
-              eventId: linkedEventId,
-              onDarkBackground: mine,
-            ),
-          if (photoPath != null) _photoAttachment(m),
-          if (videoPath != null) _videoAttachment(videoPath),
-          if (filePath != null) _fileAttachment(m, mine: mine),
-          if (hasText)
-            Padding(
-              padding: EdgeInsets.fromLTRB(
-                hasMedia ? 8 : 0,
-                hasMedia ? 7 : 0,
-                hasMedia ? 8 : 0,
-                hasMedia ? 3 : 0,
-              ),
-              child: UserProfileLinkText(
-                key: ValueKey('chat-message-text-${m.id}'),
-                text: m.content,
-                style: TextStyle(
-                  fontSize: 14.5,
-                  height: 1.45,
-                  letterSpacing: -0.1,
-                  color: mine ? Colors.white : AppColors.text,
-                ),
-                linkStyle: TextStyle(
-                  fontSize: 14.5,
-                  height: 1.45,
-                  letterSpacing: -0.1,
-                  fontWeight: FontWeight.w700,
-                  decoration: TextDecoration.underline,
-                  decorationColor: mine ? Colors.white : AppColors.primaryRed,
-                  color: mine ? Colors.white : AppColors.primaryRed,
-                ),
-                onUserLinkTap: _openSharedUserProfile,
-              ),
-            ),
-          if (sharedUserLink != null)
-            Padding(
-              padding: EdgeInsets.only(top: hasText ? 8 : 0),
-              child: SharedUserProfileMessageCard(
-                userIdentifier: sharedUserLink.userIdentifier,
+      child: _messageBodyWithTime(
+        message: m,
+        mine: mine,
+        designChat: false,
+        hasPhoto: photoPath != null,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            if (m.replyToMessageId != null)
+              _messageReplyQuote(m, mine: mine, hasMedia: hasMedia),
+            if (m.kind == ChatMessageKind.postShare && m.sharedPostId != null)
+              SharedPostMessageCard(
+                postId: m.sharedPostId!,
                 onDarkBackground: mine,
-                onOpenProfile: _openSharedUserProfile,
               ),
-            ),
-        ],
+            if (hasEventPreview)
+              SharedEventMessageCard(
+                eventId: linkedEventId,
+                onDarkBackground: mine,
+              ),
+            if (photoPath != null)
+              _photoAttachmentWithTime(m, mine: mine, designChat: false),
+            if (videoPath != null) _videoAttachment(videoPath),
+            if (filePath != null) _fileAttachment(m, mine: mine),
+            if (hasText)
+              Padding(
+                padding: EdgeInsets.fromLTRB(
+                  hasMedia ? 8 : 0,
+                  hasMedia ? 7 : 0,
+                  hasMedia ? 8 : 0,
+                  hasMedia ? 3 : 0,
+                ),
+                child: UserProfileLinkText(
+                  key: ValueKey('chat-message-text-${m.id}'),
+                  text: m.content,
+                  style: TextStyle(
+                    fontSize: 14.5,
+                    height: 1.45,
+                    letterSpacing: -0.1,
+                    color: mine ? Colors.white : AppColors.text,
+                  ),
+                  linkStyle: TextStyle(
+                    fontSize: 14.5,
+                    height: 1.45,
+                    letterSpacing: -0.1,
+                    fontWeight: FontWeight.w700,
+                    decoration: TextDecoration.underline,
+                    decorationColor: mine ? Colors.white : AppColors.primaryRed,
+                    color: mine ? Colors.white : AppColors.primaryRed,
+                  ),
+                  onUserLinkTap: _openSharedUserProfile,
+                ),
+              ),
+            if (sharedUserLink != null)
+              Padding(
+                padding: EdgeInsets.only(top: hasText ? 8 : 0),
+                child: SharedUserProfileMessageCard(
+                  userIdentifier: sharedUserLink.userIdentifier,
+                  onDarkBackground: mine,
+                  onOpenProfile: _openSharedUserProfile,
+                ),
+              ),
+          ],
+        ),
       ),
     );
 
@@ -2828,7 +2818,7 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
           if (showAvatar && !mine)
             Padding(
               // Keep the sender identity beside every incoming message.
-              padding: const EdgeInsets.only(right: 8, bottom: 15),
+              padding: const EdgeInsets.only(right: 8),
               child: GestureDetector(
                 behavior: HitTestBehavior.opaque,
                 onTap: openSenderChat,
@@ -2921,35 +2911,12 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
                       ),
                     ),
                   ),
-                // Outgoing student messages expose a compact delivery state.
-                // Group checkmarks are directly tappable; long-pressing the
-                // bubble remains a secondary route to the same information.
-                Padding(
-                  padding: const EdgeInsets.only(top: 4, left: 4, right: 4),
-                  child: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Text(
-                        _timeLabel(m.createdAt),
-                        style: TextStyle(
-                          fontSize: 10.5,
-                          fontWeight: FontWeight.w500,
-                          color: AppColors.secondaryText,
-                        ),
-                      ),
-                      if (mine && (_isDirect || _isGroup)) ...[
-                        const SizedBox(width: 5),
-                        _messageStatusIndicator(m),
-                      ],
-                    ],
-                  ),
-                ),
               ],
             ),
           ),
           if (showAvatar && mine)
             Padding(
-              padding: const EdgeInsets.only(left: 8, bottom: 15),
+              padding: const EdgeInsets.only(left: 8),
               child: lastOfRun
                   ? senderAvatar
                   : const SizedBox(width: 32, height: 32),
@@ -3079,6 +3046,110 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
             ),
         ],
       ),
+    );
+  }
+
+  /// WhatsApp-style message metadata: a quiet footer inside regular bubbles
+  /// and a dark, translucent badge over the bottom-right corner of photos.
+  Widget _messageTime(
+    ChatMessage message, {
+    required bool mine,
+    required bool designChat,
+    bool overPhoto = false,
+  }) {
+    final foreground = overPhoto
+        ? Colors.white.withValues(alpha: 0.92)
+        : mine
+        ? Colors.white.withValues(alpha: 0.72)
+        : designChat
+        ? ChatsColors.muted
+        : AppColors.secondaryText;
+    final metadata = Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Text(
+          _timeLabel(message.createdAt),
+          style: designChat
+              ? figtree(size: 10, weight: FontWeight.w500, color: foreground)
+              : TextStyle(
+                  fontSize: 10.5,
+                  fontWeight: FontWeight.w500,
+                  color: foreground,
+                ),
+        ),
+        if (mine && (_isDirect || _isGroup)) ...[
+          const SizedBox(width: 4),
+          _messageStatusIndicator(
+            message,
+            compact: true,
+            color: foreground,
+            seenColor: const Color(0xFF70C8F8),
+          ),
+        ],
+      ],
+    );
+    return Container(
+      key: ValueKey('chat-message-time-${message.id}'),
+      padding: overPhoto
+          ? const EdgeInsets.symmetric(horizontal: 6, vertical: 3)
+          : EdgeInsets.zero,
+      decoration: overPhoto
+          ? BoxDecoration(
+              color: Colors.black.withValues(alpha: 0.52),
+              borderRadius: BorderRadius.circular(8),
+            )
+          : null,
+      child: metadata,
+    );
+  }
+
+  Widget _messageBodyWithTime({
+    required ChatMessage message,
+    required bool mine,
+    required bool designChat,
+    required bool hasPhoto,
+    required Widget child,
+  }) {
+    if (hasPhoto) return child;
+    return Stack(
+      children: [
+        Padding(
+          padding: const EdgeInsets.only(bottom: 17),
+          child: ConstrainedBox(
+            // Keeps even a one-character message wide enough for HH:mm plus
+            // outgoing delivery ticks without stretching every bubble.
+            constraints: const BoxConstraints(minWidth: 54),
+            child: child,
+          ),
+        ),
+        Positioned(
+          right: 0,
+          bottom: 0,
+          child: _messageTime(message, mine: mine, designChat: designChat),
+        ),
+      ],
+    );
+  }
+
+  Widget _photoAttachmentWithTime(
+    ChatMessage message, {
+    required bool mine,
+    required bool designChat,
+  }) {
+    return Stack(
+      children: [
+        _photoAttachment(message),
+        Positioned(
+          right: 7,
+          bottom: 7,
+          child: _messageTime(
+            message,
+            mine: mine,
+            designChat: designChat,
+            overPhoto: true,
+          ),
+        ),
+      ],
     );
   }
 
@@ -3662,19 +3733,44 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
     return '${_months[dt.month - 1]} ${dt.day}';
   }
 
-  String _timeLabel(DateTime dt) =>
-      '${dt.hour.toString().padLeft(2, '0')}:${dt.minute.toString().padLeft(2, '0')}';
+  String _timeLabel(DateTime dt) {
+    final local = dt.toLocal();
+    return '${local.hour.toString().padLeft(2, '0')}:${local.minute.toString().padLeft(2, '0')}';
+  }
 
-  Widget _messageStatusIndicator(ChatMessage message) {
+  Widget _messageStatusIndicator(
+    ChatMessage message, {
+    bool compact = false,
+    Color? color,
+    Color? seenColor,
+  }) {
     final status = chatStore.deliveryStatusFor(message);
     final ticks = AnimatedSwitcher(
       duration: const Duration(milliseconds: 180),
       child: _MessageTicks(
         key: ValueKey('message-status-${message.id}-${status.name}'),
         status: status,
+        color: color,
+        seenColor: seenColor,
       ),
     );
     if (!_isGroup) return ticks;
+
+    if (compact) {
+      return Semantics(
+        button: true,
+        label: S.messageInfo,
+        child: Tooltip(
+          message: S.messageInfo,
+          child: GestureDetector(
+            key: ValueKey('group-message-receipts-${message.id}'),
+            behavior: HitTestBehavior.opaque,
+            onTap: () => _openMessageInfo(message),
+            child: ticks,
+          ),
+        ),
+      );
+    }
 
     return Semantics(
       button: true,
@@ -3741,11 +3837,19 @@ class _DateChip extends StatelessWidget {
   }
 }
 
-/// One check while sent, two muted checks once delivered, two red once seen.
+/// One check while sent and two once delivered or seen. Bubble metadata may
+/// override the colors so the ticks stay legible on accent and photo surfaces.
 class _MessageTicks extends StatelessWidget {
   final MessageDeliveryStatus status;
+  final Color? color;
+  final Color? seenColor;
 
-  const _MessageTicks({super.key, required this.status});
+  const _MessageTicks({
+    super.key,
+    required this.status,
+    this.color,
+    this.seenColor,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -3759,8 +3863,8 @@ class _MessageTicks extends StatelessWidget {
         size: const Size(17, 11),
         painter: _TicksPainter(
           color: status == MessageDeliveryStatus.seen
-              ? AppColors.primaryRed
-              : AppColors.secondaryText,
+              ? seenColor ?? AppColors.primaryRed
+              : color ?? AppColors.secondaryText,
           tickCount: status == MessageDeliveryStatus.sent ? 1 : 2,
         ),
       ),

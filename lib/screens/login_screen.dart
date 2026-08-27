@@ -304,15 +304,33 @@ class _LoginScreenState extends State<LoginScreen>
                             child: _MotionEntrance(
                               animation: _brandEntrance,
                               begin: const Offset(0, -0.035),
-                              child: Text(
-                                'ClubUp',
-                                textAlign: TextAlign.center,
-                                style: figtree(
-                                  size: 32,
-                                  weight: FontWeight.w800,
-                                  color: LandingColors.accent,
-                                  letterSpacing: -0.5,
+                              child: Text.rich(
+                                TextSpan(
+                                  children: [
+                                    TextSpan(
+                                      text: 'Club',
+                                      style: figtree(
+                                        size: 32,
+                                        weight: FontWeight.w800,
+                                        color: LandingColors.accent,
+                                        letterSpacing: -0.5,
+                                      ),
+                                    ),
+                                    TextSpan(
+                                      text: 'Up',
+                                      style: figtree(
+                                        size: 32,
+                                        weight: FontWeight.w800,
+                                        color: LandingColors.text,
+                                        letterSpacing: -0.5,
+                                      ),
+                                    ),
+                                  ],
                                 ),
+                                key: const ValueKey<String>(
+                                  'landing-clubup-wordmark',
+                                ),
+                                textAlign: TextAlign.center,
                               ),
                             ),
                           ),

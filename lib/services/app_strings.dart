@@ -1788,4 +1788,14 @@ class S {
   static String get clubEditNameField => _t('Club Name', 'Kulüp Adı');
   static String get clubEditNameSave =>
       _t('Save Changes', 'Değişiklikleri Kaydet');
+
+  // ── ACCOUNT SWITCHER area
+  /// `profile-switcher` `424:113` / `424:6`.
+  static String get switchAccountTitle =>
+      _t('Switch Account', 'Hesap Değiştir');
+  static String get switchAccountPersonal => _t('Personal', 'Kişisel');
+  static String get switchAccountFailed => _t(
+    'This account could not be selected. Try again.',
+    'Bu hesap seçilemedi. Tekrar dene.',
+  );
 }

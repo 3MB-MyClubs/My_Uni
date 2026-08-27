@@ -30,14 +30,19 @@ import 'package:hive/hive.dart';
 ///
 /// Frames covered: `club-profile` `337:8` / `337:98`, `events` `343:12`,
 /// `board` `332:1963`, `board-members-all` `346:6` and `insights` `347:6`.
-/// They are the club's own point of view, so every test runs a
-/// `setClubAdmin` session; the student path is asserted to be untouched.
+/// The frames are the club's own point of view, but they are the only
+/// club-profile design in the handoff, so **students render them too** — with
+/// the admin controls off and Follow + Club Chat in their place. Only the
+/// ClubUp platform moderator (and a session-less pump) keeps the old screen.
 void main() {
   late Directory tempDir;
   const clubId = 'club-profile-design-club';
   const adminId = 'club-profile-design-admin';
   const boardId = 'club-profile-design-board-1';
   const memberId = 'club-profile-design-member-1';
+  // A student who is *not* in this club — the browsing point of view. Signing
+  // in as `memberId` would drop them from the member directory they open.
+  const viewerId = 'club-profile-design-viewer';
   const postId = 'club-profile-design-post-1';
 
   setUpAll(() async {
@@ -70,7 +75,10 @@ void main() {
       ..removeWhere((item) => item.id == clubId)
       ..add(club);
     users
-      ..removeWhere((item) => item.id == boardId || item.id == memberId)
+      ..removeWhere(
+        (item) =>
+            item.id == boardId || item.id == memberId || item.id == viewerId,
+      )
       ..add(
         User(
           id: boardId,
@@ -89,6 +97,16 @@ void main() {
           password: '111111',
           role: 'student',
           subscribedClubIds: const [clubId],
+        ),
+      )
+      ..add(
+        User(
+          id: viewerId,
+          name: 'Ada Yilmaz',
+          email: 'ada@ku.edu.tr',
+          password: '111111',
+          role: 'student',
+          subscribedClubIds: const [],
         ),
       );
     newsPosts
@@ -121,7 +139,10 @@ void main() {
 
   tearDown(() async {
     clubs.removeWhere((item) => item.id == clubId);
-    users.removeWhere((item) => item.id == boardId || item.id == memberId);
+    users.removeWhere(
+      (item) =>
+          item.id == boardId || item.id == memberId || item.id == viewerId,
+    );
     newsPosts.clear();
     events.clear();
     await authService.logout();
@@ -137,6 +158,10 @@ void main() {
         password: '22222222',
       ),
     );
+  }
+
+  void signInStudent() {
+    expect(authService.login('ada@ku.edu.tr', '111111'), isTrue);
   }
 
   Future<void> pumpProfile(
@@ -259,9 +284,9 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
-  testWidgets('a student browsing the club keeps the previous screen', (
-    tester,
-  ) async {
+  testWidgets('with no session the old screen still renders', (tester) async {
+    // The ClubUp platform moderator's path, and any session-less pump. Neither
+    // is a club nor a student, so neither reaches the frames.
     await pumpProfile(tester);
 
     expect(find.text(S.clubProfileTitle), findsNothing);
@@ -275,15 +300,101 @@ void main() {
     tester.takeException();
   });
 
+  testWidgets('a student browsing the club gets the same frames', (
+    tester,
+  ) async {
+    signInStudent();
+    await pumpProfile(tester);
+
+    // Same chrome as the club sees.
+    expect(find.text(S.clubProfileTitle), findsOneWidget);
+    expect(find.byType(ClubProfileIdentityCard), findsOneWidget);
+    expect(find.byType(ClubProfileStatsRow), findsOneWidget);
+    expect(find.byType(ClubProfileSegmentedTabs), findsWidgets);
+    expect(find.text('@rc'), findsOneWidget);
+    expect(find.text('Music'), findsOneWidget);
+
+    // None of the admin controls.
+    expect(find.byKey(const ValueKey('club-profile-insights')), findsNothing);
+    expect(find.byIcon(Icons.settings_outlined), findsNothing);
+
+    // Student actions in their place.
+    expect(find.byKey(const ValueKey('club-profile-follow')), findsOneWidget);
+    expect(
+      find.byKey(const ValueKey('club-profile-club-chat')),
+      findsOneWidget,
+    );
+    expect(find.text(S.clubChat), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('the Follow button reflects and flips with followed state', (
+    tester,
+  ) async {
+    signInStudent();
+    await pumpProfile(tester);
+    final l10n = AppLocalizations.of(
+      tester.element(find.byType(ClubProfileIdentityCard)),
+    )!;
+
+    ClubProfileActionButton followButton() =>
+        tester.widget<ClubProfileActionButton>(
+          find.byKey(const ValueKey('club-profile-follow')),
+        );
+
+    // Not following: the filled accent call to action.
+    expect(followButton().label, l10n.follow);
+    expect(followButton().filled, isTrue);
+
+    userState.followedClubIds.add(clubId);
+    addTearDown(() => userState.followedClubIds.remove(clubId));
+    await pumpProfile(tester);
+
+    // Following: outlined, so it reads as a state rather than an invitation.
+    expect(followButton().label, l10n.following);
+    expect(followButton().filled, isFalse);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('long-pressing the identity card offers Report & Block', (
+    tester,
+  ) async {
+    signInStudent();
+    await pumpProfile(tester);
+
+    // The frame draws no overflow, so this is the student's moderation route.
+    await tester.longPress(find.byType(ClubProfileIdentityCard));
+    await tester.pumpAndSettle();
+
+    expect(find.byKey(const ValueKey('club-profile-report')), findsOneWidget);
+    expect(find.text(S.blockAndReportClub), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('a club long-press on the identity card does nothing', (
+    tester,
+  ) async {
+    signInClubAdmin();
+    await pumpProfile(tester);
+
+    await tester.longPress(find.byType(ClubProfileIdentityCard));
+    await tester.pumpAndSettle();
+
+    expect(find.byKey(const ValueKey('club-profile-report')), findsNothing);
+    expect(tester.takeException(), isNull);
+  });
+
   testWidgets('student-facing Members stat opens the same directory', (
     tester,
   ) async {
+    signInStudent();
     await pumpProfile(tester);
-    // Drain the known legacy-header overflow documented by the test above.
-    tester.takeException();
 
-    final l10n = AppLocalizations.of(tester.element(find.byType(TabBar)))!;
-    await tester.tap(find.text(l10n.members));
+    final stats = find.byType(ClubProfileStatsRow);
+    final l10n = AppLocalizations.of(tester.element(stats))!;
+    await tester.tap(
+      find.descendant(of: stats, matching: find.text(l10n.members)),
+    );
     await tester.pumpAndSettle();
 
     expect(find.byType(ClubProfileMembersScreen), findsOneWidget);
@@ -493,6 +604,33 @@ void main() {
 
     // The frame draws no filter, but the club's history has no other door.
     expect(find.byKey(const ValueKey('club-events-filter-1')), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+
+  // The compact event row draws a chevron rather than the frame's "RSVP Now"
+  // pill (a decision that predates this change), so `actionLabel` reaches the
+  // user as the chevron's Semantics label. It still has to say the right thing:
+  // a club cannot RSVP its own event, a student can.
+  testWidgets('the event row action reads View for the club', (tester) async {
+    signInClubAdmin();
+    await pumpProfile(tester, initialTabIndex: 1);
+
+    final card = find.byType(ClubProfileEventCard);
+    final l10n = AppLocalizations.of(tester.element(card))!;
+    expect(
+      tester.widget<ClubProfileEventCard>(card).actionLabel,
+      l10n.viewLabel,
+    );
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('the event row action reads RSVP for a student', (tester) async {
+    signInStudent();
+    await pumpProfile(tester, initialTabIndex: 1);
+
+    final card = find.byType(ClubProfileEventCard);
+    final l10n = AppLocalizations.of(tester.element(card))!;
+    expect(tester.widget<ClubProfileEventCard>(card).actionLabel, l10n.rsvp);
     expect(tester.takeException(), isNull);
   });
 

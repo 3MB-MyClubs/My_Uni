@@ -340,13 +340,14 @@ class ProfileBackHeader extends StatelessWidget {
 
 // ── hero ─────────────────────────────────────────────────────────────────────
 
-/// `avatar-wrapper` — 90px, clipped circle inside a 2px accent ring.
+/// `avatar-wrapper` — a compact 74px portrait clipped inside a 2px accent
+/// ring.
 class ProfileAvatarRing extends StatelessWidget {
   const ProfileAvatarRing({
     super.key,
     required this.userId,
     required this.name,
-    this.size = 90,
+    this.size = 74,
     this.onTap,
   });
 
@@ -405,7 +406,7 @@ class ProfileStat extends StatelessWidget {
             Text(
               value,
               style: figtree(
-                size: 16,
+                size: 13,
                 weight: FontWeight.w800,
                 color: ProfileColors.text,
               ),

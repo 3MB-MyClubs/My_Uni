@@ -338,6 +338,7 @@ class ClubProfileIdentityCard extends StatelessWidget {
     required this.handle,
     required this.description,
     required this.categories,
+    this.actions,
   });
 
   /// The club's real avatar widget — this area never owns image resolution.
@@ -346,6 +347,11 @@ class ClubProfileIdentityCard extends StatelessWidget {
   final String handle;
   final String description;
   final List<String> categories;
+
+  /// Viewer actions under the chips. Null on the club's own profile — the
+  /// frame is an admin looking at their own club, so it draws none. A student
+  /// browsing the club gets Follow + Club Chat here.
+  final Widget? actions;
 
   @override
   Widget build(BuildContext context) {
@@ -416,7 +422,67 @@ class ClubProfileIdentityCard extends StatelessWidget {
               ],
             ),
           ],
+          if (actions != null) ...[const SizedBox(height: 12), actions!],
         ],
+      ),
+    );
+  }
+}
+
+/// A viewer action under the identity card's chips — geometry borrowed from the
+/// student profile's Follow/Message pair (46pt tall, radius 14, 15/w700) so the
+/// two peer-view screens read the same, painted in [ClubProfileColors].
+class ClubProfileActionButton extends StatelessWidget {
+  const ClubProfileActionButton({
+    super.key,
+    required this.label,
+    required this.filled,
+    required this.onTap,
+    this.icon,
+  });
+
+  final String label;
+  final bool filled;
+  final VoidCallback? onTap;
+  final IconData? icon;
+
+  @override
+  Widget build(BuildContext context) {
+    final foreground = filled ? Colors.white : ClubProfileColors.text;
+    return GestureDetector(
+      onTap: onTap,
+      behavior: HitTestBehavior.opaque,
+      child: Container(
+        height: 46,
+        alignment: Alignment.center,
+        decoration: BoxDecoration(
+          color: filled ? ClubProfileColors.accent : Colors.transparent,
+          borderRadius: const BorderRadius.all(Radius.circular(14)),
+          border: filled ? null : Border.all(color: ClubProfileColors.border),
+        ),
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            if (icon != null) ...[
+              Icon(icon, size: 18, color: foreground),
+              const SizedBox(width: 6),
+            ],
+            // "Takip Ediliyor" is half again as long as "Following", and the
+            // pair splits the card in two, so the label has to give.
+            Flexible(
+              child: Text(
+                label,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: figtree(
+                  size: 15,
+                  weight: FontWeight.w700,
+                  color: foreground,
+                ),
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }

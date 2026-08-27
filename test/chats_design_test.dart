@@ -260,14 +260,21 @@ void main() {
       final bubble = tester.widget<ChatBubbleShell>(
         find.byKey(ValueKey('chat-message-bubble-${message.id}')),
       );
+      final timestamp = find.byKey(ValueKey('chat-message-time-${message.id}'));
       expect(bubble.mine, mine);
       expect(
         bubble.padding,
         const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
       );
+      expect(timestamp, findsOneWidget);
+      expect(
+        find.descendant(of: find.byWidget(bubble), matching: timestamp),
+        findsOneWidget,
+      );
+      expect(tester.widget<Container>(timestamp).decoration, isNull);
     }
-
-    // `date-divider` 102:31, and no per-bubble timestamp on a DM.
+    // The day divider keeps messages scannable while each bubble now carries
+    // its own compact sent time.
     expect(find.byType(ChatDayDivider), findsOneWidget);
     expect(find.text(S.today.toUpperCase()), findsOneWidget);
     // Let the store's debounced save run on the fake clock rather than

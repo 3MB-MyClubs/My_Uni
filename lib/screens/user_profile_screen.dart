@@ -20,18 +20,14 @@ import '../services/student_activity_service.dart';
 import '../services/student_club_role_service.dart';
 import '../services/user_prefs_service.dart';
 import '../services/user_state.dart';
-import '../widgets/club_avatar.dart';
 import '../widgets/moderation_reason_sheet.dart';
 import '../widgets/profile_design.dart';
-import '../widgets/user_avatar.dart';
 import 'chat_thread_screen.dart';
 import 'club_profile_screen.dart';
 import 'event_detail_screen.dart';
 import 'saved_posts_screen.dart';
 import 'student_activity_screen.dart';
-
-// ── Design palette ─────────────────────────────────────────────────────────────
-const _burgundy = Color(0xFF8C1D40);
+import 'student_connections_screen.dart';
 
 class UserProfileScreen extends StatefulWidget {
   final User user;
@@ -419,17 +415,17 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
                           ProfileStat(
                             value: '${_subscribedClubs.length}',
                             label: l10n.clubs,
-                            onTap: () => _openConnections(_ConnTab.clubs),
+                            onTap: _openClubs,
                           ),
                           ProfileStat(
                             value: '${_following.length}',
                             label: l10n.following,
-                            onTap: () => _openConnections(_ConnTab.following),
+                            onTap: _openFollowing,
                           ),
                           ProfileStat(
                             value: '${_followers.length}',
                             label: l10n.followers,
-                            onTap: () => _openConnections(_ConnTab.followers),
+                            onTap: _openFollowers,
                           ),
                         ],
                         actions: canAct
@@ -545,7 +541,7 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
               ? S.mutualClubs
               : l10n.clubsCountTitle(theirClubs.length),
           actionLabel: !clubsLoading && shown.length > 2 ? l10n.seeAll : null,
-          onAction: () => _openConnections(_ConnTab.clubs),
+          onAction: _openClubs,
         ),
         const SizedBox(height: 14),
         if (clubsLoading)
@@ -662,26 +658,35 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
     return studentClubRoleService.roleTitleFor(club, widget.user.id);
   }
 
-  void _openConnections(_ConnTab tab) {
-    final clubsLoading =
-        _clubContentLoading ||
-        (_isOwnProfile && userState.followedClubsLoading);
+  void _openClubs() => _openConnections(StudentConnectionSection.clubs);
+
+  void _openFollowers() => _openConnections(StudentConnectionSection.followers);
+
+  void _openFollowing() => _openConnections(StudentConnectionSection.following);
+
+  void _openConnections(StudentConnectionSection initialSection) {
+    final l10n = AppLocalizations.of(context)!;
     Navigator.push(
       context,
       MaterialPageRoute(
-        builder: (_) => _ConnectionsScreen(
-          title: userState.displayNameFor(widget.user.id, widget.user.name),
-          initialTab: tab,
-          clubsOf: () => _subscribedClubs,
-          followersOf: () => _followers,
-          followingOf: () => _following,
-          roleTitleFor: _roleTitleFor,
-          clubColor: _clubColor,
+        builder: (_) => StudentConnectionsScreen(
+          initialSection: initialSection,
+          clubs: _subscribedClubs,
+          followers: _followers,
+          following: _following,
+          clubColorFor: _clubColor,
+          clubSubtitleFor: (club) => localizedClubRole(
+            l10n,
+            _roleTitleFor(club) ?? l10n.memberRoleFallback,
+          ),
           onOpenClub: _openClub,
           onOpenUser: _openUserProfile,
+          clubsLoading:
+              _clubContentLoading ||
+              (_isOwnProfile && userState.followedClubsLoading),
           peopleLoading: _connectionsLoading,
+          clubsError: _connectionsError,
           peopleError: _connectionsError,
-          clubsLoading: clubsLoading,
         ),
       ),
     );
@@ -689,9 +694,8 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
 }
 
 // ── Follow toggle helper ────────────────────────────────────────────────────────
-// Shared by the name-block follow button and every row button inside
-// _ConnectionsScreen, so following/unfollowing works the same way regardless
-// of which list a person is tapped from.
+// Used only by the main profile action. The searchable connection directories
+// intentionally contain navigation-only rows.
 
 Future<void> _toggleUserFollow(User target, VoidCallback rebuild) async {
   if (!authService.isStudentSession) return;
@@ -752,405 +756,4 @@ bool _userFollowsMe(User other) {
     return true;
   }
   return other.followingUserIds.contains(myId);
-}
-
-// ── Connections screen ──────────────────────────────────────────────────────────
-// Instagram-style full-screen list with tabs to shuffle between a profile's
-// Clubs, Followers and Following, plus a search field — replaces the old
-// separate bottom sheets so all three live behind one consistent UI.
-
-enum _ConnTab { clubs, followers, following }
-
-class _ConnectionsScreen extends StatefulWidget {
-  final String title;
-  final _ConnTab initialTab;
-  final List<Club> Function() clubsOf;
-  final List<User> Function() followersOf;
-  final List<User> Function() followingOf;
-  final String? Function(Club) roleTitleFor;
-  final Color Function(Club) clubColor;
-  final ValueChanged<Club> onOpenClub;
-  final ValueChanged<User> onOpenUser;
-  final bool peopleLoading;
-  final String? peopleError;
-  final bool clubsLoading;
-
-  const _ConnectionsScreen({
-    required this.title,
-    required this.initialTab,
-    required this.clubsOf,
-    required this.followersOf,
-    required this.followingOf,
-    required this.roleTitleFor,
-    required this.clubColor,
-    required this.onOpenClub,
-    required this.onOpenUser,
-    required this.peopleLoading,
-    required this.peopleError,
-    required this.clubsLoading,
-  });
-
-  @override
-  State<_ConnectionsScreen> createState() => _ConnectionsScreenState();
-}
-
-class _ConnectionsScreenState extends State<_ConnectionsScreen> {
-  late _ConnTab _tab = widget.initialTab;
-  String _query = '';
-  final _searchController = TextEditingController();
-
-  @override
-  void dispose() {
-    _searchController.dispose();
-    super.dispose();
-  }
-
-  List<Club> _matchClubs(List<Club> list) {
-    final q = _query.trim().toLowerCase();
-    if (q.isEmpty) return list;
-    return list.where((c) => c.name.toLowerCase().contains(q)).toList();
-  }
-
-  List<User> _matchPeople(List<User> list) {
-    final q = _query.trim().toLowerCase();
-    if (q.isEmpty) return list;
-    return list.where((u) {
-      final displayName = userState.displayNameFor(u.id, u.name).toLowerCase();
-      return displayName.contains(q) || u.name.toLowerCase().contains(q);
-    }).toList();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: AppColors.background,
-      appBar: AppBar(
-        backgroundColor: AppColors.background,
-        surfaceTintColor: Colors.transparent,
-        foregroundColor: AppColors.text,
-        elevation: 0,
-        centerTitle: true,
-        title: Text(
-          widget.title,
-          style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
-        ),
-      ),
-      body: ListenableBuilder(
-        listenable: userState,
-        builder: (_, _) {
-          final clubs = widget.clubsOf();
-          final followers = widget.followersOf();
-          final following = widget.followingOf();
-
-          return Column(
-            children: [
-              _buildTabBar(clubs.length, followers.length, following.length),
-              Divider(height: 1, color: AppColors.divider),
-              _buildSearchBar(),
-              Expanded(
-                child: switch (_tab) {
-                  _ConnTab.clubs => _buildClubsList(
-                    _matchClubs(clubs),
-                    loading: widget.clubsLoading,
-                  ),
-                  _ConnTab.followers => _buildPeopleList(
-                    _matchPeople(followers),
-                    AppLocalizations.of(context)!.noFollowersYet,
-                  ),
-                  _ConnTab.following => _buildPeopleList(
-                    _matchPeople(following),
-                    AppLocalizations.of(context)!.notFollowingAnyone,
-                  ),
-                },
-              ),
-            ],
-          );
-        },
-      ),
-    );
-  }
-
-  Widget _buildTabBar(int clubsCount, int followersCount, int followingCount) {
-    Widget tabItem(String label, int count, _ConnTab tab) {
-      final selected = _tab == tab;
-      return Expanded(
-        child: GestureDetector(
-          behavior: HitTestBehavior.opaque,
-          onTap: () => setState(() => _tab = tab),
-          child: Padding(
-            padding: const EdgeInsets.only(top: 14, bottom: 12),
-            child: Column(
-              children: [
-                Text(
-                  '$count $label',
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: TextStyle(
-                    fontSize: 13,
-                    fontWeight: selected ? FontWeight.w800 : FontWeight.w600,
-                    color: selected ? AppColors.text : AppColors.secondaryText,
-                  ),
-                ),
-                const SizedBox(height: 10),
-                Container(
-                  height: 2,
-                  color: selected ? _burgundy : Colors.transparent,
-                ),
-              ],
-            ),
-          ),
-        ),
-      );
-    }
-
-    return Row(
-      children: [
-        tabItem(
-          AppLocalizations.of(context)!.clubs,
-          clubsCount,
-          _ConnTab.clubs,
-        ),
-        tabItem(
-          AppLocalizations.of(context)!.followers,
-          followersCount,
-          _ConnTab.followers,
-        ),
-        tabItem(
-          AppLocalizations.of(context)!.following,
-          followingCount,
-          _ConnTab.following,
-        ),
-      ],
-    );
-  }
-
-  Widget _buildSearchBar() {
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
-      child: Container(
-        height: 40,
-        padding: const EdgeInsets.symmetric(horizontal: 12),
-        decoration: BoxDecoration(
-          color: AppColors.surfaceAlt,
-          borderRadius: BorderRadius.all(Radius.circular(12)),
-        ),
-        child: Row(
-          children: [
-            Icon(Icons.search, size: 18, color: AppColors.secondaryText),
-            const SizedBox(width: 8),
-            Expanded(
-              child: TextField(
-                controller: _searchController,
-                onChanged: (v) => setState(() => _query = v),
-                style: TextStyle(fontSize: 14, color: AppColors.text),
-                decoration: InputDecoration(
-                  filled: false,
-                  isCollapsed: true,
-                  border: InputBorder.none,
-                  hintText: AppLocalizations.of(context)!.search,
-                  hintStyle: TextStyle(color: AppColors.secondaryText),
-                ),
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildClubsList(List<Club> clubs, {required bool loading}) {
-    if (clubs.isEmpty) {
-      return _emptyState(
-        loading
-            ? AppLocalizations.of(context)!.loadingConnections
-            : _query.isEmpty
-            ? AppLocalizations.of(context)!.noClubsYetShort
-            : AppLocalizations.of(context)!.noClubsFound,
-      );
-    }
-    return ListView.separated(
-      padding: const EdgeInsets.symmetric(vertical: 8),
-      itemCount: clubs.length,
-      separatorBuilder: (_, _) =>
-          Divider(height: 1, indent: 72, color: AppColors.divider),
-      itemBuilder: (_, i) => _clubTile(clubs[i]),
-    );
-  }
-
-  Widget _buildPeopleList(List<User> people, String emptyFallback) {
-    if (people.isEmpty) {
-      final message = _query.isNotEmpty
-          ? AppLocalizations.of(context)!.noMatchesFoundDot
-          : widget.peopleLoading
-          ? AppLocalizations.of(context)!.loadingConnections
-          : widget.peopleError ?? emptyFallback;
-      return _emptyState(message);
-    }
-    return ListView.separated(
-      padding: const EdgeInsets.symmetric(vertical: 8),
-      itemCount: people.length,
-      separatorBuilder: (_, _) =>
-          Divider(height: 1, indent: 72, color: AppColors.divider),
-      itemBuilder: (_, i) => _personTile(people[i]),
-    );
-  }
-
-  Widget _emptyState(String text) {
-    return Padding(
-      padding: const EdgeInsets.all(32),
-      child: Center(
-        child: Text(
-          text,
-          textAlign: TextAlign.center,
-          style: TextStyle(color: AppColors.secondaryText),
-        ),
-      ),
-    );
-  }
-
-  Widget _clubTile(Club club) {
-    final role = widget.roleTitleFor(club);
-    final isLeader = role != null;
-    return ListTile(
-      onTap: () => widget.onOpenClub(club),
-      leading: ClubAvatar(
-        clubId: club.id,
-        clubName: club.name,
-        color: widget.clubColor(club),
-        imageUrl: club.logoUrl,
-        size: 44,
-        fontSize: 18,
-        borderRadius: 13,
-      ),
-      title: Text(
-        club.name,
-        maxLines: 1,
-        overflow: TextOverflow.ellipsis,
-        style: TextStyle(
-          fontSize: 14,
-          fontWeight: FontWeight.w700,
-          color: AppColors.text,
-        ),
-      ),
-      trailing: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-        decoration: BoxDecoration(
-          color: isLeader ? _burgundy : AppColors.surfaceAlt,
-          borderRadius: BorderRadius.all(Radius.circular(999)),
-          border: isLeader ? null : Border.all(color: AppColors.divider),
-        ),
-        child: Text(
-          localizedClubRole(
-            AppLocalizations.of(context)!,
-            role ?? AppLocalizations.of(context)!.memberRoleFallback,
-          ),
-          style: TextStyle(
-            fontSize: 11.5,
-            fontWeight: FontWeight.w700,
-            color: isLeader ? Colors.white : AppColors.secondaryText,
-          ),
-        ),
-      ),
-    );
-  }
-
-  Widget _personTile(User user) {
-    final myId =
-        authService.currentUser?.id ?? authService.currentAdmin?.id ?? '';
-    final isMe = user.id == myId;
-    final hasUsername = userState.usernameFor(user.id) != null;
-
-    return ListTile(
-      onTap: () => widget.onOpenUser(user),
-      leading: UserAvatar(
-        userId: user.id,
-        name: user.name,
-        size: 44,
-        fontSize: 16,
-      ),
-      title: Text(
-        userState.displayNameFor(user.id, user.name),
-        style: TextStyle(
-          fontSize: 14,
-          fontWeight: FontWeight.w700,
-          color: AppColors.text,
-        ),
-      ),
-      subtitle: hasUsername
-          ? Text(
-              user.name,
-              style: TextStyle(fontSize: 12.5, color: AppColors.secondaryText),
-            )
-          : null,
-      trailing: isMe || !authService.isStudentSession
-          ? null
-          // ListTile.trailing needs a bounded width or it throws — the
-          // longest label ("Follow back") sets the fixed width for all.
-          : SizedBox(
-              width: 108,
-              height: 34,
-              child: _FollowButton(
-                isFollowing: userState.isFollowingUser(user.id),
-                isPending: userState.hasPendingRequest(user.id),
-                followsMe: _userFollowsMe(user),
-                onTap: () => _toggleUserFollow(user, () => setState(() {})),
-              ),
-            ),
-    );
-  }
-}
-
-// ── Follow button ──────────────────────────────────────────────────────────────
-
-class _FollowButton extends StatelessWidget {
-  final bool isFollowing;
-  final bool isPending;
-  final bool followsMe;
-  final VoidCallback onTap;
-
-  const _FollowButton({
-    required this.isFollowing,
-    required this.isPending,
-    this.followsMe = false,
-    required this.onTap,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    final filled = !isFollowing && !isPending;
-    final label = isPending
-        ? AppLocalizations.of(context)!.requestedLabel
-        : isFollowing
-        ? AppLocalizations.of(context)!.following
-        : followsMe
-        ? AppLocalizations.of(context)!.followBack
-        : AppLocalizations.of(context)!.follow;
-
-    return GestureDetector(
-      onTap: onTap,
-      child: AnimatedContainer(
-        duration: const Duration(milliseconds: 200),
-        height: 34,
-        padding: const EdgeInsets.symmetric(horizontal: 12),
-        decoration: BoxDecoration(
-          color: filled ? _burgundy : Colors.transparent,
-          borderRadius: BorderRadius.all(Radius.circular(999)),
-          border: Border.all(
-            color: filled ? _burgundy : AppColors.divider,
-            width: 1,
-          ),
-        ),
-        child: Center(
-          child: Text(
-            label,
-            style: TextStyle(
-              fontSize: 13,
-              fontWeight: FontWeight.w600,
-              color: filled ? Colors.white : AppColors.text,
-            ),
-          ),
-        ),
-      ),
-    );
-  }
 }
