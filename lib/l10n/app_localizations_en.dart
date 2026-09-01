@@ -139,7 +139,7 @@ class AppLocalizationsEn extends AppLocalizations {
       'Follow clubs to see their posts\nand events in your feed';
 
   @override
-  String get endOfFeed => 'That\'s it for today 😀';
+  String get endOfFeed => 'Updates Are Coming!';
 
   @override
   String get exploreClubs => 'Explore All Clubs';

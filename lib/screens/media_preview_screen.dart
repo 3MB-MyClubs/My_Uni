@@ -1,6 +1,7 @@
 import 'dart:io';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 
 import '../models/chat_media_selection.dart';
 import '../services/app_colors.dart';
@@ -85,159 +86,165 @@ class _MediaPreviewScreenState extends State<MediaPreviewScreen> {
   @override
   Widget build(BuildContext context) {
     final count = _media.length;
-    return Scaffold(
-      key: const ValueKey('media-preview-screen'),
-      resizeToAvoidBottomInset: true,
-      backgroundColor: const Color(0xFF090708),
-      body: SafeArea(
-        child: Column(
-          children: [
-            SizedBox(
-              height: 58,
-              child: Row(
-                children: [
-                  IconButton(
-                    key: const ValueKey('media-preview-cancel'),
-                    tooltip: S.cancel,
-                    onPressed: () => Navigator.of(context).pop(),
-                    icon: const Icon(Icons.close_rounded, color: Colors.white),
-                  ),
-                  Expanded(
-                    child: Text(
-                      count == 0
-                          ? S.mediaPreviewEmpty
-                          : S.mediaPreviewPosition(_currentIndex + 1, count),
-                      textAlign: TextAlign.center,
-                      style: const TextStyle(
-                        color: Colors.white,
-                        fontSize: 14,
-                        fontWeight: FontWeight.w700,
-                      ),
-                    ),
-                  ),
-                  IconButton(
-                    key: const ValueKey('media-preview-remove'),
-                    tooltip: S.mediaPreviewRemove,
-                    onPressed: count == 0 ? null : _removeCurrent,
-                    icon: const Icon(
-                      Icons.delete_outline_rounded,
-                      color: Colors.white,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            Expanded(
-              child: count == 0
-                  ? Center(
-                      child: Text(
-                        S.mediaPreviewEmpty,
-                        style: const TextStyle(color: Colors.white70),
-                      ),
-                    )
-                  : PageView.builder(
-                      key: const ValueKey('media-preview-carousel'),
-                      controller: _pageController,
-                      itemCount: count,
-                      onPageChanged: (index) {
-                        setState(() => _currentIndex = index);
-                      },
-                      itemBuilder: (context, index) => _MediaPage(
-                        key: ValueKey('media-preview-page-$index'),
-                        media: _media[index],
-                        active: index == _currentIndex,
-                      ),
-                    ),
-            ),
-            if (count > 1)
+    return AnnotatedRegion<SystemUiOverlayStyle>(
+      value: SystemUiOverlayStyle.light,
+      child: Scaffold(
+        key: const ValueKey('media-preview-screen'),
+        resizeToAvoidBottomInset: true,
+        backgroundColor: const Color(0xFF090708),
+        body: SafeArea(
+          child: Column(
+            children: [
               SizedBox(
-                key: const ValueKey('media-preview-thumbnails'),
-                height: 76,
-                child: ListView.separated(
-                  padding: const EdgeInsets.fromLTRB(12, 8, 12, 8),
-                  scrollDirection: Axis.horizontal,
-                  itemCount: count,
-                  separatorBuilder: (_, _) => const SizedBox(width: 8),
-                  itemBuilder: (context, index) => _MediaThumbnail(
-                    key: ValueKey('media-preview-thumbnail-$index'),
-                    media: _media[index],
-                    selected: index == _currentIndex,
-                    onTap: () => _pageController.animateToPage(
-                      index,
-                      duration: const Duration(milliseconds: 220),
-                      curve: Curves.easeOutCubic,
-                    ),
-                  ),
-                ),
-              ),
-            if (count > 0)
-              Padding(
-                padding: const EdgeInsets.fromLTRB(12, 8, 12, 10),
+                height: 58,
                 child: Row(
-                  crossAxisAlignment: CrossAxisAlignment.end,
                   children: [
+                    IconButton(
+                      key: const ValueKey('media-preview-cancel'),
+                      tooltip: S.cancel,
+                      onPressed: () => Navigator.of(context).pop(),
+                      icon: const Icon(
+                        Icons.close_rounded,
+                        color: Colors.white,
+                      ),
+                    ),
                     Expanded(
-                      child: Container(
-                        constraints: const BoxConstraints(minHeight: 50),
-                        padding: const EdgeInsets.symmetric(horizontal: 14),
-                        decoration: BoxDecoration(
-                          color: Colors.white.withValues(alpha: 0.11),
-                          borderRadius: BorderRadius.circular(24),
-                          border: Border.all(
-                            color: Colors.white.withValues(alpha: 0.14),
-                          ),
-                        ),
-                        child: TextField(
-                          key: const ValueKey('media-preview-caption'),
-                          controller: _captionController,
-                          minLines: 1,
-                          maxLines: 4,
-                          maxLength: 4000,
-                          textCapitalization: TextCapitalization.sentences,
-                          textInputAction: TextInputAction.newline,
-                          style: const TextStyle(
-                            color: Colors.white,
-                            fontSize: 15,
-                          ),
-                          decoration: InputDecoration(
-                            filled: false,
-                            counterText: '',
-                            hintText: S.mediaCaptionHint,
-                            hintStyle: const TextStyle(color: Colors.white60),
-                            border: InputBorder.none,
-                            enabledBorder: InputBorder.none,
-                            focusedBorder: InputBorder.none,
-                          ),
+                      child: Text(
+                        count == 0
+                            ? S.mediaPreviewEmpty
+                            : S.mediaPreviewPosition(_currentIndex + 1, count),
+                        textAlign: TextAlign.center,
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontSize: 14,
+                          fontWeight: FontWeight.w700,
                         ),
                       ),
                     ),
-                    const SizedBox(width: 10),
-                    Semantics(
-                      button: true,
-                      label: S.mediaSend,
-                      child: Material(
-                        color: AppColors.primaryRed,
-                        shape: const CircleBorder(),
-                        child: InkWell(
-                          key: const ValueKey('media-preview-send'),
-                          customBorder: const CircleBorder(),
-                          onTap: _confirm,
-                          child: const SizedBox(
-                            width: 54,
-                            height: 54,
-                            child: Icon(
-                              Icons.send_rounded,
-                              color: Colors.white,
-                              size: 25,
-                            ),
-                          ),
-                        ),
+                    IconButton(
+                      key: const ValueKey('media-preview-remove'),
+                      tooltip: S.mediaPreviewRemove,
+                      onPressed: count == 0 ? null : _removeCurrent,
+                      icon: const Icon(
+                        Icons.delete_outline_rounded,
+                        color: Colors.white,
                       ),
                     ),
                   ],
                 ),
               ),
-          ],
+              Expanded(
+                child: count == 0
+                    ? Center(
+                        child: Text(
+                          S.mediaPreviewEmpty,
+                          style: const TextStyle(color: Colors.white70),
+                        ),
+                      )
+                    : PageView.builder(
+                        key: const ValueKey('media-preview-carousel'),
+                        controller: _pageController,
+                        itemCount: count,
+                        onPageChanged: (index) {
+                          setState(() => _currentIndex = index);
+                        },
+                        itemBuilder: (context, index) => _MediaPage(
+                          key: ValueKey('media-preview-page-$index'),
+                          media: _media[index],
+                          active: index == _currentIndex,
+                        ),
+                      ),
+              ),
+              if (count > 1)
+                SizedBox(
+                  key: const ValueKey('media-preview-thumbnails'),
+                  height: 76,
+                  child: ListView.separated(
+                    padding: const EdgeInsets.fromLTRB(12, 8, 12, 8),
+                    scrollDirection: Axis.horizontal,
+                    itemCount: count,
+                    separatorBuilder: (_, _) => const SizedBox(width: 8),
+                    itemBuilder: (context, index) => _MediaThumbnail(
+                      key: ValueKey('media-preview-thumbnail-$index'),
+                      media: _media[index],
+                      selected: index == _currentIndex,
+                      onTap: () => _pageController.animateToPage(
+                        index,
+                        duration: const Duration(milliseconds: 220),
+                        curve: Curves.easeOutCubic,
+                      ),
+                    ),
+                  ),
+                ),
+              if (count > 0)
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(12, 8, 12, 10),
+                  child: Row(
+                    crossAxisAlignment: CrossAxisAlignment.end,
+                    children: [
+                      Expanded(
+                        child: Container(
+                          constraints: const BoxConstraints(minHeight: 50),
+                          padding: const EdgeInsets.symmetric(horizontal: 14),
+                          decoration: BoxDecoration(
+                            color: Colors.white.withValues(alpha: 0.11),
+                            borderRadius: BorderRadius.circular(24),
+                            border: Border.all(
+                              color: Colors.white.withValues(alpha: 0.14),
+                            ),
+                          ),
+                          child: TextField(
+                            key: const ValueKey('media-preview-caption'),
+                            controller: _captionController,
+                            minLines: 1,
+                            maxLines: 4,
+                            maxLength: 4000,
+                            textCapitalization: TextCapitalization.sentences,
+                            textInputAction: TextInputAction.newline,
+                            style: const TextStyle(
+                              color: Colors.white,
+                              fontSize: 15,
+                            ),
+                            decoration: InputDecoration(
+                              filled: false,
+                              counterText: '',
+                              hintText: S.mediaCaptionHint,
+                              hintStyle: const TextStyle(color: Colors.white60),
+                              border: InputBorder.none,
+                              enabledBorder: InputBorder.none,
+                              focusedBorder: InputBorder.none,
+                            ),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 10),
+                      Semantics(
+                        button: true,
+                        label: S.mediaSend,
+                        child: Material(
+                          color: AppColors.primaryRed,
+                          shape: const CircleBorder(),
+                          child: InkWell(
+                            key: const ValueKey('media-preview-send'),
+                            customBorder: const CircleBorder(),
+                            onTap: _confirm,
+                            child: const SizedBox(
+                              width: 54,
+                              height: 54,
+                              child: Icon(
+                                Icons.send_rounded,
+                                color: Colors.white,
+                                size: 25,
+                              ),
+                            ),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+            ],
+          ),
         ),
       ),
     );

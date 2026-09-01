@@ -15,6 +15,30 @@ import 'package:flutter_application_1/widgets/landing_design.dart';
 /// "@ku.edu.tr" domain is shown as a fixed suffix and never typed. Pasting a
 /// full email is normalised back down to the local part.
 void main() {
+  testWidgets('landing wordmark keeps Club burgundy and makes Up foreground', (
+    tester,
+  ) async {
+    await themeService.setDark(true);
+    addTearDown(() => themeService.setDark(false));
+
+    await tester.pumpWidget(
+      MaterialApp(
+        localizationsDelegates: AppLocalizations.localizationsDelegates,
+        supportedLocales: AppLocalizations.supportedLocales,
+        home: LoginScreen(onLogin: () {}, onSignUp: () {}, onAdminLogin: () {}),
+      ),
+    );
+    await tester.pump();
+
+    final wordmark = tester.widget<Text>(
+      find.byKey(const ValueKey<String>('landing-clubup-wordmark')),
+    );
+    final spans = (wordmark.textSpan! as TextSpan).children!;
+    expect((spans[0] as TextSpan).style?.color, LandingColors.accent);
+    expect((spans[1] as TextSpan).style?.color, const Color(0xFFFAFAFA));
+    expect((spans[1] as TextSpan).style?.color, LandingColors.text);
+  });
+
   testWidgets('login copy is translated to Turkish', (tester) async {
     await tester.pumpWidget(
       MaterialApp(

@@ -107,6 +107,41 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
+  testWidgets('settings back control is icon-only and theme-neutral', (
+    tester,
+  ) async {
+    signInStudent();
+    await pumpSettings(tester);
+
+    final backButton = find.byKey(const ValueKey('settings-back-button'));
+    expect(backButton, findsOneWidget);
+    expect(
+      tester.widget<IconButton>(backButton).style?.backgroundColor?.resolve({}),
+      Colors.transparent,
+    );
+    expect(
+      tester
+          .widget<Icon>(
+            find.descendant(of: backButton, matching: find.byType(Icon)),
+          )
+          .color,
+      isNull,
+    );
+    expect(
+      tester.widget<IconButton>(backButton).style?.foregroundColor?.resolve({}),
+      Colors.black,
+    );
+
+    await themeService.setDark(true);
+    await tester.pump(const Duration(milliseconds: 300));
+
+    expect(
+      tester.widget<IconButton>(backButton).style?.foregroundColor?.resolve({}),
+      Colors.white,
+    );
+    expect(tester.takeException(), isNull);
+  });
+
   testWidgets('the appearance and language toggles drive the services', (
     tester,
   ) async {

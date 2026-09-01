@@ -287,7 +287,7 @@ abstract class AppLocalizations {
   /// No description provided for @endOfFeed.
   ///
   /// In en, this message translates to:
-  /// **'That\'s it for today 😀'**
+  /// **'Updates Are Coming!'**
   String get endOfFeed;
 
   /// No description provided for @exploreClubs.

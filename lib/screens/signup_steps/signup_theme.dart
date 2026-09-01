@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../../services/app_colors.dart';
 import '../../services/theme_service.dart';
+import '../../theme/app_semantic_colors.dart';
 
 /// Theme-aware colors and helpers for the signup flow.
 ///
@@ -95,36 +96,33 @@ class SC {
         ),
       );
 
-  // ── Wrap content in the signup light theme ────────────────────
-  static ThemeData theme() => ThemeData(
-    brightness: themeService.isDark ? Brightness.dark : Brightness.light,
-    colorScheme:
-        ColorScheme.fromSeed(
-          seedColor: SC.burgundy,
-          brightness: themeService.isDark ? Brightness.dark : Brightness.light,
-        ).copyWith(
-          primary: SC.burgundy,
-          onPrimary: Colors.white,
-          surface: SC.bg,
-          onSurface: SC.ink,
+  // ── Wrap content without escaping the active app ThemeData ────────────────
+  static ThemeData theme(BuildContext context) {
+    final base = Theme.of(context);
+    final semantic = context.semanticColors;
+    return base.copyWith(
+      inputDecorationTheme: base.inputDecorationTheme.copyWith(
+        filled: true,
+        fillColor: base.colorScheme.surface,
+        labelStyle: TextStyle(color: semantic.textSecondary),
+        hintStyle: TextStyle(color: semantic.textMuted),
+        errorStyle: TextStyle(color: semantic.destructive, fontSize: 12),
+        border: OutlineInputBorder(
+          borderRadius: const BorderRadius.all(Radius.circular(12)),
+          borderSide: BorderSide(color: base.colorScheme.outline, width: 1.5),
         ),
-    scaffoldBackgroundColor: SC.bg,
-    inputDecorationTheme: InputDecorationTheme(
-      filled: true,
-      fillColor: SC.card,
-      labelStyle: TextStyle(color: SC.muted),
-      hintStyle: TextStyle(color: SC.muted),
-      errorStyle: TextStyle(color: SC.burgundy, fontSize: 12),
-      border: OutlineInputBorder(
-        borderRadius: BorderRadius.all(Radius.circular(12)),
-        borderSide: BorderSide(color: SC.hair, width: 1.5),
       ),
-    ),
-    textTheme: TextTheme(
-      bodyLarge: TextStyle(color: SC.ink),
-      bodyMedium: TextStyle(color: SC.ink),
-      bodySmall: TextStyle(color: SC.body),
-    ),
-    useMaterial3: true,
-  );
+      textTheme: base.textTheme.copyWith(
+        bodyLarge: base.textTheme.bodyLarge?.copyWith(
+          color: semantic.textPrimary,
+        ),
+        bodyMedium: base.textTheme.bodyMedium?.copyWith(
+          color: semantic.textPrimary,
+        ),
+        bodySmall: base.textTheme.bodySmall?.copyWith(
+          color: semantic.textSecondary,
+        ),
+      ),
+    );
+  }
 }

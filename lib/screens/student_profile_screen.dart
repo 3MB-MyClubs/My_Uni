@@ -9,11 +9,13 @@ import '../services/club_role_localization.dart';
 import '../services/mock_data.dart';
 import '../services/rsvp_store.dart';
 import '../services/student_activity_service.dart';
+import '../onboarding/onboarding_anchors.dart';
 import '../onboarding/widgets/starter_checklist_card.dart';
 import '../widgets/clubup_design.dart';
 import '../widgets/profile_design.dart';
 import 'event_detail_screen.dart';
 import 'student_activity_screen.dart';
+import 'student_connections_screen.dart';
 
 class StudentClubDetail {
   final Club club;
@@ -90,6 +92,7 @@ class StudentProfileScreen extends StatelessWidget {
   /// Overrides the default "See All" destination for Upcoming Events. Defaults
   /// to this student's full [StudentActivityScreen] history.
   final VoidCallback? onSeeAllEvents;
+  final VoidCallback? onClubsTap;
   final VoidCallback? onFollowersTap;
   final VoidCallback? onFollowingTap;
   final List<Club> followedClubs;
@@ -97,13 +100,20 @@ class StudentProfileScreen extends StatelessWidget {
   final bool clubsLoading;
   final StudentProfileData data;
 
+  /// True only for the instance the bottom nav hosts, which is the one the
+  /// in-app tutorial spotlights. Keeps `tut-profile-*`'s [GlobalKey]s from
+  /// being mounted twice when this screen is pushed as a route as well.
+  final bool isTutorialHost;
+
   const StudentProfileScreen({
     super.key,
     required this.onSettings,
     required this.data,
+    this.isTutorialHost = false,
     this.onShare,
     this.onFindClubs,
     this.onSeeAllEvents,
+    this.onClubsTap,
     this.onFollowersTap,
     this.onFollowingTap,
     this.followedClubs = const [],
@@ -150,35 +160,45 @@ class StudentProfileScreen extends StatelessWidget {
                   bottomInset + kProfileNavClearance,
                 ),
                 children: [
-                  ProfileHero(
-                    userId: data.userId,
-                    name: data.name,
-                    handle: '',
-                    bio: data.bio,
-                    nameBadge: boardMemberships.isEmpty
-                        ? null
-                        : ProfileRolePill(
-                            label: l10n.boardMemberLabel,
-                            semanticsLabel: l10n.boardMemberships,
-                            onTap: () => _showBoardMembershipsSheet(context),
-                          ),
-                    stats: [
-                      ProfileStat(
-                        value: '${data.clubs}',
-                        label: l10n.clubs,
-                        onTap: () => _showFollowedClubsSheet(context),
-                      ),
-                      ProfileStat(
-                        value: '${data.following}',
-                        label: l10n.following,
-                        onTap: onFollowingTap,
-                      ),
-                      ProfileStat(
-                        value: '${data.followers}',
-                        label: l10n.followers,
-                        onTap: onFollowersTap,
-                      ),
-                    ],
+                  KeyedSubtree(
+                    // `tut-profile-hero` 390:3
+                    key: isTutorialHost
+                        ? onboardingAnchors.keyFor(
+                            OnboardingAnchors.profileHero,
+                          )
+                        : null,
+                    child: ProfileHero(
+                      userId: data.userId,
+                      name: data.name,
+                      handle: '',
+                      bio: data.bio,
+                      nameBadge: boardMemberships.isEmpty
+                          ? null
+                          : ProfileRolePill(
+                              label: l10n.boardMemberLabel,
+                              semanticsLabel: l10n.boardMemberships,
+                              onTap: () => _showBoardMembershipsSheet(context),
+                            ),
+                      stats: [
+                        ProfileStat(
+                          value: '${data.clubs}',
+                          label: l10n.clubs,
+                          onTap:
+                              onClubsTap ??
+                              () => _openFollowedClubsScreen(context),
+                        ),
+                        ProfileStat(
+                          value: '${data.following}',
+                          label: l10n.following,
+                          onTap: onFollowingTap,
+                        ),
+                        ProfileStat(
+                          value: '${data.followers}',
+                          label: l10n.followers,
+                          onTap: onFollowersTap,
+                        ),
+                      ],
+                    ),
                   ),
                   const SizedBox(height: 4),
                   // Not in the frame, and invisible in every normal session:
@@ -190,7 +210,15 @@ class StudentProfileScreen extends StatelessWidget {
                   // shared onboarding widget.
                   const StarterChecklistCard(),
                   const SizedBox(height: 28),
-                  _buildClubsSection(context),
+                  KeyedSubtree(
+                    // `tut-profile-clubs` 390:248
+                    key: isTutorialHost
+                        ? onboardingAnchors.keyFor(
+                            OnboardingAnchors.profileClubs,
+                          )
+                        : null,
+                    child: _buildClubsSection(context),
+                  ),
                   const SizedBox(height: 28),
                   _StudentActivityHydrator(
                     userId: data.userId,
@@ -217,7 +245,7 @@ class StudentProfileScreen extends StatelessWidget {
         ProfileSectionHeader(
           title: l10n.myClubs,
           actionLabel: clubsLoading || entries.isEmpty ? null : l10n.seeAll,
-          onAction: () => _showFollowedClubsSheet(context),
+          onAction: onClubsTap ?? () => _openFollowedClubsScreen(context),
         ),
         const SizedBox(height: 14),
         if (clubsLoading)
@@ -361,134 +389,24 @@ class StudentProfileScreen extends StatelessWidget {
 
   // ── "See All" clubs sheet ──────────────────────────────────────────────────
 
-  /// There is no frame for this sheet, so it borrows the area's tokens rather
-  /// than the old campus palette — otherwise "See All" opened a differently
-  /// themed surface on top of the redesigned page.
-  void _showFollowedClubsSheet(BuildContext context) {
+  /// Opens the same searchable, board-style directory used by the profile's
+  /// other connection stats.
+  void _openFollowedClubsScreen(BuildContext context) {
     final entries = _clubEntries(context);
-    showModalBottomSheet<void>(
-      context: context,
-      isScrollControlled: true,
-      backgroundColor: Colors.transparent,
-      builder: (sheetContext) => DraggableScrollableSheet(
-        initialChildSize: 0.5,
-        minChildSize: 0.34,
-        maxChildSize: 0.82,
-        expand: false,
-        builder: (context, scrollController) => Container(
-          decoration: BoxDecoration(
-            color: ProfileColors.card,
-            borderRadius: const BorderRadius.vertical(top: Radius.circular(28)),
-            border: Border(top: BorderSide(color: ProfileColors.border)),
-          ),
-          child: Column(
-            children: [
-              const SizedBox(height: 12),
-              Container(
-                width: 42,
-                height: 4,
-                decoration: BoxDecoration(
-                  color: ProfileColors.border,
-                  borderRadius: const BorderRadius.all(Radius.circular(999)),
-                ),
-              ),
-              Padding(
-                padding: const EdgeInsets.fromLTRB(20, 20, 20, 12),
-                child: Align(
-                  alignment: Alignment.centerLeft,
-                  child: Text(
-                    AppLocalizations.of(context)!.followedClubsTitle,
-                    style: figtree(
-                      size: 20,
-                      weight: FontWeight.w800,
-                      color: ProfileColors.text,
-                    ),
-                  ),
-                ),
-              ),
-              Expanded(
-                child: entries.isEmpty
-                    ? Center(
-                        child: Text(
-                          AppLocalizations.of(context)!.noFollowedClubsYet,
-                          style: figtree(
-                            size: 14,
-                            weight: FontWeight.w600,
-                            color: ProfileColors.muted,
-                          ),
-                        ),
-                      )
-                    : ListView.separated(
-                        controller: scrollController,
-                        padding: const EdgeInsets.fromLTRB(16, 0, 16, 28),
-                        itemCount: entries.length,
-                        separatorBuilder: (_, _) => const SizedBox(height: 8),
-                        itemBuilder: (context, index) {
-                          final entry = entries[index];
-                          return GestureDetector(
-                            onTap: () {
-                              Navigator.pop(sheetContext);
-                              onClubTap?.call(entry.club);
-                            },
-                            behavior: HitTestBehavior.opaque,
-                            child: Container(
-                              padding: const EdgeInsets.all(10),
-                              decoration: BoxDecoration(
-                                color: ProfileColors.card,
-                                borderRadius: const BorderRadius.all(
-                                  Radius.circular(16),
-                                ),
-                                border: Border.all(color: ProfileColors.border),
-                              ),
-                              child: Row(
-                                children: [
-                                  ProfileClubCover(
-                                    club: entry.club,
-                                    color: entry.color,
-                                    width: 46,
-                                    height: 46,
-                                  ),
-                                  const SizedBox(width: 12),
-                                  Expanded(
-                                    child: Column(
-                                      crossAxisAlignment:
-                                          CrossAxisAlignment.start,
-                                      children: [
-                                        Text(
-                                          entry.club.name,
-                                          maxLines: 1,
-                                          overflow: TextOverflow.ellipsis,
-                                          style: figtree(
-                                            size: 14,
-                                            weight: FontWeight.w700,
-                                            color: ProfileColors.text,
-                                          ),
-                                        ),
-                                        const SizedBox(height: 2),
-                                        Text(
-                                          entry.detail,
-                                          style: figtree(
-                                            size: 11,
-                                            weight: FontWeight.w400,
-                                            color: ProfileColors.muted,
-                                          ),
-                                        ),
-                                      ],
-                                    ),
-                                  ),
-                                  Icon(
-                                    Icons.chevron_right_rounded,
-                                    color: ProfileColors.muted,
-                                  ),
-                                ],
-                              ),
-                            ),
-                          );
-                        },
-                      ),
-              ),
-            ],
-          ),
+    final byId = {for (final entry in entries) entry.club.id: entry};
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => StudentConnectionsScreen(
+          initialSection: StudentConnectionSection.clubs,
+          clubs: entries.map((entry) => entry.club).toList(),
+          followers: const [],
+          following: const [],
+          clubColorFor: (club) => byId[club.id]?.color ?? _clubColorFor(club),
+          clubSubtitleFor: (club) => byId[club.id]?.detail ?? '',
+          onOpenClub: onClubTap,
+          onOpenUser: (_) {},
+          clubsLoading: clubsLoading,
         ),
       ),
     );

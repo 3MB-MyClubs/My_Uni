@@ -44,6 +44,7 @@ import 'rsvp_list_screen.dart';
 import 'post_detail_screen.dart';
 import 'settings_screen.dart';
 import 'student_profile_screen.dart';
+import 'student_connections_screen.dart';
 import 'user_profile_screen.dart';
 
 class ProfileScreen extends StatefulWidget {
@@ -520,251 +521,74 @@ class _ProfileScreenState extends State<ProfileScreen> {
   }
 
   void _showFollowersSheet(List<User> followers) {
-    showModalBottomSheet(
-      context: context,
-      isScrollControlled: true,
-      backgroundColor: Colors.transparent,
-      builder: (sheetContext) => FractionallySizedBox(
-        heightFactor: 0.72,
-        child: Container(
-          decoration: BoxDecoration(
-            color: AppColors.surfaceAlt,
-            borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
-          ),
-          padding: const EdgeInsets.fromLTRB(20, 14, 20, 24),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Center(
-                child: Container(
-                  width: 38,
-                  height: 4,
-                  decoration: BoxDecoration(
-                    color: AppColors.divider,
-                    borderRadius: BorderRadius.all(Radius.circular(999)),
-                  ),
-                ),
-              ),
-              const SizedBox(height: 16),
-              Row(
-                children: [
-                  Icon(
-                    Icons.people_alt_outlined,
-                    size: 18,
-                    color: AppColors.primaryRed,
-                  ),
-                  const SizedBox(width: 8),
-                  Text(
-                    AppLocalizations.of(context)!.followers,
-                    style: TextStyle(
-                      fontSize: 18,
-                      fontWeight: FontWeight.bold,
-                      color: AppColors.text,
-                    ),
-                  ),
-                  const Spacer(),
-                  Text(
-                    '${followers.length}',
-                    style: TextStyle(
-                      fontSize: 14,
-                      fontWeight: FontWeight.w700,
-                      color: AppColors.secondaryText,
-                    ),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 16),
-              Expanded(
-                child: followers.isEmpty
-                    ? Center(
-                        child: Text(
-                          AppLocalizations.of(context)!.noFollowersYet,
-                          style: TextStyle(
-                            fontSize: 14,
-                            color: AppColors.secondaryText,
-                          ),
-                        ),
-                      )
-                    : ListView.separated(
-                        itemCount: followers.length,
-                        separatorBuilder: (_, _) =>
-                            Divider(height: 1, color: AppColors.divider),
-                        itemBuilder: (_, index) {
-                          final follower = followers[index];
-                          return ListTile(
-                            contentPadding: const EdgeInsets.symmetric(
-                              horizontal: 0,
-                              vertical: 4,
-                            ),
-                            leading: UserAvatar(
-                              userId: follower.id,
-                              name: follower.name,
-                              size: 42,
-                              fontSize: 18,
-                            ),
-                            title: Text(
-                              userState.displayNameFor(
-                                follower.id,
-                                follower.name,
-                              ),
-                              style: TextStyle(
-                                fontWeight: FontWeight.w600,
-                                color: AppColors.text,
-                              ),
-                            ),
-                            subtitle: userState.usernameFor(follower.id) != null
-                                ? Text(
-                                    follower.name,
-                                    style: TextStyle(
-                                      fontSize: 12,
-                                      color: AppColors.secondaryText,
-                                    ),
-                                  )
-                                : null,
-                            trailing: Icon(
-                              Icons.chevron_right_rounded,
-                              color: AppColors.secondaryText,
-                            ),
-                            onTap: () {
-                              Navigator.pop(sheetContext);
-                              Navigator.push(
-                                context,
-                                MaterialPageRoute(
-                                  builder: (_) =>
-                                      UserProfileScreen(user: follower),
-                                ),
-                              );
-                            },
-                          );
-                        },
-                      ),
-              ),
-            ],
-          ),
+    _showStudentConnections(
+      initialSection: StudentConnectionSection.followers,
+      followers: followers,
+    );
+  }
+
+  void _showFollowingSheet(List<User> following) {
+    _showStudentConnections(
+      initialSection: StudentConnectionSection.following,
+      following: following,
+    );
+  }
+
+  void _showStudentConnections({
+    required StudentConnectionSection initialSection,
+    List<Club>? studentClubs,
+    List<User>? followers,
+    List<User>? following,
+  }) {
+    final userId = authService.currentUser?.id ?? '';
+    final clubsLoading = _clubContentLoading || userState.followedClubsLoading;
+    final resolvedClubs =
+        studentClubs ??
+        (clubsLoading
+            ? const <Club>[]
+            : studentClubRoleService.orderedProfileClubs(
+                userId: userId,
+                followedClubIds: userState.followedClubIds,
+                allClubs: clubs,
+              ));
+    final l10n = AppLocalizations.of(context)!;
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => StudentConnectionsScreen(
+          initialSection: initialSection,
+          clubs: resolvedClubs,
+          followers: followers ?? _followersForUser(userId),
+          following: following ?? _followingUsers(),
+          clubColorFor: (club) => _clubColor(clubOrdinal(club.id)),
+          clubSubtitleFor: (club) {
+            final role = studentClubRoleService.roleTitleFor(club, userId);
+            return role == null
+                ? l10n.membersCount(clubMemberCount(club.id))
+                : localizedClubRole(l10n, role);
+          },
+          onOpenClub: _openStudentClub,
+          onOpenUser: _openStudentProfile,
+          clubsLoading: clubsLoading,
         ),
       ),
     );
   }
 
-  void _showFollowingSheet(List<User> following) {
-    showModalBottomSheet(
-      context: context,
-      isScrollControlled: true,
-      backgroundColor: Colors.transparent,
-      builder: (sheetContext) => FractionallySizedBox(
-        heightFactor: 0.72,
-        child: Container(
-          decoration: BoxDecoration(
-            color: AppColors.surfaceAlt,
-            borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
-          ),
-          padding: const EdgeInsets.fromLTRB(20, 14, 20, 24),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Center(
-                child: Container(
-                  width: 38,
-                  height: 4,
-                  decoration: BoxDecoration(
-                    color: AppColors.divider,
-                    borderRadius: BorderRadius.all(Radius.circular(999)),
-                  ),
-                ),
-              ),
-              const SizedBox(height: 16),
-              Row(
-                children: [
-                  Icon(
-                    Icons.person_add_alt_1_outlined,
-                    size: 18,
-                    color: AppColors.primaryRed,
-                  ),
-                  const SizedBox(width: 8),
-                  Text(
-                    AppLocalizations.of(context)!.following,
-                    style: TextStyle(
-                      fontSize: 18,
-                      fontWeight: FontWeight.bold,
-                      color: AppColors.text,
-                    ),
-                  ),
-                  const Spacer(),
-                  Text(
-                    '${following.length}',
-                    style: TextStyle(
-                      fontSize: 14,
-                      fontWeight: FontWeight.w700,
-                      color: AppColors.secondaryText,
-                    ),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 16),
-              Expanded(
-                child: following.isEmpty
-                    ? Center(
-                        child: Text(
-                          AppLocalizations.of(context)!.notFollowingAnyone,
-                          style: TextStyle(
-                            fontSize: 14,
-                            color: AppColors.secondaryText,
-                          ),
-                        ),
-                      )
-                    : ListView.separated(
-                        itemCount: following.length,
-                        separatorBuilder: (_, _) =>
-                            Divider(height: 1, color: AppColors.divider),
-                        itemBuilder: (_, index) {
-                          final person = following[index];
-                          return ListTile(
-                            contentPadding: const EdgeInsets.symmetric(
-                              horizontal: 0,
-                              vertical: 4,
-                            ),
-                            leading: UserAvatar(
-                              userId: person.id,
-                              name: person.name,
-                              size: 42,
-                              fontSize: 18,
-                            ),
-                            title: Text(
-                              userState.displayNameFor(person.id, person.name),
-                              style: TextStyle(
-                                fontWeight: FontWeight.w600,
-                                color: AppColors.text,
-                              ),
-                            ),
-                            subtitle: userState.usernameFor(person.id) != null
-                                ? Text(
-                                    person.name,
-                                    style: TextStyle(
-                                      fontSize: 12,
-                                      color: AppColors.secondaryText,
-                                    ),
-                                  )
-                                : null,
-                            trailing: Icon(
-                              Icons.chevron_right_rounded,
-                              color: AppColors.secondaryText,
-                            ),
-                            onTap: () {
-                              Navigator.pop(sheetContext);
-                              Navigator.push(
-                                context,
-                                MaterialPageRoute(
-                                  builder: (_) =>
-                                      UserProfileScreen(user: person),
-                                ),
-                              );
-                            },
-                          );
-                        },
-                      ),
-              ),
-            ],
-          ),
+  void _openStudentProfile(User user) {
+    Navigator.push(
+      context,
+      MaterialPageRoute(builder: (_) => UserProfileScreen(user: user)),
+    );
+  }
+
+  void _openStudentClub(Club club) {
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => ClubProfileScreen(
+          club: club,
+          color: _clubColor(clubOrdinal(club.id)),
         ),
       ),
     );
@@ -993,6 +817,9 @@ class _ProfileScreenState extends State<ProfileScreen> {
           }).toList();
 
           return StudentProfileScreen(
+            // [ProfileScreen] is only ever built by MainNavScreen's tab 4, so
+            // this instance is always the one the tutorial spotlights.
+            isTutorialHost: true,
             data: StudentProfileData(
               userId: user.id,
               initials: _initialsFor(name),
@@ -1027,19 +854,27 @@ class _ProfileScreenState extends State<ProfileScreen> {
               context,
               MaterialPageRoute(builder: (_) => const ExploreScreen()),
             ),
-            onFollowersTap: () => _showFollowersSheet(followers),
-            onFollowingTap: () => _showFollowingSheet(following),
+            onClubsTap: () => _showStudentConnections(
+              initialSection: StudentConnectionSection.clubs,
+              studentClubs: followedClubs,
+              followers: followers,
+              following: following,
+            ),
+            onFollowersTap: () => _showStudentConnections(
+              initialSection: StudentConnectionSection.followers,
+              studentClubs: followedClubs,
+              followers: followers,
+              following: following,
+            ),
+            onFollowingTap: () => _showStudentConnections(
+              initialSection: StudentConnectionSection.following,
+              studentClubs: followedClubs,
+              followers: followers,
+              following: following,
+            ),
             followedClubs: followedClubs,
             clubsLoading: clubsLoading,
-            onClubTap: (club) => Navigator.push(
-              context,
-              MaterialPageRoute(
-                builder: (_) => ClubProfileScreen(
-                  club: club,
-                  color: _clubColor(clubOrdinal(club.id)),
-                ),
-              ),
-            ),
+            onClubTap: _openStudentClub,
           );
         },
       );

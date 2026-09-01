@@ -100,22 +100,26 @@ void main() {
     expect(find.text(S.chatNoMessagesYet), findsOneWidget);
     expect(find.byKey(const ValueKey('chat-starter-chips')), findsNothing);
 
-    // `composer-row` 102:55 — paperclip, pill, send. The camera that used to
-    // be docked inside the pill is not on the frame; the attach sheet still
-    // offers it.
+    // `composer-row` 102:55 — paperclip, pill, and one trailing accent
+    // circle: a camera while the pill is empty, the send arrow once a draft
+    // exists.
     expect(find.byKey(const ValueKey('chat-attach-button')), findsOneWidget);
-    expect(find.byKey(const ValueKey('chat-camera-button')), findsNothing);
-    expect(find.byKey(const ValueKey('chat-send-button')), findsOneWidget);
+    expect(find.byKey(const ValueKey('chat-camera-button')), findsOneWidget);
+    expect(find.byKey(const ValueKey('chat-send-button')), findsNothing);
     expect(find.byType(TextField), findsOneWidget);
     final messageField = tester.widget<TextField>(find.byType(TextField));
     expect(messageField.maxLines, 4);
     expect(messageField.textInputAction, TextInputAction.send);
     expect(find.byIcon(Icons.mic_none_rounded), findsNothing);
-    expect(find.byIcon(Icons.send_rounded), findsOneWidget);
+    expect(find.byIcon(Icons.photo_camera_rounded), findsOneWidget);
+    expect(find.byIcon(Icons.send_rounded), findsNothing);
 
     await tester.enterText(find.byType(TextField), 'Draft');
     await tester.pump();
     expect(find.byIcon(Icons.send_rounded), findsOneWidget);
+    // Once the camera-to-send morph settles, only the send button remains.
+    await tester.pump(const Duration(milliseconds: 250));
+    expect(find.byKey(const ValueKey('chat-camera-button')), findsNothing);
     expect(find.byIcon(Icons.mic_none_rounded), findsNothing);
 
     await tester.testTextInput.receiveAction(TextInputAction.send);
@@ -161,7 +165,8 @@ void main() {
     final settledY = tester.getTopLeft(bubble).dy;
     expect(settledY, lessThan(movingY));
     expect(find.text('On my way'), findsOneWidget);
-    expect(find.byIcon(Icons.mic_none_rounded), findsOneWidget);
+    // The cleared pill hands the trailing slot back to the camera.
+    expect(find.byKey(const ValueKey('chat-camera-button')), findsOneWidget);
 
     await tester.runAsync(chatStore.saveAll);
     expect(tester.takeException(), isNull);
@@ -199,7 +204,7 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
-  testWidgets('chat attachment sheet offers gallery media and camera', (
+  testWidgets('chat attachment sheet offers gallery media only', (
     tester,
   ) async {
     final threadId = ChatStore.dmThreadId(myId, second.$1);
@@ -209,9 +214,11 @@ void main() {
     await tester.tap(find.byKey(const ValueKey('chat-attach-button')));
     await tester.pumpAndSettle();
 
+    // A live capture belongs to the composer's camera button, so the sheet
+    // only lists media that already exists in the library.
     expect(find.byKey(const ValueKey('chat-attach-sheet')), findsOneWidget);
     expect(find.byKey(const ValueKey('chat-attach-photo')), findsOneWidget);
-    expect(find.byKey(const ValueKey('chat-attach-camera')), findsOneWidget);
+    expect(find.byKey(const ValueKey('chat-attach-camera')), findsNothing);
     expect(find.byKey(const ValueKey('chat-attach-file')), findsNothing);
 
     Navigator.of(

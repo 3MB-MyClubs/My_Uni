@@ -30,11 +30,14 @@ void main() {
     ),
   );
 
-  testWidgets('right swipe past the threshold fires a reply', (tester) async {
+  testWidgets('left swipe past the threshold fires a reply', (tester) async {
     var replies = 0;
     await tester.pumpWidget(host(onReply: () => replies++));
 
-    await tester.drag(find.byKey(const ValueKey('bubble')), const Offset(80, 0));
+    await tester.drag(
+      find.byKey(const ValueKey('bubble')),
+      const Offset(-80, 0),
+    );
     await tester.pumpAndSettle();
 
     expect(replies, 1);
@@ -46,7 +49,10 @@ void main() {
     var replies = 0;
     await tester.pumpWidget(host(onReply: () => replies++));
 
-    await tester.drag(find.byKey(const ValueKey('bubble')), const Offset(20, 0));
+    await tester.drag(
+      find.byKey(const ValueKey('bubble')),
+      const Offset(-20, 0),
+    );
     await tester.pumpAndSettle();
 
     expect(replies, 0);
@@ -71,9 +77,9 @@ void main() {
     final gesture = await tester.startGesture(
       tester.getCenter(find.byKey(const ValueKey('bubble'))),
     );
-    await gesture.moveBy(const Offset(70, 0));
+    await gesture.moveBy(const Offset(-70, 0));
     await tester.pump();
-    await gesture.moveBy(const Offset(-60, 0)); // pull it back and bail out
+    await gesture.moveBy(const Offset(60, 0)); // pull it back and bail out
     await tester.pump();
     await gesture.up();
     await tester.pumpAndSettle();
@@ -81,13 +87,13 @@ void main() {
     expect(replies, 0);
   });
 
-  testWidgets('left swipe never fires a reply', (tester) async {
+  testWidgets('right swipe never fires a reply', (tester) async {
     var replies = 0;
     await tester.pumpWidget(host(onReply: () => replies++));
 
     await tester.drag(
       find.byKey(const ValueKey('bubble')),
-      const Offset(-90, 0),
+      const Offset(90, 0),
     );
     await tester.pumpAndSettle();
 
@@ -98,7 +104,10 @@ void main() {
     var replies = 0;
     await tester.pumpWidget(host(onReply: () => replies++, enabled: false));
 
-    await tester.drag(find.byKey(const ValueKey('bubble')), const Offset(90, 0));
+    await tester.drag(
+      find.byKey(const ValueKey('bubble')),
+      const Offset(-90, 0),
+    );
     await tester.pumpAndSettle();
 
     expect(replies, 0);

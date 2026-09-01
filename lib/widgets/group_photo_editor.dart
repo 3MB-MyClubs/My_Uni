@@ -5,7 +5,6 @@ import 'package:flutter/material.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:pro_image_editor/pro_image_editor.dart';
 
-import '../services/app_colors.dart';
 import '../services/locale_service.dart';
 import '../services/photo_upload_quality.dart';
 
@@ -78,8 +77,8 @@ cropme.CropperThemeData groupPhotoTiltTheme() {
   final isTurkish = localeService.languageCode == 'tr';
   return cropme.CropperThemeData(
     backgroundColor: const Color(0xFF121212),
-    accentColor: AppColors.primaryRed,
-    cropButtonColor: AppColors.primaryRed,
+    accentColor: const Color(0xFF9E2045),
+    cropButtonColor: const Color(0xFF9E2045),
     cropButtonTextColor: Colors.white,
     resetLabel: isTurkish ? 'Sıfırla' : 'Reset',
     cropLabel: isTurkish ? 'Fotoğrafı kullan' : 'Use photo',
@@ -95,7 +94,7 @@ ProImageEditorConfigs groupPhotoEditorConfigs() {
     useMaterial3: true,
     scaffoldBackgroundColor: const Color(0xFF121212),
     colorScheme: ColorScheme.fromSeed(
-      seedColor: AppColors.primaryRed,
+      seedColor: const Color(0xFF9E2045),
       brightness: Brightness.dark,
     ),
   );

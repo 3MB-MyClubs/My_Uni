@@ -183,6 +183,9 @@ void main() {
     expect(find.text(S.replyingTo(S.you)), findsOneWidget);
 
     await tester.enterText(find.byType(TextField), 'This is my reply');
+    // A frame for the camera-to-send morph to hand the slot to the send
+    // button.
+    await tester.pump();
     await tester.tap(find.byKey(const ValueKey('chat-send-button')));
     await tester.pumpAndSettle();
 
@@ -262,8 +265,22 @@ void main() {
       final bubble = tester.widget<ChatBubbleShell>(
         find.byKey(ValueKey('chat-message-bubble-${message.id}')),
       );
+      final photo = find.byKey(ValueKey('chat-photo-${message.id}'));
+      final timestamp = find.byKey(ValueKey('chat-message-time-${message.id}'));
       expect(bubble.padding, const EdgeInsets.all(2));
       expect(bubble.mine, message.senderId == currentId);
+      expect(timestamp, findsOneWidget);
+      expect(
+        tester.widget<Container>(timestamp).decoration,
+        isA<BoxDecoration>(),
+      );
+
+      // The time badge lives inside the photo's bottom-right corner, like a
+      // WhatsApp media message, rather than adding a separate row below it.
+      final photoRect = tester.getRect(photo);
+      final timestampRect = tester.getRect(timestamp);
+      expect(timestampRect.right, closeTo(photoRect.right - 7, 0.01));
+      expect(timestampRect.bottom, closeTo(photoRect.bottom - 7, 0.01));
     }
     final decorations = tester
         .widgetList<Container>(

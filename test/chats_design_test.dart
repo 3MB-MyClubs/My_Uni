@@ -2,6 +2,7 @@ import 'dart:io';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_application_1/l10n/app_localizations.dart';
+import 'package:flutter_application_1/models/chat_message.dart';
 import 'package:flutter_application_1/models/user.dart';
 import 'package:flutter_application_1/screens/add_members_screen.dart';
 import 'package:flutter_application_1/screens/chat_thread_screen.dart';
@@ -17,6 +18,7 @@ import 'package:flutter_application_1/services/club_chat_prefs.dart';
 import 'package:flutter_application_1/services/content_store.dart';
 import 'package:flutter_application_1/services/people_service.dart';
 import 'package:flutter_application_1/widgets/chats_design.dart';
+import 'package:flutter_application_1/widgets/sent_message_entrance.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:hive/hive.dart';
@@ -237,6 +239,60 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
+  testWidgets('a search hit pulses once, then settles back to the plain row', (
+    tester,
+  ) async {
+    // Not in the handoff — the frames are static. This is the Instagram
+    // behaviour the inbox was missing: the row a query lands on lights up for
+    // a beat so the eye can find it, then goes quiet again.
+    final threadId = chatStore.ensureDirectThread(myId, peer.$1)!;
+    chatStore.sendMessage(
+      threadId: threadId,
+      senderId: myId,
+      content: 'Sending the palette refs over now',
+    );
+    await pumpApp(tester, const ChatsScreen());
+
+    final row = find.byKey(ValueKey('chat-thread-row-$threadId'));
+    Color? rowColor() => tester
+        .widget<Material>(
+          find.ancestor(of: row, matching: find.byType(Material)).first,
+        )
+        .color;
+
+    // A read row with no query is untouched: the pulse never runs.
+    expect(rowColor(), Colors.transparent);
+
+    await tester.enterText(
+      find.byKey(const ValueKey('chat-search-students')),
+      'Sarah',
+    );
+    // The pulse starts during this rebuild, and a ticker's first tick always
+    // reports zero elapsed — so the wash only shows from the frame after.
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 200));
+    final lit = rowColor()!;
+    expect(row, findsOneWidget);
+    expect(lit, isNot(Colors.transparent));
+    // Blended into the page rather than laid over the row, so the ink splash
+    // and the text still sit on top of it.
+    expect(lit.a, 1.0);
+    expect(lit, isNot(ChatsColors.background));
+
+    await tester.pump(const Duration(milliseconds: 900));
+    expect(rowColor(), Colors.transparent);
+
+    // Clearing the field leaves nothing behind either.
+    await tester.enterText(
+      find.byKey(const ValueKey('chat-search-students')),
+      '',
+    );
+    await tester.pump(const Duration(milliseconds: 200));
+    expect(rowColor(), Colors.transparent);
+    await tester.pump(const Duration(seconds: 1));
+    expect(tester.takeException(), isNull);
+  });
+
   // ── thread ────────────────────────────────────────────────────────────────
 
   testWidgets('DM bubbles are flat, and only mine take the accent', (
@@ -260,18 +316,105 @@ void main() {
       final bubble = tester.widget<ChatBubbleShell>(
         find.byKey(ValueKey('chat-message-bubble-${message.id}')),
       );
+      final timestamp = find.byKey(ValueKey('chat-message-time-${message.id}'));
       expect(bubble.mine, mine);
+      expect(bubble.showTail, isTrue);
       expect(
         bubble.padding,
         const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
       );
+      expect(timestamp, findsOneWidget);
+      expect(
+        find.descendant(of: find.byWidget(bubble), matching: timestamp),
+        findsOneWidget,
+      );
+      expect(tester.widget<Container>(timestamp).decoration, isNull);
     }
-
-    // `date-divider` 102:31, and no per-bubble timestamp on a DM.
+    // The day divider keeps messages scannable while each bubble now carries
+    // its own compact sent time.
     expect(find.byType(ChatDayDivider), findsOneWidget);
     expect(find.text(S.today.toUpperCase()), findsOneWidget);
     // Let the store's debounced save run on the fake clock rather than
     // `runAsync`, which wedges once read receipts are in flight.
+    await tester.pump(const Duration(seconds: 1));
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('only the bottom bubble in a consecutive sender run has a tail', (
+    tester,
+  ) async {
+    final threadId = chatStore.ensureDirectThread(myId, peer.$1)!;
+    final firstMine = chatStore.sendMessage(
+      threadId: threadId,
+      senderId: myId,
+      content: 'First outgoing bubble',
+    )!;
+    final lastMine = chatStore.sendMessage(
+      threadId: threadId,
+      senderId: myId,
+      content: 'Last outgoing bubble',
+    )!;
+    final firstIncoming = chatStore.sendMessage(
+      threadId: threadId,
+      senderId: peer.$1,
+      content: 'First incoming bubble',
+    )!;
+    final lastIncoming = chatStore.sendMessage(
+      threadId: threadId,
+      senderId: peer.$1,
+      content: 'Last incoming bubble',
+    )!;
+
+    await pumpApp(tester, ChatThreadScreen(threadId: threadId));
+
+    ChatBubbleShell bubbleFor(ChatMessage message) => tester.widget(
+      find.byKey(ValueKey('chat-message-bubble-${message.id}')),
+    );
+
+    expect(bubbleFor(firstMine).showTail, isFalse);
+    expect(bubbleFor(lastMine).showTail, isTrue);
+    expect(bubbleFor(firstIncoming).showTail, isFalse);
+    expect(bubbleFor(lastIncoming).showTail, isTrue);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('rapid sends keep both bubble entrances running smoothly', (
+    tester,
+  ) async {
+    final threadId = chatStore.ensureDirectThread(myId, peer.$1)!;
+    await pumpApp(tester, ChatThreadScreen(threadId: threadId));
+
+    await tester.enterText(find.byType(TextField), 'First rapid message');
+    await tester.pump();
+    await tester.tap(find.byKey(const ValueKey('chat-send-button')));
+    await tester.pump(const Duration(milliseconds: 60));
+    final first = chatStore
+        .messagesFor(threadId)
+        .where((message) => message.content == 'First rapid message')
+        .last;
+
+    await tester.enterText(find.byType(TextField), 'Second rapid message');
+    await tester.pump();
+    await tester.tap(find.byKey(const ValueKey('chat-send-button')));
+    await tester.pump(const Duration(milliseconds: 16));
+    final second = chatStore
+        .messagesFor(threadId)
+        .where((message) => message.content == 'Second rapid message')
+        .last;
+
+    SentMessageEntrance entranceFor(ChatMessage message) => tester.widget(
+      find.byKey(
+        ValueKey('sent-message-entrance-${message.id}'),
+        skipOffstage: false,
+      ),
+    );
+
+    expect(entranceFor(first).animate, isTrue);
+    expect(entranceFor(second).animate, isTrue);
+
+    await tester.pumpAndSettle();
+    expect(entranceFor(first).animate, isFalse);
+    expect(entranceFor(second).animate, isFalse);
     await tester.pump(const Duration(seconds: 1));
     expect(tester.takeException(), isNull);
   });
@@ -373,7 +516,9 @@ void main() {
 
     await tester.tap(find.byKey(const ValueKey('chat-thread-search-cancel')));
     await tester.pump();
-    expect(find.byKey(const ValueKey('chat-send-button')), findsOneWidget);
+    // The composer returns with an empty pill, so its trailing slot is the
+    // camera rather than the send arrow.
+    expect(find.byKey(const ValueKey('chat-camera-button')), findsOneWidget);
     // Let the store's debounced save run on the fake clock rather than
     // `runAsync`, which wedges once read receipts are in flight.
     await tester.pump(const Duration(seconds: 1));

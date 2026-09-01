@@ -1,13 +1,23 @@
-/// The `@handle` shown for a club: its short name when it has one, otherwise
-/// the initials of its name (falling back to the whole name for clubs whose
-/// words start with non-Latin characters).
+const int kClubInitialsMaxLength = 15;
+
+/// Removes the optional display prefix while preserving the capitalization
+/// chosen by the club (for example `@IES` is stored as `IES`).
+String normalizeClubInitials(String value) =>
+    value.trim().replaceFirst(RegExp(r'^@+'), '');
+
+bool isValidClubInitials(String value) {
+  final normalized = normalizeClubInitials(value);
+  return normalized.isNotEmpty &&
+      normalized.length <= kClubInitialsMaxLength &&
+      RegExp(r'^[A-Za-z0-9_çğıöşüÇĞİÖŞÜ]+$').hasMatch(normalized);
+}
+
+/// The value shown after `@` for a club: its chosen initials when it has them,
+/// otherwise initials derived from its name.
 String clubHandle(Club club) {
   final shortName = club.shortName?.trim();
   if (shortName != null && shortName.isNotEmpty) {
-    return shortName
-        .replaceFirst(RegExp(r'^@+'), '')
-        .replaceAll(RegExp(r'\s+'), '')
-        .toLowerCase();
+    return normalizeClubInitials(shortName);
   }
 
   final name = club.name;
@@ -25,7 +35,9 @@ String clubHandle(Club club) {
 class Club {
   final String id;
   String name;
-  final String? shortName;
+
+  /// Editable club initials persisted as Supabase `clubs.short_name`.
+  String? shortName;
   // Editable by the club's own admin from Settings. Mutable so an edit shows
   // everywhere the club is displayed; persisted globally and re-applied at start.
   String description;

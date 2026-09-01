@@ -26,6 +26,7 @@ class ClubComposer extends StatefulWidget {
     required this.onSend,
     required this.onAttach,
     required this.onTypingChanged,
+    this.onFocusChanged,
     this.enabled = true,
   });
 
@@ -41,6 +42,7 @@ class ClubComposer extends StatefulWidget {
   final void Function(String text, List<String> mentions) onSend;
   final void Function(ClubAttachment attachment) onAttach;
   final VoidCallback onTypingChanged;
+  final ValueChanged<bool>? onFocusChanged;
   final bool enabled;
 
   /// Resolves `@token`s in [text] to member ids using [people].
@@ -78,11 +80,13 @@ class _ClubComposerState extends State<ClubComposer> {
   void initState() {
     super.initState();
     widget.controller.addListener(_onChanged);
+    _focusNode.addListener(_onFocusChanged);
   }
 
   @override
   void dispose() {
     widget.controller.removeListener(_onChanged);
+    _focusNode.removeListener(_onFocusChanged);
     _focusNode.dispose();
     super.dispose();
   }
@@ -90,6 +94,10 @@ class _ClubComposerState extends State<ClubComposer> {
   void _onChanged() {
     if (mounted) setState(() {});
     if (widget.controller.text.trim().isNotEmpty) widget.onTypingChanged();
+  }
+
+  void _onFocusChanged() {
+    widget.onFocusChanged?.call(_focusNode.hasFocus);
   }
 
   List<ClubPerson> get _suggestions {
@@ -338,7 +346,7 @@ class _ClubComposerState extends State<ClubComposer> {
                                 // The pill owns its theme-aware background.
                                 // Avoid the app-wide field fill adding a grey
                                 // layer, including while disabled or focused.
-                                
+
                                 border: InputBorder.none,
                                 enabledBorder: InputBorder.none,
                                 focusedBorder: InputBorder.none,

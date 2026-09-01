@@ -2,6 +2,7 @@ import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:hive/hive.dart';
+import 'package:flutter_application_1/models/club.dart';
 import 'package:flutter_application_1/models/user.dart';
 import 'package:flutter_application_1/services/mock_data.dart';
 import 'package:flutter_application_1/services/user_prefs_service.dart';
@@ -48,5 +49,29 @@ void main() {
 
     expect(userState.followedClubIds, isEmpty);
     expect(userState.followedUserIds, isEmpty);
+  });
+
+  test('club initials persist for offline sessions', () async {
+    final club = Club(
+      id: 'prefs-club',
+      name: 'Industrial Engineering Society',
+      description: '',
+      adminUserIds: const [],
+    );
+    clubs.add(club);
+    addTearDown(() => clubs.remove(club));
+
+    await userPrefsService.saveClubInitials(club.id, 'IES');
+    club.shortName = null;
+    userPrefsService.loadAllPhotos();
+
+    expect(club.shortName, 'IES');
+    expect(clubHandle(club), 'IES');
+  });
+
+  test('club initials accept an optional @ and reject spaces', () {
+    expect(normalizeClubInitials('@kbr'), 'kbr');
+    expect(isValidClubInitials('@IES'), isTrue);
+    expect(isValidClubInitials('KU Beer'), isFalse);
   });
 }

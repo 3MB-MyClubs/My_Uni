@@ -2,9 +2,11 @@ import 'dart:async';
 import 'dart:io';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:image_cropper/image_cropper.dart';
 import 'package:package_info_plus/package_info_plus.dart';
 import 'package:image_picker/image_picker.dart';
+import 'package:supabase_flutter/supabase_flutter.dart' show PostgrestException;
 import 'package:url_launcher/url_launcher.dart';
 import '../models/club.dart';
 import '../services/app_colors.dart';
@@ -560,6 +562,17 @@ class _SettingsScreenState extends State<SettingsScreen> {
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
       builder: (_) => _ClubNameSheet(club: club),
+    ).then((_) {
+      if (mounted) setState(() {});
+    });
+  }
+
+  void _openClubInitialsSheet(Club club) {
+    showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (_) => _ClubInitialsSheet(club: club),
     ).then((_) {
       if (mounted) setState(() {});
     });
@@ -1213,6 +1226,12 @@ class _SettingsScreenState extends State<SettingsScreen> {
                                 onTap: () => _openClubNameSheet(club),
                               ),
                               ClubSettingsDetailRow(
+                                key: const ValueKey('club-settings-initials'),
+                                icon: Icons.alternate_email_rounded,
+                                label: S.clubInitials,
+                                onTap: () => _openClubInitialsSheet(club),
+                              ),
+                              ClubSettingsDetailRow(
                                 key: const ValueKey('club-settings-category'),
                                 icon: Icons.sell_outlined,
                                 label: l10n.clubCategories,
@@ -1236,29 +1255,27 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   // `management-group` 350:67.
                   ListenableBuilder(
                     listenable: userState,
-                    builder: (context, _) => _clubSection(
-                      S.clubSettingsManagementSection,
-                      [
-                        ClubSettingsRow(
-                          key: const ValueKey('club-settings-board'),
-                          icon: Icons.group_outlined,
-                          title: l10n.manageBoardMembers,
-                          value: '${club.boardMemberIds.length}',
-                          onTap: () => _openBoardManagement(club),
-                        ),
-                        ClubSettingsRow(
-                          key: const ValueKey('club-settings-blocked'),
-                          icon: Icons.shield_outlined,
-                          title: S.clubSettingsBlockedRow,
-                          onTap: () => Navigator.push(
-                            context,
-                            MaterialPageRoute(
-                              builder: (_) => const BlockedAccountsScreen(),
+                    builder: (context, _) =>
+                        _clubSection(S.clubSettingsManagementSection, [
+                          ClubSettingsRow(
+                            key: const ValueKey('club-settings-board'),
+                            icon: Icons.group_outlined,
+                            title: l10n.manageBoardMembers,
+                            value: '${club.boardMemberIds.length}',
+                            onTap: () => _openBoardManagement(club),
+                          ),
+                          ClubSettingsRow(
+                            key: const ValueKey('club-settings-blocked'),
+                            icon: Icons.shield_outlined,
+                            title: S.clubSettingsBlockedRow,
+                            onTap: () => Navigator.push(
+                              context,
+                              MaterialPageRoute(
+                                builder: (_) => const BlockedAccountsScreen(),
+                              ),
                             ),
                           ),
-                        ),
-                      ],
-                    ),
+                        ]),
                   ),
 
                   // `preferences-group` 350:87. The frame draws a switch for
@@ -2453,6 +2470,238 @@ class _ClubNameSheetState extends State<_ClubNameSheet> {
   }
 }
 
+class _ClubInitialsSheet extends StatefulWidget {
+  const _ClubInitialsSheet({required this.club});
+
+  final Club club;
+
+  @override
+  State<_ClubInitialsSheet> createState() => _ClubInitialsSheetState();
+}
+
+class _ClubInitialsSheetState extends State<_ClubInitialsSheet> {
+  late final TextEditingController _controller = TextEditingController(
+    text: widget.club.shortName == null
+        ? ''
+        : normalizeClubInitials(widget.club.shortName!),
+  );
+  bool _saving = false;
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  Future<void> _save(String value) async {
+    final normalized = normalizeClubInitials(value);
+    setState(() => _saving = true);
+    try {
+      await supabaseClubService.updateClubInitials(
+        club: widget.club,
+        initials: normalized,
+      );
+    } catch (error) {
+      if (!mounted) return;
+      setState(() => _saving = false);
+      final permissionMissing =
+          error is PostgrestException && error.code == '42501';
+      ScaffoldMessenger.of(context)
+        ..hideCurrentSnackBar()
+        ..showSnackBar(
+          SnackBar(
+            content: Text(
+              permissionMissing
+                  ? S.clubInitialsPermissionMissing
+                  : S.couldNotUpdateClubInitials,
+            ),
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+      return;
+    }
+    if (!mounted) return;
+    widget.club.shortName = normalized;
+    userState.bumpClubInfo();
+    unawaited(userPrefsService.saveClubInitials(widget.club.id, normalized));
+    Navigator.pop(context);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final value = normalizeClubInitials(_controller.text);
+    final currentValue = widget.club.shortName == null
+        ? ''
+        : normalizeClubInitials(widget.club.shortName!);
+    final valid = isValidClubInitials(value);
+    final canSave = valid && value != currentValue && !_saving;
+    final showError = _controller.text.isNotEmpty && !valid;
+
+    return Padding(
+      padding: EdgeInsets.only(
+        bottom: MediaQuery.of(context).viewInsets.bottom,
+      ),
+      child: Container(
+        decoration: BoxDecoration(
+          color: ClubProfileColors.card,
+          borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
+        ),
+        padding: const EdgeInsets.fromLTRB(24, 10, 24, 24),
+        child: SafeArea(
+          top: false,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Center(
+                child: Container(
+                  width: 40,
+                  height: 4,
+                  decoration: BoxDecoration(
+                    color: ClubProfileColors.border,
+                    borderRadius: BorderRadius.circular(999),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 22),
+              Text(
+                S.clubEditInitialsTitle,
+                textAlign: TextAlign.center,
+                style: figtree(
+                  size: 19,
+                  weight: FontWeight.w800,
+                  color: ClubProfileColors.text,
+                ),
+              ),
+              const SizedBox(height: 6),
+              Text(
+                S.clubEditInitialsSubtitle,
+                textAlign: TextAlign.center,
+                style: figtree(
+                  size: 12.5,
+                  weight: FontWeight.w400,
+                  color: ClubProfileColors.muted,
+                  height: 1.4,
+                ),
+              ),
+              const SizedBox(height: 24),
+              Padding(
+                padding: const EdgeInsets.only(left: 4, bottom: 8),
+                child: Text(
+                  S.clubEditInitialsField.toUpperCase(),
+                  style: figtree(
+                    size: 11,
+                    weight: FontWeight.w700,
+                    color: ClubProfileColors.muted,
+                    letterSpacing: 0.6,
+                  ),
+                ),
+              ),
+              Container(
+                height: 48,
+                padding: const EdgeInsets.symmetric(horizontal: 14),
+                decoration: BoxDecoration(
+                  color: ClubProfileColors.field,
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                alignment: Alignment.centerLeft,
+                child: TextField(
+                  key: const ValueKey('club-settings-initials-field'),
+                  controller: _controller,
+                  autofocus: true,
+                  maxLength: kClubInitialsMaxLength,
+                  inputFormatters: [
+                    FilteringTextInputFormatter.deny(RegExp(r'@')),
+                  ],
+                  textCapitalization: TextCapitalization.none,
+                  textInputAction: TextInputAction.done,
+                  onChanged: (_) => setState(() {}),
+                  onSubmitted: (_) {
+                    if (canSave) unawaited(_save(value));
+                  },
+                  style: figtree(
+                    size: 14.5,
+                    weight: FontWeight.w500,
+                    color: ClubProfileColors.text,
+                  ),
+                  decoration: InputDecoration(
+                    isDense: true,
+                    border: InputBorder.none,
+                    enabledBorder: InputBorder.none,
+                    focusedBorder: InputBorder.none,
+                    disabledBorder: InputBorder.none,
+                    errorBorder: InputBorder.none,
+                    focusedErrorBorder: InputBorder.none,
+                    counterText: '',
+                    contentPadding: EdgeInsets.zero,
+                    prefixText: '@',
+                    prefixStyle: figtree(
+                      size: 14.5,
+                      weight: FontWeight.w700,
+                      color: ClubProfileColors.text,
+                    ),
+                  ),
+                ),
+              ),
+              if (showError) ...[
+                const SizedBox(height: 7),
+                Text(
+                  S.clubEditInitialsInvalid,
+                  key: const ValueKey('club-settings-initials-error'),
+                  style: figtree(
+                    size: 11.5,
+                    weight: FontWeight.w500,
+                    color: ClubProfileColors.accent,
+                  ),
+                ),
+              ],
+              const SizedBox(height: 24),
+              Opacity(
+                opacity: canSave ? 1 : 0.45,
+                child: GestureDetector(
+                  key: const ValueKey('club-settings-initials-save'),
+                  behavior: HitTestBehavior.opaque,
+                  onTap: canSave ? () => unawaited(_save(value)) : null,
+                  child: Container(
+                    height: 48,
+                    alignment: Alignment.center,
+                    decoration: BoxDecoration(
+                      color: ClubProfileColors.accent,
+                      borderRadius: BorderRadius.circular(999),
+                    ),
+                    child: Text(
+                      _saving
+                          ? AppLocalizations.of(context)!.savingEllipsis
+                          : S.clubEditNameSave,
+                      style: figtree(
+                        size: 15,
+                        weight: FontWeight.w700,
+                        color: Colors.white,
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 6),
+              TextButton(
+                onPressed: () => Navigator.pop(context),
+                child: Text(
+                  AppLocalizations.of(context)!.cancel,
+                  style: figtree(
+                    size: 14,
+                    weight: FontWeight.w600,
+                    color: ClubProfileColors.muted,
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
 /// Bottom sheet for editing the student's display name. Owns its own
 /// [TextEditingController] so it is disposed only after the sheet is fully
 /// removed — disposing it earlier (e.g. in `whenComplete`) crashed because the
@@ -2485,9 +2734,7 @@ class _ClubLanguageOption extends StatelessWidget {
         height: 70,
         padding: const EdgeInsets.symmetric(horizontal: 24),
         decoration: BoxDecoration(
-          border: Border(
-            top: BorderSide(color: ClubProfileColors.border),
-          ),
+          border: Border(top: BorderSide(color: ClubProfileColors.border)),
         ),
         child: Row(
           children: [

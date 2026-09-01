@@ -35,6 +35,88 @@ import 'upload_failure_classifier.dart';
 /// the official notice area, `chat` is the room where the conversation lives.
 enum ClubChatLane { board, chat }
 
+/// Narrow transport seam for ephemeral typing Broadcasts.
+///
+/// ChatStore owns session timing and validation; the production implementation
+/// below owns only the Supabase channel. Tests can provide an in-memory
+/// transport without initializing Supabase or opening a socket.
+abstract class ChatTypingTransport {
+  ChatTypingConnection open({
+    required String topic,
+    required ValueChanged<Map<String, dynamic>> onPayload,
+    required ValueChanged<bool> onSubscribed,
+  });
+}
+
+abstract class ChatTypingConnection {
+  Future<void> send(Map<String, dynamic> payload);
+  Future<void> close();
+}
+
+class _SupabaseChatTypingTransport implements ChatTypingTransport {
+  const _SupabaseChatTypingTransport(this.client);
+
+  final SupabaseClient client;
+
+  @override
+  ChatTypingConnection open({
+    required String topic,
+    required ValueChanged<Map<String, dynamic>> onPayload,
+    required ValueChanged<bool> onSubscribed,
+  }) {
+    final channel = client.channel(
+      topic,
+      opts: const RealtimeChannelConfig(private: true),
+    );
+    channel.onBroadcast(
+      event: 'typing',
+      callback: (event) {
+        // realtime_client versions have returned both the application payload
+        // and a protocol envelope here. Accept either shape, then leave strict
+        // field validation to ChatStore.
+        final nested = event['payload'];
+        onPayload(
+          nested is Map
+              ? Map<String, dynamic>.from(nested)
+              : Map<String, dynamic>.from(event),
+        );
+      },
+    );
+    channel.subscribe((status, error) {
+      switch (status) {
+        case RealtimeSubscribeStatus.subscribed:
+          onSubscribed(true);
+        case RealtimeSubscribeStatus.channelError:
+        case RealtimeSubscribeStatus.timedOut:
+        case RealtimeSubscribeStatus.closed:
+          onSubscribed(false);
+      }
+    });
+    return _SupabaseChatTypingConnection(client, channel);
+  }
+}
+
+class _SupabaseChatTypingConnection implements ChatTypingConnection {
+  const _SupabaseChatTypingConnection(this.client, this.channel);
+
+  final SupabaseClient client;
+  final RealtimeChannel channel;
+
+  @override
+  Future<void> send(Map<String, dynamic> payload) async {
+    await channel.sendBroadcastMessage(
+      event: 'typing',
+      // realtime_client mutates the supplied map with protocol fields.
+      payload: Map<String, dynamic>.from(payload),
+    );
+  }
+
+  @override
+  Future<void> close() async {
+    await client.removeChannel(channel);
+  }
+}
+
 /// Local-first messaging: 1:1 direct messages, student-created groups, plus
 /// one members-only community chat per club.
 ///
@@ -45,7 +127,16 @@ enum ClubChatLane { board, chat }
 /// Like the other stores, every method no-ops / returns empty before
 /// [initialize] so screens render safely in widget tests without Hive.
 class ChatStore extends ChangeNotifier {
-  ChatStore({ChatV2Source? chatV2Source}) {
+  ChatStore({
+    ChatV2Source? chatV2Source,
+    ChatTypingTransport? typingTransport,
+    Duration typingRefreshInterval = const Duration(seconds: 2),
+    Duration typingIdleTimeout = const Duration(seconds: 2),
+    Duration typingExpiry = const Duration(seconds: 5),
+  }) : _typingTransportOverride = typingTransport,
+       _typingRefreshInterval = typingRefreshInterval,
+       _typingIdleTimeout = typingIdleTimeout,
+       _typingExpiry = typingExpiry {
     _chatV2Source = chatV2Source ?? supabaseChatV2Service;
     _chatV2 = ChatV2Controller(source: _chatV2Source)
       ..addListener(_applyChatV2State);
@@ -96,6 +187,10 @@ class ChatStore extends ChangeNotifier {
   RealtimeChannel? _directMessageChannel;
   RealtimeChannel? _groupMessageChannel;
   RealtimeChannel? _clubMessageChannel;
+  final ChatTypingTransport? _typingTransportOverride;
+  final Duration _typingRefreshInterval;
+  final Duration _typingIdleTimeout;
+  final Duration _typingExpiry;
   String? _syncedUserId;
   String? _clubSyncedActorId;
   Timer? _syncRetry;
@@ -508,6 +603,7 @@ class ChatStore extends ChangeNotifier {
     _chatV2UnreadCounts.clear();
     _chatV2ClubLaneUnreadCounts.clear();
     _chatV2.reset();
+    _clearTypingAtAuthBoundary();
     if (_chatV2Source is SupabaseChatV2Service) {
       _chatV2Source.clearAccountCache();
     }
@@ -545,6 +641,15 @@ class ChatStore extends ChangeNotifier {
     if (removeChannel && client != null && channel != null) {
       unawaited(client.removeChannel(channel));
     }
+  }
+
+  void _clearTypingAtAuthBoundary() {
+    for (final session in _typingSessions.toList(growable: false)) {
+      session.dispose();
+    }
+    _typingExpiryTimer?.cancel();
+    _typingExpiryTimer = null;
+    _remoteTyping.clear();
   }
 
   Future<void> _refreshChatV2Summaries() async {
@@ -4114,58 +4219,314 @@ class ChatStore extends ChangeNotifier {
 
   // ── Typing ───────────────────────────────────────────────────────────────────
 
-  /// threadId → userId → the moment their typing signal expires.
-  final Map<String, Map<String, DateTime>> _typing = {};
-  static const Duration _typingWindow = Duration(seconds: 5);
-  Timer? _typingSweep;
+  static final RegExp _typingUuid = RegExp(
+    r'^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$',
+    caseSensitive: false,
+  );
 
-  /// Marks [userId] as composing in [threadId]. The signal lapses on its own
-  /// a few seconds later, so a dropped "stopped typing" never sticks.
-  void setTyping(String threadId, String userId) {
-    if (userId.isEmpty || !canAccessThread(threadId, userId)) return;
-    final wasTyping = typingUserIds(threadId).contains(userId);
-    (_typing[threadId] ??= {})[userId] = DateTime.now().add(_typingWindow);
-    _typingSweep ??= Timer.periodic(const Duration(seconds: 1), (_) {
-      if (_pruneTyping()) notifyListeners();
-    });
-    if (!wasTyping) notifyListeners();
+  final Map<String, _TypingChannelEntry> _typingChannels = {};
+  final Set<ChatTypingSession> _typingSessions = {};
+
+  /// threadId → actorId → sessionId → expiry.
+  ///
+  /// A user's phone and laptop remain independent. A stop event removes only
+  /// the session that sent it; the actor stays visible while any other session
+  /// is still active.
+  final Map<String, Map<String, Map<String, DateTime>>> _remoteTyping = {};
+  Timer? _typingExpiryTimer;
+
+  ChatTypingTransport? get _typingTransport {
+    final override = _typingTransportOverride;
+    if (override != null) return override;
+    final client = _client;
+    if (client == null || client.auth.currentSession == null) return null;
+    return _SupabaseChatTypingTransport(client);
   }
 
-  void clearTyping(String threadId, String userId) {
-    final removed = _typing[threadId]?.remove(userId) != null;
-    if (_typing[threadId]?.isEmpty ?? false) _typing.remove(threadId);
-    if (removed) notifyListeners();
+  /// Opens one screen-scoped typing session and retains the thread's private
+  /// Broadcast channel. Read-only viewers retain a receive-only session; its
+  /// draft and focus methods never emit.
+  ChatTypingSession? openTypingSession({
+    required String threadId,
+    required String actorId,
+  }) {
+    if (actorId.isEmpty || !canAccessThread(threadId, actorId)) return null;
+    final session = ChatTypingSession._(
+      store: this,
+      threadId: threadId,
+      actorId: actorId,
+      sessionId: const Uuid().v4(),
+      canEmit: canWriteThread(threadId, actorId),
+      refreshInterval: _typingRefreshInterval,
+      idleTimeout: _typingIdleTimeout,
+    );
+    _typingSessions.add(session);
+    _retainTypingChannel(threadId);
+    return session;
+  }
+
+  void _retainTypingChannel(String threadId) {
+    final existing = _typingChannels[threadId];
+    if (existing != null) {
+      existing.references++;
+      return;
+    }
+    final transport = _typingTransport;
+    if (transport == null) return;
+
+    final entry = _TypingChannelEntry(threadId: threadId);
+    _typingChannels[threadId] = entry;
+    final connection = transport.open(
+      topic: 'chat:typing:$threadId',
+      onPayload: (payload) => _handleTypingPayload(threadId, payload),
+      onSubscribed: (subscribed) {
+        if (!identical(_typingChannels[threadId], entry)) return;
+        entry.subscribed = subscribed;
+        if (subscribed && entry.connection != null) {
+          unawaited(_flushPendingTyping(entry));
+        } else if (!subscribed) {
+          _queueCurrentTypingState(entry);
+        }
+      },
+    );
+    entry.connection = connection;
+    if (entry.subscribed) unawaited(_flushPendingTyping(entry));
+  }
+
+  void _queueCurrentTypingState(_TypingChannelEntry entry) {
+    for (final session in _typingSessions) {
+      if (session.threadId != entry.threadId || session.isDisposed) continue;
+      entry.pending[session.sessionId] = _PendingTypingSignal(
+        actorId: session.actorId,
+        isTyping: session.isTyping,
+      );
+    }
+  }
+
+  Future<void> _publishTyping(ChatTypingSession session, bool isTyping) async {
+    final entry = _typingChannels[session.threadId];
+    if (entry == null || entry.closing) return;
+    entry.pending[session.sessionId] = _PendingTypingSignal(
+      actorId: session.actorId,
+      isTyping: isTyping,
+    );
+    if (entry.subscribed) await _flushPendingTyping(entry);
+  }
+
+  Future<void> _flushPendingTyping(_TypingChannelEntry entry) async {
+    if (entry.closing || !entry.subscribed) return;
+    if (entry.flushing) {
+      await entry.flushCompleter?.future;
+      return;
+    }
+    entry.flushing = true;
+    final drained = Completer<void>();
+    entry.flushCompleter = drained;
+    try {
+      while (entry.subscribed && entry.pending.isNotEmpty) {
+        final sessionId = entry.pending.keys.first;
+        final signal = entry.pending.remove(sessionId)!;
+        try {
+          await entry.connection!.send({
+            'version': 1,
+            'actor_id': signal.actorId,
+            'session_id': sessionId,
+            'is_typing': signal.isTyping,
+          });
+        } catch (_) {
+          // Keep only the newest desired state for this session. The Realtime
+          // client reconnects its channel; the subscribed callback flushes it.
+          entry.pending.putIfAbsent(sessionId, () => signal);
+          entry.subscribed = false;
+        }
+      }
+    } finally {
+      entry.flushing = false;
+      if (!drained.isCompleted) drained.complete();
+      if (identical(entry.flushCompleter, drained)) {
+        entry.flushCompleter = null;
+      }
+    }
+  }
+
+  Future<void> _releaseTypingSession(
+    ChatTypingSession session,
+    Future<void> stopped,
+  ) async {
+    _typingSessions.remove(session);
+    final entry = _typingChannels[session.threadId];
+    if (entry == null) return;
+    entry.references--;
+    if (entry.references > 0) {
+      await stopped;
+      entry.pending.remove(session.sessionId);
+      return;
+    }
+
+    // Give an already-subscribed stop a brief chance to leave before closing.
+    await Future.any<void>([
+      stopped,
+      Future<void>.delayed(const Duration(milliseconds: 300)),
+    ]);
+    // A new screen can retain this thread while the final stop is in flight.
+    // In that case it owns the existing channel and must keep it alive.
+    if (entry.references > 0) return;
+
+    entry.closing = true;
+    if (identical(_typingChannels[session.threadId], entry)) {
+      _typingChannels.remove(session.threadId);
+    }
+    entry.pending.clear();
+    try {
+      await entry.connection?.close();
+    } catch (_) {
+      // Typing is best effort; its five-second receive expiry is the fallback.
+    }
+  }
+
+  void _handleTypingPayload(String threadId, Map<String, dynamic> payload) {
+    if (payload['version'] != 1 || payload['is_typing'] is! bool) return;
+    final actorId = payload['actor_id'];
+    final sessionId = payload['session_id'];
+    if (actorId is! String ||
+        sessionId is! String ||
+        !_typingUuid.hasMatch(actorId) ||
+        !_typingUuid.hasMatch(sessionId) ||
+        actorId == _chatV2ActorId ||
+        !_canEmitTypingInThread(threadId, actorId)) {
+      return;
+    }
+    _setReceivedTyping(
+      threadId: threadId,
+      actorId: actorId,
+      sessionId: sessionId,
+      isTyping: payload['is_typing'] as bool,
+    );
+  }
+
+  bool _canEmitTypingInThread(String threadId, String actorId) {
+    // Club membership is local-session state inside canAccessThread, so using
+    // that method alone would accept an arbitrary actor id whenever *this*
+    // device belongs to the club. Restrict club payload identities to the
+    // same board/linked-account writers allowed to broadcast on the server.
+    if (isClubThread(threadId)) {
+      return canWriteClubThread(threadId, actorId);
+    }
+    return canAccessThread(threadId, actorId);
+  }
+
+  void _setReceivedTyping({
+    required String threadId,
+    required String actorId,
+    required String sessionId,
+    required bool isTyping,
+  }) {
+    final wasVisible = _actorIsTyping(threadId, actorId);
+    if (isTyping) {
+      ((_remoteTyping[threadId] ??= {})[actorId] ??= {})[sessionId] =
+          DateTime.now().add(_typingExpiry);
+    } else {
+      _remoteTyping[threadId]?[actorId]?.remove(sessionId);
+      if (_remoteTyping[threadId]?[actorId]?.isEmpty ?? false) {
+        _remoteTyping[threadId]?.remove(actorId);
+      }
+      if (_remoteTyping[threadId]?.isEmpty ?? false) {
+        _remoteTyping.remove(threadId);
+      }
+    }
+    _scheduleTypingExpiry();
+    if (wasVisible != _actorIsTyping(threadId, actorId)) notifyListeners();
+  }
+
+  bool _actorIsTyping(String threadId, String actorId) {
+    final now = DateTime.now();
+    return _remoteTyping[threadId]?[actorId]?.values.any(
+          (expiry) => expiry.isAfter(now),
+        ) ??
+        false;
+  }
+
+  void _scheduleTypingExpiry() {
+    _typingExpiryTimer?.cancel();
+    DateTime? earliest;
+    for (final actors in _remoteTyping.values) {
+      for (final sessions in actors.values) {
+        for (final expiry in sessions.values) {
+          if (earliest == null || expiry.isBefore(earliest)) earliest = expiry;
+        }
+      }
+    }
+    if (earliest == null) {
+      _typingExpiryTimer = null;
+      return;
+    }
+    final delay = earliest.difference(DateTime.now());
+    _typingExpiryTimer = Timer(delay.isNegative ? Duration.zero : delay, () {
+      if (_pruneTyping()) notifyListeners();
+      _scheduleTypingExpiry();
+    });
   }
 
   bool _pruneTyping() {
     final now = DateTime.now();
     var changed = false;
-    _typing.removeWhere((threadId, users) {
-      users.removeWhere((userId, expiry) {
-        final expired = expiry.isBefore(now);
-        if (expired) changed = true;
-        return expired;
+    _remoteTyping.removeWhere((threadId, actors) {
+      actors.removeWhere((actorId, sessions) {
+        final hadSessions = sessions.isNotEmpty;
+        sessions.removeWhere((sessionId, expiry) => !expiry.isAfter(now));
+        if (hadSessions && sessions.isEmpty) changed = true;
+        return sessions.isEmpty;
       });
-      return users.isEmpty;
+      return actors.isEmpty;
     });
-    if (_typing.isEmpty) {
-      _typingSweep?.cancel();
-      _typingSweep = null;
-    }
     return changed;
   }
 
   List<String> typingUserIds(String threadId, {String? excluding}) {
-    final now = DateTime.now();
-    final users = _typing[threadId];
-    if (users == null) return const [];
-    return users.entries
+    _pruneTyping();
+    final actors = _remoteTyping[threadId];
+    if (actors == null) return const [];
+    return actors.keys
         .where(
-          (entry) => entry.value.isAfter(now) && entry.key != (excluding ?? ''),
+          (actorId) =>
+              actorId != (excluding ?? '') &&
+              canAccessThread(threadId, actorId) &&
+              _actorIsTyping(threadId, actorId),
         )
-        .map((entry) => entry.key)
         .toList(growable: false);
   }
+
+  /// Compatibility helpers for local previews and older tests. Production
+  /// screens use [openTypingSession], never shared in-memory actor state.
+  void setTyping(String threadId, String userId) {
+    if (userId.isEmpty || !canAccessThread(threadId, userId)) return;
+    _setReceivedTyping(
+      threadId: threadId,
+      actorId: userId,
+      sessionId: 'legacy:$userId',
+      isTyping: true,
+    );
+  }
+
+  void clearTyping(String threadId, String userId) {
+    final wasVisible = _actorIsTyping(threadId, userId);
+    _remoteTyping[threadId]?.remove(userId);
+    if (_remoteTyping[threadId]?.isEmpty ?? false) {
+      _remoteTyping.remove(threadId);
+    }
+    _scheduleTypingExpiry();
+    if (wasVisible) notifyListeners();
+  }
+
+  void clearTypingThread(String threadId) {
+    final changed = _remoteTyping.remove(threadId)?.isNotEmpty ?? false;
+    _scheduleTypingExpiry();
+    if (changed) notifyListeners();
+  }
+
+  @visibleForTesting
+  int debugTypingChannelReferences(String threadId) =>
+      _typingChannels[threadId]?.references ?? 0;
 
   /// Records that [userId] has seen [threadId] up to now. Only saves and
   /// notifies when something was actually unread, so screens can safely call
@@ -4349,6 +4710,149 @@ class ChatStore extends ChangeNotifier {
   }
 
   // ── Seed content ─────────────────────────────────────────────────────────────
+}
+
+/// One composer's independent typing lifetime.
+///
+/// Draft and focus changes are intentionally explicit so navigation, app
+/// lifecycle, and send cleanup do not depend on a widget continuing to emit
+/// text callbacks while it is being removed.
+class ChatTypingSession {
+  ChatTypingSession._({
+    required ChatStore store,
+    required this.threadId,
+    required this.actorId,
+    required this.sessionId,
+    required bool canEmit,
+    required Duration refreshInterval,
+    required Duration idleTimeout,
+  }) : _store = store,
+       _canEmit = canEmit,
+       _refreshInterval = refreshInterval,
+       _idleTimeout = idleTimeout;
+
+  final ChatStore _store;
+  final String threadId;
+  final String actorId;
+  final String sessionId;
+  final bool _canEmit;
+  final Duration _refreshInterval;
+  final Duration _idleTimeout;
+
+  Timer? _idleTimer;
+  Timer? _refreshTimer;
+  DateTime? _lastBroadcastAt;
+  String _draft = '';
+  bool _focused = false;
+  bool _active = false;
+  bool _disposed = false;
+
+  bool get isTyping => _active;
+  bool get isDisposed => _disposed;
+
+  void updateDraft(String value) {
+    if (_disposed || !_canEmit) return;
+    _draft = value;
+    if (value.trim().isEmpty) {
+      stop();
+    } else if (_focused) {
+      _recordActivity();
+    }
+  }
+
+  void updateFocus(bool focused) {
+    if (_disposed || !_canEmit || _focused == focused) return;
+    _focused = focused;
+    if (!focused) {
+      stop();
+    } else if (_draft.trim().isNotEmpty) {
+      _recordActivity();
+    }
+  }
+
+  void _recordActivity() {
+    _idleTimer?.cancel();
+    // This timer is registered before the refresh. With no further input, a
+    // two-second idle stop therefore wins over a redundant heartbeat due at
+    // the same instant.
+    _idleTimer = Timer(_idleTimeout, stop);
+
+    if (!_active) {
+      _active = true;
+      _broadcast(true);
+      return;
+    }
+
+    final last = _lastBroadcastAt;
+    final elapsed = last == null
+        ? _refreshInterval
+        : DateTime.now().difference(last);
+    if (elapsed >= _refreshInterval) {
+      _broadcast(true);
+    } else {
+      _scheduleRefresh(_refreshInterval - elapsed);
+    }
+  }
+
+  void _broadcast(bool isTyping) {
+    if (_disposed) return;
+    _lastBroadcastAt = DateTime.now();
+    unawaited(_store._publishTyping(this, isTyping));
+    if (isTyping) _scheduleRefresh(_refreshInterval);
+  }
+
+  void _scheduleRefresh(Duration delay) {
+    _refreshTimer?.cancel();
+    _refreshTimer = Timer(delay, () {
+      if (!_disposed && _active) _broadcast(true);
+    });
+  }
+
+  /// Clears the desired state immediately. Repeated cleanup from send, focus,
+  /// lifecycle, or navigation is idempotent.
+  void stop() {
+    if (_disposed) return;
+    _idleTimer?.cancel();
+    _idleTimer = null;
+    _refreshTimer?.cancel();
+    _refreshTimer = null;
+    if (!_active) return;
+    _active = false;
+    _broadcast(false);
+  }
+
+  void dispose() {
+    if (_disposed) return;
+    _idleTimer?.cancel();
+    _refreshTimer?.cancel();
+    final wasActive = _active;
+    _active = false;
+    _disposed = true;
+    final stopped = wasActive
+        ? _store._publishTyping(this, false)
+        : Future<void>.value();
+    unawaited(_store._releaseTypingSession(this, stopped));
+  }
+}
+
+class _TypingChannelEntry {
+  _TypingChannelEntry({required this.threadId});
+
+  final String threadId;
+  ChatTypingConnection? connection;
+  final Map<String, _PendingTypingSignal> pending = {};
+  int references = 1;
+  bool subscribed = false;
+  bool flushing = false;
+  Completer<void>? flushCompleter;
+  bool closing = false;
+}
+
+class _PendingTypingSignal {
+  const _PendingTypingSignal({required this.actorId, required this.isTyping});
+
+  final String actorId;
+  final bool isTyping;
 }
 
 final chatStore = ChatStore();

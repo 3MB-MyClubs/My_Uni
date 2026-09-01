@@ -35,7 +35,7 @@ class S {
     'Gönderilerini görmek için\nkulüp takip et',
   );
   static String get endOfFeed =>
-      _t("That's it for today 😀", 'Bugünlük bu kadar 😀');
+      _t('Updates Are Coming!', 'Updates Are Coming!');
   static String get exploreClubs =>
       _t('Explore All Clubs', 'Tüm Kulüpleri Keşfet');
   static String get peopleMightKnow =>
@@ -403,72 +403,10 @@ class S {
   static String get onboardingIntroGetStarted => _t('Get started', 'Başla');
   static String get onboardingIntroLogIn => _t('Log in', 'Giriş yap');
 
-  // ── Onboarding — welcome (Act 1)
-  static String get onboardingWelcomeEyebrow =>
-      _t('YOUR CAMPUS, YOUR PEOPLE', 'KAMPÜSÜN, İNSANLARIN');
-  static String onboardingWelcomeTitle(String firstName) => firstName.isEmpty
-      ? _t('Hey! 👋', 'Selam! 👋')
-      : _t('Hey $firstName! 👋', 'Selam $firstName! 👋');
-  static String get onboardingWelcomeBody => _t(
-    'Welcome to ClubUp — this is where campus life happens. '
-        'Want a quick tour? Takes about a minute.',
-    "ClubUp'a hoş geldin — kampüs hayatı burada dönüyor. "
-        'Hızlı bir tur ister misin? Bir dakikanı alır.',
-  );
-  static String get onboardingShowMeAround =>
-      _t('Show me around', 'Bana etrafı göster');
-  static String get onboardingExploreOnMyOwn =>
-      _t("I'll explore on my own", 'Kendim keşfederim');
-
-  // ── Onboarding — tour chrome (Act 2)
+  // ── Onboarding — coach-card controls
   static String get onboardingNext => _t('Next', 'İleri');
   static String get onboardingBack => _t('Back', 'Geri');
-  static String get onboardingFinish => _t('Finish', 'Bitir');
   static String get onboardingSkipTour => _t('Skip tour', 'Turu atla');
-  static String onboardingStepLabel(int current, int total) =>
-      _t('Step $current of $total', '$total adımın $current. adımı');
-  static String get onboardingTapHint => _t(
-    'Tip: tapping the glowing spot works too',
-    'İpucu: parlayan yere dokunmak da olur',
-  );
-
-  // ── Onboarding — student tour guide lines
-  static String get onboardingStudentHome => _t(
-    'This is your feed. Everything from clubs you follow lands here — '
-        'plus events and people you might like.',
-    'Burası senin akışın. Takip ettiğin kulüplerden her şey buraya düşer — '
-        'bir de hoşuna gidebilecek etkinlikler ve kişiler.',
-  );
-  static String get onboardingStudentFeedToggle => _t(
-    'Following shows the clubs you picked; For You mixes in things '
-        "we think you'll like. Flip between them anytime.",
-    'Takip Edilenler seçtiğin kulüpleri gösterir; Sana Özel ise '
-        'seveceğini düşündüklerimizi karıştırır. İstediğin zaman geçiş yap.',
-  );
-  static String get onboardingStudentRsvp => _t(
-    'Campus events, all in one place. See something fun? '
-        "Hit RSVP and it's on your list.",
-    'Kampüs etkinlikleri, hepsi tek yerde. Eğlenceli bir şey mi gördün? '
-        'LCV ver, listene eklensin.',
-  );
-  static String get onboardingStudentExplore => _t(
-    'Looking for your people? Search clubs, events and students here — '
-        'this is how you find your crowd.',
-    'İnsanlarını mı arıyorsun? Kulüpleri, etkinlikleri ve öğrencileri '
-        'buradan ara — çevreni böyle bulursun.',
-  );
-  static String get onboardingStudentCompose => _t(
-    "DM friends, or jump into a club's community chat. "
-        'This button starts a new conversation.',
-    'Arkadaşlarına yaz ya da bir kulübün topluluk sohbetine katıl. '
-        'Bu düğme yeni bir sohbet başlatır.',
-  );
-  static String get onboardingStudentProfile => _t(
-    "And this one's yours. Add a bio, your major and year — "
-        'make it feel like you.',
-    'Burası da senin. Bir biyografi, bölümünü ve sınıfını ekle — '
-        'burayı kendin gibi hissettir.',
-  );
 
   // ── Onboarding — club-admin tour guide lines
   static String get onboardingClubComposer => _t(
@@ -504,20 +442,6 @@ class S {
     'İsim, fotoğraf, kategoriler, yönetim kurulu — hepsini ayarlardan '
         'yönet.',
   );
-
-  // ── Onboarding — finish (Act 3)
-  static String get onboardingFinishTitle =>
-      _t("That's the tour! 🎉", 'Tur bitti! 🎉');
-  static String get onboardingFinishBody => _t(
-    "Here's how to make this place yours — three small things to get "
-        'you started.',
-    'Burayı kendine ait kılmanın yolu — başlaman için üç küçük adım.',
-  );
-  static String get onboardingFinishBodyClub => _t(
-    "You're all set. Go post something — your members are waiting.",
-    'Her şey hazır. Hadi bir şeyler paylaş — üyelerin bekliyor.',
-  );
-  static String get onboardingLetsGo => _t("Let's go", 'Hadi başlayalım');
 
   // ── Onboarding — starter checklist
   static String get checklistTitle => _t('Get started', 'Başlarken');
@@ -1788,4 +1712,192 @@ class S {
   static String get clubEditNameField => _t('Club Name', 'Kulüp Adı');
   static String get clubEditNameSave =>
       _t('Save Changes', 'Değişiklikleri Kaydet');
+
+  static String get clubInitials => _t('Club Initials', 'Kulüp Kısaltması');
+  static String get clubEditInitialsTitle =>
+      _t('Edit Club Initials', 'Kulüp Kısaltmasını Düzenle');
+  static String get clubEditInitialsSubtitle => _t(
+    'Choose the short @name shown on Home and your public club profile.',
+    'Ana sayfada ve herkese açık kulüp profilinde görünecek kısa @adı seç.',
+  );
+  static String get clubEditInitialsField => _t('Initials', 'Kısaltma');
+  static String get clubEditInitialsHint => _t('kbr or IES', 'kbr veya IES');
+  static String get clubEditInitialsInvalid => _t(
+    'Use 1–15 letters, numbers, or underscores.',
+    '1–15 harf, rakam veya alt çizgi kullan.',
+  );
+  static String get couldNotUpdateClubInitials =>
+      _t('Could not update club initials.', 'Kulüp kısaltması güncellenemedi.');
+  static String get clubInitialsPermissionMissing => _t(
+    'Club initials need the latest database update before they can be saved.',
+    'Kulüp kısaltmasını kaydetmek için en son veritabanı güncellemesi gerekli.',
+  );
+
+  // ── ACCOUNT SWITCHER area
+  /// `profile-switcher` `424:113` / `424:6`.
+  static String get switchAccountTitle =>
+      _t('Switch Account', 'Hesap Değiştir');
+  static String get switchAccountPersonal => _t('Personal', 'Kişisel');
+  static String get switchAccountFailed => _t(
+    'This account could not be selected. Try again.',
+    'Bu hesap seçilemedi. Tekrar dene.',
+  );
+
+  // ── STUDENT UI · IN-APP TUTORIAL area
+  // Copy lifted verbatim from the `tut-*` frames (y≈34000) and the kit board
+  // `canvas-tutorial-kit` 391:4. Turkish runs roughly 20% longer than English,
+  // which is why the coach card hugs its height and is never given a fixed one.
+
+  /// `Eyebrow` — the page name, then the counter when the page has more than
+  /// one step.
+  static String tutorialEyebrow(String page, int current, int total) =>
+      _t('$page · STEP $current OF $total', '$page · ADIM $current / $total');
+
+  static String get tutorialPageHomeFeed => _t('HOME FEED', 'ANA AKIŞ');
+  static String get tutorialPageThisWeek => _t('THIS WEEK', 'BU HAFTA');
+  static String get tutorialPageSearch => _t('SEARCH', 'ARAMA');
+  static String get tutorialPageChats => _t('CHATS', 'SOHBETLER');
+  static String get tutorialPageProfile => _t('PROFILE', 'PROFİL');
+  static String get tutorialPageAnnouncements =>
+      _t('ANNOUNCEMENTS', 'DUYURULAR');
+
+  /// The club-admin tour is out of scope on the design board, but it renders
+  /// through the same card and still needs page names for its eyebrow.
+  static String get tutorialPageClubFeed => _t('CLUB FEED', 'KULÜP AKIŞI');
+  static String get tutorialPageClubProfile =>
+      _t('CLUB PROFILE', 'KULÜP PROFİLİ');
+  static String get tutorialPageModeration => _t('MODERATION', 'MODERASYON');
+
+  /// The primary pill on the last step of a page.
+  static String get tutorialGotIt => _t('Got it', 'Anladım');
+
+  // `tut-home-nav` 387:3
+  static String get tutorialHomeNavTitle =>
+      _t('Five tabs, one app', 'Beş sekme, tek uygulama');
+  static String get tutorialHomeNavBody => _t(
+    'Home is your club feed. This Week lists events, Search finds clubs and '
+        'people, Chats holds every conversation and Profile is your card. '
+        'The tab you are on turns burgundy.',
+    'Ana sayfa kulüp akışın. Bu Hafta etkinlikleri listeler, Arama kulüpleri '
+        've kişileri bulur, Sohbetler tüm yazışmalarını tutar, Profil ise '
+        'senin kartın. Bulunduğun sekme bordo olur.',
+  );
+
+  // `tut-home-following` 387:394
+  static String get tutorialHomeFollowingTitle =>
+      _t('Choose what you see', 'Ne göreceğini seç');
+  static String get tutorialHomeFollowingBody => _t(
+    'Tap Following to switch between the clubs you already follow and '
+        'everything happening across campus.',
+    'Takip Edilenler’e dokunarak zaten takip ettiğin kulüpler ile kampüsteki '
+        'her şey arasında geçiş yap.',
+  );
+
+  // `tut-events-filters` 388:1123
+  static String get tutorialEventsSearchTitle =>
+      _t('Search by keywords', 'Anahtar kelimeyle ara');
+  static String get tutorialEventsSearchBody => _t(
+    'Type a keyword into the search bar to quickly find events that match '
+        'your interests.',
+    'İlgi alanlarına uyan etkinlikleri hızlıca bulmak için arama çubuğuna bir '
+        'anahtar kelime yaz.',
+  );
+
+  // `tut-events-card` 388:1434
+  static String get tutorialEventsCardTitle =>
+      _t('Every event at a glance', 'Her etkinlik tek bakışta');
+  static String get tutorialEventsCardBody => _t(
+    'A card carries the date, the time, the place and who is hosting. '
+        'Tap it to open the full event page.',
+    'Bir kart tarihi, saati, yeri ve düzenleyeni taşır. Etkinliğin tam '
+        'sayfasını açmak için karta dokun.',
+  );
+
+  // `tut-search-bar` 389:204
+  static String get tutorialSearchTitle =>
+      _t('One search for everything', 'Her şey için tek arama');
+  static String get tutorialSearchBody => _t(
+    'Look up clubs, events and people from the same field. Results update '
+        'as you type.',
+    'Kulüpleri, etkinlikleri ve kişileri aynı alandan ara. Sonuçlar sen '
+        'yazdıkça güncellenir.',
+  );
+
+  // `tut-chats-tabs` 389:985
+  static String get tutorialChatsTitle =>
+      _t('Clubs and direct messages', 'Kulüpler ve mesajlar');
+  static String get tutorialChatsBody => _t(
+    'The dropdown in the header switches between your club chats and your '
+        'one to one messages without leaving the page.',
+    'Başlıktaki açılır menü, sayfadan çıkmadan kulüp sohbetlerin ile birebir '
+        'mesajların arasında geçiş yapar.',
+  );
+
+  // `tut-profile-hero` 390:3
+  static String get tutorialProfileHeroTitle =>
+      _t('Your card on campus', 'Kampüsteki kartın');
+  static String get tutorialProfileHeroBody => _t(
+    'Your photo, year, major and interests sit at the top. Edit profile '
+        'updates all of it, and other students see the same card.',
+    'Fotoğrafın, sınıfın, bölümün ve ilgi alanların en üstte durur. Profili '
+        'Düzenle hepsini günceller ve diğer öğrenciler aynı kartı görür.',
+  );
+
+  // `tut-profile-clubs` 390:248
+  static String get tutorialProfileClubsTitle =>
+      _t('Your clubs and your events', 'Kulüplerin ve etkinliklerin');
+  static String get tutorialProfileClubsBody => _t(
+    'My Clubs lists everything you joined and Events keeps the ones you '
+        'said yes to. Tap any row to open it.',
+    'Kulüplerim katıldığın her şeyi listeler, Etkinlikler ise evet dediklerini '
+        'tutar. Açmak için herhangi bir satıra dokun.',
+  );
+
+  // `tut-announcements` 389:2162 — a page-level tip, not a tour stop.
+  static String get tutorialAnnouncementsTitle =>
+      _t('Pinned club news', 'Sabitlenmiş kulüp haberleri');
+  static String get tutorialAnnouncementsBody => _t(
+    'Announcements are posted by club admins only, so nothing important gets '
+        'buried. Read them here, then head back to the chat.',
+    'Duyuruları yalnızca kulüp yöneticileri paylaşır, böylece önemli hiçbir '
+        'şey kaybolmaz. Buradan oku, sonra sohbete geri dön.',
+  );
+
+  // `tut-welcome` 386:3 — step 01.
+  static String get tutorialWelcomeEyebrow => _t('WELCOME', 'HOŞ GELDİN');
+  static String get tutorialWelcomeTitle =>
+      _t('Welcome to ClubUp', 'ClubUp’a hoş geldin');
+  static String get tutorialWelcomeBody => _t(
+    'A one minute tour of the five things you will use every day: your feed, '
+        'events, search, chats and your profile card.',
+    'Her gün kullanacağın beş şeyin bir dakikalık turu: akışın, etkinlikler, '
+        'arama, sohbetler ve profil kartın.',
+  );
+  static String get tutorialWelcomeFootnote => _t(
+    'You can replay this tour any time from Profile then Settings.',
+    'Bu turu istediğin zaman Profil, ardından Ayarlar’dan tekrar izleyebilirsin.',
+  );
+  static String get tutorialSkipForNow => _t('Skip for now', 'Şimdilik atla');
+  static String get tutorialStartTour => _t('Start the tour', 'Tura başla');
+
+  // `tut-finish` 390:1494 — step 32.
+  static String get tutorialFinishEyebrow =>
+      _t('TOUR COMPLETE', 'TUR TAMAMLANDI');
+  static String get tutorialFinishTitle =>
+      _t('You are all set', 'Her şey hazır');
+  static String get tutorialFinishBody => _t(
+    'That is the whole app. Post in your feed, say yes to events, search for '
+        'new clubs and keep your profile current.',
+    'Uygulamanın tamamı bu kadar. Akışında paylaş, etkinliklere evet de, yeni '
+        'kulüpler ara ve profilini güncel tut.',
+  );
+  static String get tutorialFinishFootnote => _t(
+    'Profile then Settings then Replay tutorial brings this back any time.',
+    'Profil, ardından Ayarlar, ardından Turu tekrar izle bunu istediğin zaman '
+        'geri getirir.',
+  );
+  static String get tutorialReplayTour =>
+      _t('Replay the tour', 'Turu tekrar izle');
+  static String get tutorialExploreClubUp =>
+      _t('Explore ClubUp', 'ClubUp’ı keşfet');
 }

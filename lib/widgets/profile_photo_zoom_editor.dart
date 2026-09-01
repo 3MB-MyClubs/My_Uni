@@ -4,7 +4,6 @@ import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:pro_image_editor/pro_image_editor.dart';
 
-import '../services/app_colors.dart';
 import '../services/locale_service.dart';
 import '../services/photo_upload_quality.dart';
 
@@ -52,7 +51,7 @@ ThemeData profilePhotoEditorTheme(Brightness brightness) {
         ? const Color(0xFF121212)
         : const Color(0xFFF8F5F6),
     colorScheme: ColorScheme.fromSeed(
-      seedColor: AppColors.primaryRed,
+      seedColor: const Color(0xFF9E2045),
       brightness: brightness,
     ),
   );

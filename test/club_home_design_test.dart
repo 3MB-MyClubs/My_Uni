@@ -55,6 +55,7 @@ void main() {
         Club(
           id: clubId,
           name: 'Design Society',
+          shortName: 'IES',
           description: 'CLUB HOME redesign fixture',
           adminUserIds: const ['club-home-design-admin'],
         ),
@@ -127,7 +128,7 @@ void main() {
       findsNothing,
     );
     expect(find.text(S.forYou), findsNothing);
-    expect(find.text('${S.hiPrefix} Design Society'), findsOneWidget);
+    expect(find.text('${S.hiPrefix} @IES'), findsOneWidget);
     expect(
       find.byKey(const ValueKey('home-notifications-bell')),
       findsOneWidget,

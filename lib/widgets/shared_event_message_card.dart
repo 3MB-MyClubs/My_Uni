@@ -8,6 +8,8 @@ import '../services/app_strings.dart';
 import '../services/mock_data.dart';
 import '../services/supabase_content_service.dart';
 import 'event_cover_image.dart';
+import 'media_scrim.dart';
+import '../theme/app_semantic_colors.dart';
 
 typedef SharedEventResolver = Future<Event?> Function(String eventId);
 
@@ -177,18 +179,7 @@ class _SharedEventMessageCardState extends State<SharedEventMessageCard> {
                       cacheWidth: 500,
                       cacheHeight: 224,
                     ),
-                    DecoratedBox(
-                      decoration: BoxDecoration(
-                        gradient: LinearGradient(
-                          begin: Alignment.topCenter,
-                          end: Alignment.bottomCenter,
-                          colors: [
-                            Colors.transparent,
-                            Colors.black.withValues(alpha: 0.62),
-                          ],
-                        ),
-                      ),
-                    ),
+                    const MediaScrim(position: MediaScrimPosition.bottom),
                     Positioned(
                       left: 10,
                       bottom: 9,
@@ -201,13 +192,15 @@ class _SharedEventMessageCardState extends State<SharedEventMessageCard> {
                           color: Colors.black.withValues(alpha: 0.5),
                           borderRadius: BorderRadius.circular(999),
                           border: Border.all(
-                            color: Colors.white.withValues(alpha: 0.24),
+                            color: context.semanticColors.onMedia.withValues(
+                              alpha: 0.24,
+                            ),
                           ),
                         ),
                         child: Text(
                           '$date · $time',
-                          style: const TextStyle(
-                            color: Colors.white,
+                          style: TextStyle(
+                            color: context.semanticColors.onMedia,
                             fontSize: 10.5,
                             fontWeight: FontWeight.w700,
                           ),

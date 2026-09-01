@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../services/theme_service.dart';
+import '../theme/specialized_semantic_palettes.dart';
 
 /// Design tokens for the ClubUp-Desings Figma handoff.
 ///
@@ -16,6 +17,11 @@ import '../services/theme_service.dart';
 /// reviewed. As each remaining area is redesigned, it moves onto these.
 class ClubUpColors {
   const ClubUpColors._();
+
+  /// Active-theme semantic pairings while the legacy getters remain source
+  /// compatible with existing handoff widgets.
+  static SpecializedSemanticPalette of(BuildContext context) =>
+      SpecializedSemanticPalettes.clubUp(Theme.of(context));
 
   static bool get _dark => themeService.isDark;
 
@@ -59,7 +65,8 @@ class ClubUpColors {
       _dark ? const Color(0xFF2A1319) : const Color(0xFFFDF2F4);
 
   /// Scrim behind a bottom sheet — `rgba(24,24,27,0.4)`.
-  static Color get scrim => _dark ? const Color(0x8C000000) : const Color(0x6618181B);
+  static Color get scrim =>
+      _dark ? const Color(0x8C000000) : const Color(0x6618181B);
 
   /// Card lift — `0 4px 5px rgba(128,0,32,0.07)` / `rgba(0,0,0,0.4)`.
   static List<BoxShadow> get cardShadow => [

@@ -67,6 +67,7 @@ void main() {
     club = Club(
       id: clubId,
       name: 'Rooftop Collective',
+      shortName: 'RC',
       description: 'Deep grooves and sunset sessions on the terrace.',
       categoryName: 'Arts, Music',
       adminUserIds: const [adminId],
@@ -158,9 +159,10 @@ void main() {
     expect(find.byType(ClubSettingsIdentityCard), findsOneWidget);
     expect(find.text('Rooftop Collective'), findsWidgets);
 
-    // `profile-details` 350:45 — three navigation rows on the card's fill.
+    // Club profile fields are editable only from the club settings card.
     for (final key in const [
       ValueKey('club-settings-name'),
+      ValueKey('club-settings-initials'),
       ValueKey('club-settings-category'),
       ValueKey('club-settings-description'),
     ]) {
@@ -202,6 +204,7 @@ void main() {
 
     expect(find.byKey(const ValueKey('club-settings-header')), findsNothing);
     expect(find.byType(ClubSettingsIdentityCard), findsNothing);
+    expect(find.byKey(const ValueKey('club-settings-initials')), findsNothing);
     // The student frame's chrome, unchanged.
     expect(find.byType(SettingsHeaderBar), findsOneWidget);
     expect(find.byType(SettingsRowCard), findsWidgets);
@@ -289,7 +292,76 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
+  testWidgets('the initials sheet validates and saves the public @name', (
+    tester,
+  ) async {
+    signInClubAdmin();
+    await pumpSettings(tester);
+
+    // The short name stays private to the editor instead of being repeated on
+    // the settings card.
+    expect(find.text('@RC'), findsNothing);
+    await tester.tap(find.byKey(const ValueKey('club-settings-initials')));
+    await tester.pumpAndSettle();
+
+    expect(find.text(S.clubEditInitialsTitle), findsOneWidget);
+    final initialsField = tester.widget<TextField>(
+      find.byKey(const ValueKey('club-settings-initials-field')),
+    );
+    expect(initialsField.controller?.text, 'RC');
+    await tester.enterText(
+      find.byKey(const ValueKey('club-settings-initials-field')),
+      'not valid',
+    );
+    await tester.pump();
+    expect(
+      find.byKey(const ValueKey('club-settings-initials-error')),
+      findsOneWidget,
+    );
+    final decoratedField = tester.widget<TextField>(
+      find.byKey(const ValueKey('club-settings-initials-field')),
+    );
+    expect(decoratedField.decoration?.border, InputBorder.none);
+    expect(decoratedField.decoration?.enabledBorder, InputBorder.none);
+    expect(decoratedField.decoration?.focusedBorder, InputBorder.none);
+    expect(decoratedField.decoration?.errorBorder, InputBorder.none);
+    expect(decoratedField.decoration?.focusedErrorBorder, InputBorder.none);
+    expect(club.shortName, 'RC');
+
+    await tester.enterText(
+      find.byKey(const ValueKey('club-settings-initials-field')),
+      '@IES',
+    );
+    await tester.pump();
+    await tester.tap(find.byKey(const ValueKey('club-settings-initials-save')));
+    await tester.pumpAndSettle();
+
+    expect(club.shortName, 'IES');
+    expect(find.text(S.clubEditInitialsTitle), findsNothing);
+    expect(find.text('@IES'), findsNothing);
+    expect(tester.takeException(), isNull);
+  });
+
   // ── category editor ────────────────────────────────────────────────────────
+
+  testWidgets('the initials sheet has no suggested value or placeholder', (
+    tester,
+  ) async {
+    club.shortName = null;
+    signInClubAdmin();
+    await pumpSettings(tester);
+
+    await tester.tap(find.byKey(const ValueKey('club-settings-initials')));
+    await tester.pumpAndSettle();
+
+    final initialsField = tester.widget<TextField>(
+      find.byKey(const ValueKey('club-settings-initials-field')),
+    );
+    expect(initialsField.controller?.text, isEmpty);
+    expect(initialsField.decoration?.hintText, isNull);
+    expect(find.text('kbr or IES'), findsNothing);
+    expect(tester.takeException(), isNull);
+  });
 
   Widget categoryScreen() => ClubEditCategoryScreen(
     club: club,

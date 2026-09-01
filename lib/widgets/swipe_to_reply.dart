@@ -3,9 +3,9 @@ import 'package:flutter/services.dart';
 
 import '../services/app_colors.dart';
 
-/// Drag a message bubble to the right to reply to it — the WhatsApp/Instagram
+/// Drag a message bubble to the left to reply to it — the WhatsApp/Instagram
 /// gesture. The bubble follows your finger, a reply arrow slides in from the
-/// left, and passing [_threshold] arms the action: a haptic tick fires the
+/// right, and passing [_threshold] arms the action: a haptic tick fires the
 /// moment it arms, then releasing calls [onReply] and the bubble springs back.
 ///
 /// Pulling further than the threshold is damped rather than blocked, so the
@@ -76,15 +76,16 @@ class _SwipeToReplyState extends State<SwipeToReply>
   void _onDragUpdate(DragUpdateDetails details) {
     final delta = details.primaryDelta ?? 0;
     var next = _dx + delta;
-    if (next < 0) {
-      // Left of rest is dead travel — this gesture only goes one way.
+    if (next > 0) {
+      // Right of rest is dead travel — this gesture only goes one way.
       next = 0;
-    } else if (next > _threshold) {
-      next = _threshold + (next - _threshold) * _overdragDamping;
-      if (next > _maxDrag) next = _maxDrag;
+    } else if (next < -_threshold) {
+      final overdrag = (-next - _threshold) * _overdragDamping;
+      next = -(_threshold + overdrag);
+      if (next < -_maxDrag) next = -_maxDrag;
     }
 
-    final armed = next >= _threshold;
+    final armed = -next >= _threshold;
     if (armed != _armed) {
       // Tick on the way in and on the way back out, so bailing out is felt too.
       HapticFeedback.selectionClick();
@@ -115,7 +116,8 @@ class _SwipeToReplyState extends State<SwipeToReply>
   Widget build(BuildContext context) {
     if (!widget.enabled) return widget.child;
 
-    final progress = (_dx / _threshold).clamp(0.0, 1.0);
+    final travel = -_dx;
+    final progress = (travel / _threshold).clamp(0.0, 1.0);
 
     return GestureDetector(
       behavior: HitTestBehavior.deferToChild,
@@ -125,10 +127,10 @@ class _SwipeToReplyState extends State<SwipeToReply>
       child: Stack(
         clipBehavior: Clip.none,
         children: [
-          // Trails the bubble in from the left margin. Sized off the bubble by
+          // Trails the bubble in from the right margin. Sized off the bubble by
           // the Stack, so it lines up with whatever row it's dropped into.
           Positioned(
-            left: -34 + _dx * 0.86,
+            right: -34 + travel * 0.86,
             top: 0,
             bottom: 0,
             child: Center(
@@ -150,19 +152,14 @@ class _SwipeToReplyState extends State<SwipeToReply>
                     child: Icon(
                       Icons.reply_rounded,
                       size: 16,
-                      color: _armed
-                          ? Colors.white
-                          : AppColors.secondaryText,
+                      color: _armed ? Colors.white : AppColors.secondaryText,
                     ),
                   ),
                 ),
               ),
             ),
           ),
-          Transform.translate(
-            offset: Offset(_dx, 0),
-            child: widget.child,
-          ),
+          Transform.translate(offset: Offset(_dx, 0), child: widget.child),
         ],
       ),
     );

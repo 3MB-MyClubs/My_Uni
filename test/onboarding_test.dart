@@ -20,35 +20,61 @@ import 'package:flutter_application_1/services/rsvp_store.dart';
 import 'package:flutter_application_1/services/theme_service.dart';
 import 'package:flutter_application_1/services/user_state.dart';
 
-/// Every localized string the onboarding renders, keyed for failure messages.
+/// Every localized string the tutorial renders, keyed for failure messages.
 Map<String, String Function()> _allOnboardingCopy() => {
-  'welcomeEyebrow': () => S.onboardingWelcomeEyebrow,
-  'welcomeTitle': () => S.onboardingWelcomeTitle('Ayşe'),
-  'welcomeBody': () => S.onboardingWelcomeBody,
-  'showMeAround': () => S.onboardingShowMeAround,
-  'exploreOnMyOwn': () => S.onboardingExploreOnMyOwn,
+  // Coach-card controls.
   'next': () => S.onboardingNext,
   'back': () => S.onboardingBack,
-  'finish': () => S.onboardingFinish,
   'skipTour': () => S.onboardingSkipTour,
-  'stepLabel': () => S.onboardingStepLabel(1, 6),
-  'tapHint': () => S.onboardingTapHint,
-  'studentHome': () => S.onboardingStudentHome,
-  'studentFeedToggle': () => S.onboardingStudentFeedToggle,
-  'studentRsvp': () => S.onboardingStudentRsvp,
-  'studentExplore': () => S.onboardingStudentExplore,
-  'studentCompose': () => S.onboardingStudentCompose,
-  'studentProfile': () => S.onboardingStudentProfile,
+  'gotIt': () => S.tutorialGotIt,
+  'eyebrow': () => S.tutorialEyebrow(S.tutorialPageHomeFeed, 1, 2),
+  // Page names.
+  'pageHomeFeed': () => S.tutorialPageHomeFeed,
+  'pageThisWeek': () => S.tutorialPageThisWeek,
+  'pageSearch': () => S.tutorialPageSearch,
+  'pageChats': () => S.tutorialPageChats,
+  'pageProfile': () => S.tutorialPageProfile,
+  'pageAnnouncements': () => S.tutorialPageAnnouncements,
+  // The nine drawn coach marks.
+  'homeNavTitle': () => S.tutorialHomeNavTitle,
+  'homeNavBody': () => S.tutorialHomeNavBody,
+  'homeFollowingTitle': () => S.tutorialHomeFollowingTitle,
+  'homeFollowingBody': () => S.tutorialHomeFollowingBody,
+  'eventsSearchTitle': () => S.tutorialEventsSearchTitle,
+  'eventsSearchBody': () => S.tutorialEventsSearchBody,
+  'eventsCardTitle': () => S.tutorialEventsCardTitle,
+  'eventsCardBody': () => S.tutorialEventsCardBody,
+  'searchTitle': () => S.tutorialSearchTitle,
+  'searchBody': () => S.tutorialSearchBody,
+  'chatsTitle': () => S.tutorialChatsTitle,
+  'chatsBody': () => S.tutorialChatsBody,
+  'profileHeroTitle': () => S.tutorialProfileHeroTitle,
+  'profileHeroBody': () => S.tutorialProfileHeroBody,
+  'profileClubsTitle': () => S.tutorialProfileClubsTitle,
+  'profileClubsBody': () => S.tutorialProfileClubsBody,
+  'announcementsTitle': () => S.tutorialAnnouncementsTitle,
+  'announcementsBody': () => S.tutorialAnnouncementsBody,
+  // The two full-screen moments.
+  'welcomeEyebrow': () => S.tutorialWelcomeEyebrow,
+  'welcomeTitle': () => S.tutorialWelcomeTitle,
+  'welcomeBody': () => S.tutorialWelcomeBody,
+  'welcomeFootnote': () => S.tutorialWelcomeFootnote,
+  'skipForNow': () => S.tutorialSkipForNow,
+  'startTour': () => S.tutorialStartTour,
+  'finishEyebrow': () => S.tutorialFinishEyebrow,
+  'finishTitle': () => S.tutorialFinishTitle,
+  'finishBody': () => S.tutorialFinishBody,
+  'finishFootnote': () => S.tutorialFinishFootnote,
+  'replayTour': () => S.tutorialReplayTour,
+  'exploreClubUp': () => S.tutorialExploreClubUp,
+  // The club-admin tour still renders through the same card.
   'clubComposer': () => S.onboardingClubComposer,
   'clubCreateEvent': () => S.onboardingClubCreateEvent,
   'clubProfileTabs': () => S.onboardingClubProfileTabs,
   'clubChats': () => S.onboardingClubChats,
   'clubModeration': () => S.onboardingClubModeration,
   'clubSettings': () => S.onboardingClubSettings,
-  'finishTitle': () => S.onboardingFinishTitle,
-  'finishBody': () => S.onboardingFinishBody,
-  'finishBodyClub': () => S.onboardingFinishBodyClub,
-  'letsGo': () => S.onboardingLetsGo,
+  // The starter checklist, which Profile still renders.
   'checklistTitle': () => S.checklistTitle,
   'checklistSubtitle': () => S.checklistSubtitle,
   'checklistFollowClub': () => S.checklistFollowClub,
@@ -155,7 +181,7 @@ void main() {
         findsOneWidget,
       );
 
-      await tester.tap(find.text(S.onboardingShowMeAround));
+      await tester.tap(find.text(S.tutorialStartTour));
       await _settleFlow(tester);
       expect(
         find.byKey(const ValueKey('onboarding-guide-card-dark')),
@@ -171,7 +197,7 @@ void main() {
 
       await tester.tap(find.text(S.onboardingNext));
       await _settleFlow(tester);
-      await tester.tap(find.text(S.onboardingFinish));
+      await tester.tap(find.text(S.tutorialGotIt));
       await _settleFlow(tester);
       expect(
         find.byKey(const ValueKey('onboarding-finish-light')),
@@ -180,13 +206,13 @@ void main() {
       expect(homeReturns, 0);
       expect(completed, isFalse);
 
-      await tester.tap(find.text(S.onboardingLetsGo));
+      await tester.tap(find.text(S.tutorialExploreClubUp));
       await _settleFlow(tester);
       expect(homeReturns, 1);
       expect(completed, isTrue);
     });
 
-    testWidgets('welcome greets by name and skipping completes', (
+    testWidgets('welcome states the tour and skipping completes', (
       tester,
     ) async {
       var skipped = false;
@@ -200,11 +226,16 @@ void main() {
       await tester.pumpWidget(harness.build());
       await tester.pump(const Duration(milliseconds: 400));
 
-      expect(find.textContaining('Ayşe'), findsOneWidget);
-      expect(find.text(S.onboardingShowMeAround), findsOneWidget);
-      expect(find.text(S.onboardingExploreOnMyOwn), findsOneWidget);
+      // `tut-welcome` is not personalised: eyebrow, title, body, footnote and
+      // the two controls, and nothing else.
+      expect(find.text(S.tutorialWelcomeEyebrow), findsOneWidget);
+      expect(find.text(S.tutorialWelcomeTitle), findsOneWidget);
+      expect(find.text(S.tutorialWelcomeBody), findsOneWidget);
+      expect(find.text(S.tutorialWelcomeFootnote), findsOneWidget);
+      expect(find.text(S.tutorialStartTour), findsOneWidget);
+      expect(find.text(S.tutorialSkipForNow), findsOneWidget);
 
-      await tester.tap(find.text(S.onboardingExploreOnMyOwn));
+      await tester.tap(find.text(S.tutorialSkipForNow));
       await tester.pump();
       await tester.pump(const Duration(milliseconds: 400));
       // Flush the async continuation waiting on the reverse entrance
@@ -224,11 +255,11 @@ void main() {
       await tester.pumpWidget(harness.build());
       await tester.pump(const Duration(milliseconds: 400));
 
-      await tester.tap(find.text(S.onboardingShowMeAround));
+      await tester.tap(find.text(S.tutorialStartTour));
       await _settleFlow(tester);
 
       // Step 1 with its guide line, skip pill, and no Back button yet.
-      expect(find.text(S.onboardingStudentHome), findsOneWidget);
+      expect(find.text(S.tutorialHomeNavBody), findsOneWidget);
       expect(find.text(S.onboardingSkipTour), findsOneWidget);
       expect(find.text(S.onboardingBack), findsNothing);
       expect(find.text(S.onboardingNext), findsOneWidget);
@@ -236,23 +267,23 @@ void main() {
       // Next → step 2, Back → step 1.
       await tester.tap(find.text(S.onboardingNext));
       await _settleFlow(tester);
-      expect(find.text(S.onboardingStudentProfile), findsOneWidget);
+      expect(find.text(S.tutorialProfileHeroBody), findsOneWidget);
       await tester.tap(find.text(S.onboardingBack));
       await _settleFlow(tester);
-      expect(find.text(S.onboardingStudentHome), findsOneWidget);
+      expect(find.text(S.tutorialHomeNavBody), findsOneWidget);
 
       // A tap inside the spotlight reaches the real control AND advances.
       await tester.tapAt(tester.getCenter(find.byKey(harness.firstTargetKey)));
       await _settleFlow(tester);
       expect(harness.firstTaps, 1);
-      expect(find.text(S.onboardingStudentProfile), findsOneWidget);
+      expect(find.text(S.tutorialProfileHeroBody), findsOneWidget);
 
       // Step 2 is tapThrough=false: the tap opens the finish moment but must
       // NOT reach the underlying control (it would push a route).
       await tester.tapAt(tester.getCenter(find.byKey(harness.secondTargetKey)));
       await _settleFlow(tester);
       expect(harness.secondTaps, 0);
-      expect(find.text(S.onboardingFinishTitle), findsOneWidget);
+      expect(find.text(S.tutorialFinishTitle), findsOneWidget);
     });
 
     testWidgets('Lets go completes the tour and returns directly Home', (
@@ -267,26 +298,26 @@ void main() {
       await tester.pumpWidget(harness.build());
       await tester.pump(const Duration(milliseconds: 400));
 
-      await tester.tap(find.text(S.onboardingShowMeAround));
+      await tester.tap(find.text(S.tutorialStartTour));
       await _settleFlow(tester);
       await tester.tap(find.text(S.onboardingNext));
       await _settleFlow(tester);
-      await tester.tap(find.text(S.onboardingFinish));
+      await tester.tap(find.text(S.tutorialGotIt));
       await _settleFlow(tester);
 
-      expect(find.text(S.onboardingFinishTitle), findsOneWidget);
-      expect(find.text(S.onboardingLetsGo), findsOneWidget);
+      expect(find.text(S.tutorialFinishTitle), findsOneWidget);
+      expect(find.text(S.tutorialExploreClubUp), findsOneWidget);
       expect(completed, isFalse);
       expect(homeReturns, 0);
 
-      await tester.tap(find.text(S.onboardingLetsGo));
+      await tester.tap(find.text(S.tutorialExploreClubUp));
       await _settleFlow(tester);
       expect(completed, isTrue);
       expect(homeReturns, 1);
     });
 
     testWidgets(
-      'card and Skip avoid targets and each other near screen edges',
+      'the card clears its target and stays on screen near the edges',
       (tester) async {
         tester.view.physicalSize = const Size(402, 874);
         tester.view.devicePixelRatio = 1;
@@ -296,7 +327,7 @@ void main() {
         final harness = _PlacementHarness();
         await tester.pumpWidget(harness.build());
         await tester.pump(const Duration(milliseconds: 400));
-        await tester.tap(find.text(S.onboardingShowMeAround));
+        await tester.tap(find.text(S.tutorialStartTour));
         await _settleFlow(tester);
 
         for (var index = 0; index < harness.targetKeys.length; index++) {
@@ -308,18 +339,26 @@ void main() {
             find.byKey(const ValueKey('onboarding-skip-button')),
           );
           final screenRect = Offset.zero & tester.view.physicalSize;
+          // The cut-out is the target inflated by 8; the card sits 14 clear
+          // of that, so it must never touch the target's own bounds.
+          final cutout = targetRect.inflate(8);
 
-          expect(guideRect.overlaps(targetRect.inflate(12)), isFalse);
-          expect(skipRect.overlaps(targetRect.inflate(12)), isFalse);
-          expect(skipRect.overlaps(guideRect.inflate(12)), isFalse);
-          expect(guideRect.left, greaterThanOrEqualTo(screenRect.left));
+          expect(
+            guideRect.overlaps(cutout),
+            isFalse,
+            reason: 'card overlaps the spotlight at step $index',
+          );
+          // Skip tour is inside the footer now, not a free-floating pill.
+          expect(guideRect.contains(skipRect.topLeft), isTrue);
+          expect(guideRect.contains(skipRect.bottomRight), isTrue);
+
+          // "clamped 12 px from the screen edge"
+          expect(guideRect.left, greaterThanOrEqualTo(screenRect.left + 12));
           expect(guideRect.top, greaterThanOrEqualTo(screenRect.top));
-          expect(guideRect.right, lessThanOrEqualTo(screenRect.right));
+          expect(guideRect.right, lessThanOrEqualTo(screenRect.right - 12));
           expect(guideRect.bottom, lessThanOrEqualTo(screenRect.bottom));
-          expect(skipRect.left, greaterThanOrEqualTo(screenRect.left));
-          expect(skipRect.top, greaterThanOrEqualTo(screenRect.top));
-          expect(skipRect.right, lessThanOrEqualTo(screenRect.right));
-          expect(skipRect.bottom, lessThanOrEqualTo(screenRect.bottom));
+          // The card is a fixed 306 wide and hugs its content.
+          expect(guideRect.width, closeTo(306, 0.5));
 
           if (index < harness.targetKeys.length - 1) {
             await tester.tap(find.text(S.onboardingNext));
@@ -336,16 +375,16 @@ void main() {
       await tester.pumpWidget(harness.build());
       await tester.pump(const Duration(milliseconds: 400));
 
-      await tester.tap(find.text(S.onboardingShowMeAround));
+      await tester.tap(find.text(S.tutorialStartTour));
       await _settleFlow(tester);
 
       await localeService.setLanguage('en');
-      final english = S.onboardingStudentHome;
+      final english = S.tutorialHomeNavBody;
       expect(find.text(english), findsOneWidget);
 
       await localeService.setLanguage('tr');
       await tester.pump();
-      final turkish = S.onboardingStudentHome;
+      final turkish = S.tutorialHomeNavBody;
       expect(turkish, isNot(english));
       expect(find.text(turkish), findsOneWidget);
       expect(find.text(english), findsNothing);
@@ -491,23 +530,26 @@ class _TourHarness {
               Positioned.fill(
                 child: OnboardingFlow(
                   steps: [
+                    // Two steps on one page, so the second gets Back and the
+                    // primary pill reads "Got it".
                     OnboardingStep(
-                      guideLine: () => S.onboardingStudentHome,
-                      icon: Icons.home_rounded,
+                      pageLabel: () => S.tutorialPageHomeFeed,
+                      pageId: 'home',
+                      title: () => S.tutorialHomeNavTitle,
+                      body: () => S.tutorialHomeNavBody,
                       targetKey: firstTargetKey,
                       tabIndex: 0,
                     ),
                     OnboardingStep(
-                      guideLine: () => S.onboardingStudentProfile,
-                      icon: Icons.person_rounded,
+                      pageLabel: () => S.tutorialPageHomeFeed,
+                      pageId: 'home',
+                      title: () => S.tutorialProfileHeroTitle,
+                      body: () => S.tutorialProfileHeroBody,
                       targetKey: secondTargetKey,
                       tabIndex: 0,
                       tapThrough: false,
                     ),
                   ],
-                  userId: 'u1',
-                  firstName: 'Ayşe',
-                  showChecklist: true,
                   onStepChanged: (_) {},
                   onComplete: onComplete ?? () {},
                   onSkip: onSkip ?? () {},
@@ -561,15 +603,15 @@ class _PlacementHarness {
                   steps: [
                     for (var index = 0; index < targetKeys.length; index++)
                       OnboardingStep(
-                        guideLine: () => S.onboardingStudentHome,
-                        icon: Icons.auto_awesome_rounded,
+                        pageLabel: () => S.tutorialPageHomeFeed,
+                        // One page, so the pill reads Next until the last.
+                        pageId: 'page',
+                        title: () => S.tutorialHomeNavTitle,
+                        body: () => S.tutorialHomeNavBody,
                         targetKey: targetKeys[index],
                         tabIndex: 0,
                       ),
                   ],
-                  userId: 'u1',
-                  firstName: 'Ayşe',
-                  showChecklist: false,
                   onStepChanged: (_) {},
                   onComplete: () {},
                   onSkip: () {},

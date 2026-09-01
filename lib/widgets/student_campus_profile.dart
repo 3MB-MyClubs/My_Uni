@@ -6,6 +6,7 @@ import '../services/academic_year_options.dart';
 import '../services/app_colors.dart';
 import '../services/club_role_localization.dart';
 import '../services/theme_service.dart';
+import '../theme/specialized_semantic_palettes.dart';
 import 'club_avatar.dart';
 import 'user_avatar.dart';
 import 'app_pressable.dart';
@@ -34,8 +35,8 @@ abstract final class _StudentLight {
   static const card = Color(0x0A9E2045);
   static const text = Color(0xFF1A0610);
   static const textSoft = Color(0xD11A0610);
-  static const textMuted = Color(0x8C1A0610);
-  static const secondary = Color(0xFF9A7888);
+  static const textMuted = LightColors.mutedText;
+  static const secondary = LightColors.secondaryText;
   static const border = Color(0x14000000);
   static const borderStrong = Color(0x2E000000);
   static const accent = Color(0xFF9E2045);
@@ -45,6 +46,12 @@ abstract final class StudentCampusPalette {
   // Same in both themes — the ID card keeps its fixed brand colors.
   static const burgundy = Color(0xFF8C1D40);
   static const burgundyDeep = Color(0xFF6A1530);
+
+  static SpecializedSemanticPalette of(BuildContext context) =>
+      SpecializedSemanticPalettes.campusId(Theme.of(context));
+
+  /// Foreground paired with the fixed burgundy Campus ID surface.
+  static const onBurgundy = Colors.white;
 
   static Color get background =>
       themeService.isDark ? _StudentDark.background : _StudentLight.background;

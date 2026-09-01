@@ -189,7 +189,7 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
-  testWidgets('For You remains visible when the Home theme changes', (
+  testWidgets('For You uses the foreground colour when Home theme changes', (
     tester,
   ) async {
     await themeService.setDark(false, persistToAccount: false);
@@ -201,14 +201,14 @@ void main() {
       find.descendant(of: feedScope, matching: find.text(S.forYou)),
     );
 
-    expect(forYouLabel().style?.color, const Color(0xFF800020));
-    expect(forYouLabel().style?.color, ClubUpColors.accentText);
+    expect(forYouLabel().style?.color, const Color(0xFF18181B));
+    expect(forYouLabel().style?.color, ClubUpColors.text);
 
     await themeService.setDark(true, persistToAccount: false);
     await tester.pump();
 
-    expect(forYouLabel().style?.color, const Color(0xFFE8A1A6));
-    expect(forYouLabel().style?.color, ClubUpColors.accentText);
+    expect(forYouLabel().style?.color, const Color(0xFFFAFAFA));
+    expect(forYouLabel().style?.color, ClubUpColors.text);
     expect(tester.takeException(), isNull);
   });
 

@@ -273,7 +273,9 @@ void main() {
     await tester.tap(find.text('Taylor Questioner'));
     await tester.pumpAndSettle();
     expect(chatStore.canWriteThread(inbox.threadId, myId), isTrue);
-    expect(find.byKey(const ValueKey('chat-send-button')), findsOneWidget);
+    // An empty pill parks the camera in the trailing slot; the send button
+    // only takes over once a draft exists.
+    expect(find.byKey(const ValueKey('chat-camera-button')), findsOneWidget);
 
     await tester.enterText(
       find.byType(TextField),

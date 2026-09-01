@@ -9,6 +9,7 @@ import '../models/event.dart';
 import '../services/locale_service.dart';
 import '../services/photo_file_cache.dart';
 import '../services/theme_service.dart';
+import '../theme/specialized_semantic_palettes.dart';
 import '../services/user_state.dart';
 import 'app_network_image.dart';
 import 'clubup_design.dart';
@@ -46,6 +47,9 @@ import 'user_avatar.dart';
 /// sampling it turns up exactly one accent, the same burgundy as light.
 class ProfileColors {
   const ProfileColors._();
+
+  static SpecializedSemanticPalette of(BuildContext context) =>
+      SpecializedSemanticPalettes.profiles(Theme.of(context));
 
   static bool get _dark => themeService.isDark;
 
@@ -340,13 +344,13 @@ class ProfileBackHeader extends StatelessWidget {
 
 // ── hero ─────────────────────────────────────────────────────────────────────
 
-/// `avatar-wrapper` — 90px, clipped circle inside a 2px accent ring.
+/// `avatar-wrapper` — a compact 74px circular portrait.
 class ProfileAvatarRing extends StatelessWidget {
   const ProfileAvatarRing({
     super.key,
     required this.userId,
     required this.name,
-    this.size = 90,
+    this.size = 74,
     this.onTap,
   });
 
@@ -360,21 +364,12 @@ class ProfileAvatarRing extends StatelessWidget {
     return GestureDetector(
       onTap: onTap,
       behavior: HitTestBehavior.opaque,
-      child: Container(
-        width: size,
-        height: size,
-        padding: const EdgeInsets.all(2),
-        decoration: BoxDecoration(
-          shape: BoxShape.circle,
-          border: Border.all(color: ProfileColors.accent, width: 2),
-        ),
-        child: ClipOval(
-          child: UserAvatar(
-            userId: userId,
-            name: name,
-            size: size - 4,
-            fontSize: size / 2.9,
-          ),
+      child: ClipOval(
+        child: UserAvatar(
+          userId: userId,
+          name: name,
+          size: size,
+          fontSize: size / 2.9,
         ),
       ),
     );
@@ -405,7 +400,7 @@ class ProfileStat extends StatelessWidget {
             Text(
               value,
               style: figtree(
-                size: 16,
+                size: 13,
                 weight: FontWeight.w800,
                 color: ProfileColors.text,
               ),

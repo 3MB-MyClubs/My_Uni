@@ -13,6 +13,7 @@ import '../services/app_colors.dart';
 import '../services/app_strings.dart';
 import '../services/auth_service.dart';
 import '../services/club_admin_access.dart';
+import '../services/club_follow_helper.dart';
 import '../services/club_follow_service.dart';
 import '../services/club_role_localization.dart';
 import '../services/mock_clubup_profile.dart';
@@ -131,6 +132,14 @@ class _ClubProfileScreenState extends State<ClubProfileScreen>
     final admin = authService.currentAdmin;
     return admin != null && !isClubUpAdmin(admin);
   }
+
+  /// A student browsing a club. `club-profile` `337:8` / `337:98` is the only
+  /// club-profile design in the handoff — there is no student-POV frame — so
+  /// students render the same chrome, with every admin control off (Insights
+  /// needs [isCurrentAdminForClub], the gear needs `onSettings`, the post ⋯
+  /// and the event/board long presses need `isAdmin`) and Follow + Club Chat
+  /// in their place. The ClubUp platform moderator still gets the old screen.
+  bool get _isStudentViewer => authService.isStudentSession && !_isClubSession;
 
   @override
   void dispose() {
@@ -263,27 +272,6 @@ class _ClubProfileScreenState extends State<ClubProfileScreen>
       );
   }
 
-  String _handleFor(Club club) {
-    final shortName = club.shortName?.trim();
-    if (shortName != null && shortName.isNotEmpty) {
-      return shortName
-          .replaceFirst(RegExp(r'^@+'), '')
-          .replaceAll(RegExp(r'\s+'), '')
-          .toLowerCase();
-    }
-
-    final name = club.name;
-    final words = name.split(RegExp(r'[\s\-]+'));
-    final initials = words
-        .where((w) => w.isNotEmpty && RegExp(r'[A-Za-z]').hasMatch(w[0]))
-        .map((w) => w[0])
-        .join()
-        .toLowerCase();
-    return initials.isEmpty
-        ? name.toLowerCase().replaceAll(RegExp(r'\s+'), '')
-        : initials;
-  }
-
   String _monthAbbr(int m) {
     return AppLocalizations.of(context)!.monthAbbr(m.toString());
   }
@@ -306,6 +294,87 @@ class _ClubProfileScreenState extends State<ClubProfileScreen>
     ),
   );
 
+  /// Follow / Following + Club Chat, the pair the legacy student header
+  /// carried. [ClubFollowButton] is shared with Explore, the feed and the
+  /// event detail, so this is a local button on [ClubProfileColors] driving the
+  /// same [handleFollowTap]. The card sits inside a `userState`
+  /// [ListenableBuilder], so the label flips without extra plumbing.
+  Widget _buildStudentActions() {
+    final l10n = AppLocalizations.of(context)!;
+    final isFollowing = userState.isFollowing(widget.club.id);
+    return Row(
+      children: [
+        Expanded(
+          child: ClubProfileActionButton(
+            key: const ValueKey('club-profile-follow'),
+            label: isFollowing ? l10n.following : l10n.follow,
+            filled: !isFollowing,
+            onTap: () => handleFollowTap(context, widget.club.id, () {
+              if (mounted) setState(() {});
+            }),
+          ),
+        ),
+        const SizedBox(width: 10),
+        Expanded(
+          child: ClubProfileActionButton(
+            key: const ValueKey('club-profile-club-chat'),
+            label: S.clubChat,
+            filled: false,
+            icon: Icons.forum_outlined,
+            onTap: _openCommunityChat,
+          ),
+        ),
+      ],
+    );
+  }
+
+  /// Long press on the identity card. Same presentation as
+  /// [showClubBoardMemberActions] so the area has one action-sheet shape.
+  Future<void> _showStudentClubActions() async {
+    final confirmed = await showModalBottomSheet<bool>(
+      context: context,
+      backgroundColor: ClubProfileColors.card,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (sheetContext) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const SizedBox(height: 8),
+            Container(
+              width: 40,
+              height: 4,
+              decoration: BoxDecoration(
+                color: ClubProfileColors.border,
+                borderRadius: BorderRadius.circular(999),
+              ),
+            ),
+            const SizedBox(height: 8),
+            ListTile(
+              key: const ValueKey('club-profile-report'),
+              leading: const Icon(
+                Icons.flag_outlined,
+                color: ClubProfileColors.danger,
+              ),
+              title: Text(
+                S.blockAndReportClub,
+                style: figtree(
+                  size: 14,
+                  weight: FontWeight.w600,
+                  color: ClubProfileColors.danger,
+                ),
+              ),
+              onTap: () => Navigator.pop(sheetContext, true),
+            ),
+            const SizedBox(height: 8),
+          ],
+        ),
+      ),
+    );
+    if (confirmed == true && mounted) await _blockClub();
+  }
+
   /// `club-profile` / `events` / `board` — Figma `337:8`, `343:12`,
   /// `332:1963`. One scroll: the header bar pins, the identity card, stat
   /// cells and segmented tabs scroll away above the selected stream.
@@ -316,7 +385,6 @@ class _ClubProfileScreenState extends State<ClubProfileScreen>
     required List<dynamic> clubPosts,
     required List<Event> clubEvents,
     required int memberCount,
-    required String handle,
   }) {
     final l10n = AppLocalizations.of(context)!;
     final isOwner = isCurrentAdminForClub(widget.club);
@@ -377,20 +445,35 @@ class _ClubProfileScreenState extends State<ClubProfileScreen>
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
-                    ClubProfileIdentityCard(
-                      avatar: ClubAvatar(
-                        clubId: widget.club.id,
-                        clubName: widget.club.name,
-                        color: widget.color,
-                        imageUrl: widget.club.logoUrl,
-                        size: 60,
-                        fontSize: 24,
-                        borderRadius: 999,
+                    GestureDetector(
+                      // The frame draws no overflow, so Report & Block — a
+                      // student's only moderation route on this screen — hangs
+                      // off a long press, as this area's board rows and event
+                      // cards already do for controls the frames omit.
+                      onLongPress: _isStudentViewer
+                          ? _showStudentClubActions
+                          : null,
+                      child: ClubProfileIdentityCard(
+                        avatar: ClubAvatar(
+                          clubId: widget.club.id,
+                          clubName: widget.club.name,
+                          color: widget.color,
+                          imageUrl: widget.club.logoUrl,
+                          size: 60,
+                          fontSize: 24,
+                          borderRadius: 999,
+                        ),
+                        name: widget.club.name,
+                        // Recalculate inside the UserState listener so an
+                        // initials edit made in Settings updates this visible
+                        // @handle without reopening the profile screen.
+                        handle: clubHandle(widget.club),
+                        description: widget.club.description,
+                        categories: _categoryTagsFor(widget.club),
+                        actions: _isStudentViewer
+                            ? _buildStudentActions()
+                            : null,
                       ),
-                      name: widget.club.name,
-                      handle: handle,
-                      description: widget.club.description,
-                      categories: _categoryTagsFor(widget.club),
                     ),
                     const SizedBox(height: 14),
                     ClubProfileStatsRow(
@@ -482,13 +565,12 @@ class _ClubProfileScreenState extends State<ClubProfileScreen>
     final subText = AppColors.secondaryText;
     final panelText = AppColors.text;
     final bodyText = _clubPageBodyText(context);
-    final handle = _handleFor(widget.club);
-    if (_isClubSession) {
+    final handle = clubHandle(widget.club);
+    if (_isClubSession || _isStudentViewer) {
       return _buildDesignProfile(
         clubPosts: clubPosts,
         clubEvents: clubEvents,
         memberCount: memberCount,
-        handle: handle,
       );
     }
     final showFollowAction = authService.isStudentSession && !_isThisClubAdmin;
@@ -1937,7 +2019,17 @@ class _EventCardV2 extends StatelessWidget {
           : isPast
           ? loc.past
           : null,
-      actionLabel: isPast ? loc.recapLabel : loc.viewLabel,
+      // A club cannot RSVP its own event, so its label reads View / Recap.
+      // A student's reads what the frame drew — the same three-way label the
+      // legacy card used. The tap opens the event either way; the RSVP itself
+      // lives on the detail screen.
+      actionLabel: authService.isStudentSession
+          ? (isLive
+                ? loc.join
+                : isPast
+                ? loc.recapLabel
+                : loc.rsvp)
+          : (isPast ? loc.recapLabel : loc.viewLabel),
       onAction: () => _openDetail(context),
       onTap: () => _openDetail(context),
       onLongPress: isAdmin ? () => _confirmDelete(context) : null,

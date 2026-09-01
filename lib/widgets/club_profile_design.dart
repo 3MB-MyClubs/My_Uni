@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../l10n/app_localizations.dart';
 import '../services/theme_service.dart';
+import '../theme/specialized_semantic_palettes.dart';
 import 'clubup_design.dart';
 
 export 'clubup_design.dart' show figtree;
@@ -32,6 +33,9 @@ export 'clubup_design.dart' show figtree;
 class ClubProfileColors {
   const ClubProfileColors._();
 
+  static SpecializedSemanticPalette of(BuildContext context) =>
+      SpecializedSemanticPalettes.clubProfiles(Theme.of(context));
+
   static bool get _dark => themeService.isDark;
 
   /// Page background — `#FAF9F6` / `#0A0A0A`.
@@ -59,7 +63,7 @@ class ClubProfileColors {
   /// in dark, exactly as the frames draw it.
   static const Color accent = Color(0xFF800020);
 
-  /// Accent *text*: the handle chip, the category chips, "View all" and
+  /// Accent *text*: the category chips, "View all" and
   /// "Most Popular" all lift to `#FA526B` in dark — the same bright rose the
   /// EVENT CREATION section uses, not the `#E8A1A6` of CHATS and settings.
   static Color get accentText => _dark ? const Color(0xFFFA526B) : accent;
@@ -217,14 +221,21 @@ class ClubProfileCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final colors = ClubProfileColors.of(context);
     final card = Container(
       padding: padding,
       decoration: BoxDecoration(
-        color: ClubProfileColors.card,
+        color: colors.surface,
         borderRadius: BorderRadius.circular(radius),
         border: Border.all(color: ClubProfileColors.border),
       ),
-      child: child,
+      child: DefaultTextStyle.merge(
+        style: TextStyle(color: colors.onSurface),
+        child: IconTheme.merge(
+          data: IconThemeData(color: colors.onSurface),
+          child: child,
+        ),
+      ),
     );
     if (onTap == null && onLongPress == null) return card;
     return GestureDetector(
@@ -328,7 +339,7 @@ class ClubVerifiedName extends StatelessWidget {
   }
 }
 
-/// `club-identity-card` `337:30` — 64pt avatar, name, `@handle` chip, the
+/// `club-identity-card` `337:30` — 64pt avatar, name, plain `@handle`, the
 /// description and the category chips.
 class ClubProfileIdentityCard extends StatelessWidget {
   const ClubProfileIdentityCard({
@@ -338,6 +349,7 @@ class ClubProfileIdentityCard extends StatelessWidget {
     required this.handle,
     required this.description,
     required this.categories,
+    this.actions,
   });
 
   /// The club's real avatar widget — this area never owns image resolution.
@@ -346,6 +358,11 @@ class ClubProfileIdentityCard extends StatelessWidget {
   final String handle;
   final String description;
   final List<String> categories;
+
+  /// Viewer actions under the chips. Null on the club's own profile — the
+  /// frame is an admin looking at their own club, so it draws none. A student
+  /// browsing the club gets Follow + Club Chat here.
+  final Widget? actions;
 
   @override
   Widget build(BuildContext context) {
@@ -387,7 +404,20 @@ class ClubProfileIdentityCard extends StatelessWidget {
                       ),
                     ),
                     const SizedBox(height: 6),
-                    ClubProfileChip(label: '@$handle'),
+                    Text(
+                      '@$handle',
+                      key: const ValueKey('club-profile-handle'),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: figtree(
+                        size: 14,
+                        weight: FontWeight.w600,
+                        color: themeService.isDark
+                            ? Colors.white
+                            : ClubProfileColors.text,
+                        height: 1.2,
+                      ),
+                    ),
                   ],
                 ),
               ),
@@ -416,7 +446,67 @@ class ClubProfileIdentityCard extends StatelessWidget {
               ],
             ),
           ],
+          if (actions != null) ...[const SizedBox(height: 12), actions!],
         ],
+      ),
+    );
+  }
+}
+
+/// A viewer action under the identity card's chips — geometry borrowed from the
+/// student profile's Follow/Message pair (46pt tall, radius 14, 15/w700) so the
+/// two peer-view screens read the same, painted in [ClubProfileColors].
+class ClubProfileActionButton extends StatelessWidget {
+  const ClubProfileActionButton({
+    super.key,
+    required this.label,
+    required this.filled,
+    required this.onTap,
+    this.icon,
+  });
+
+  final String label;
+  final bool filled;
+  final VoidCallback? onTap;
+  final IconData? icon;
+
+  @override
+  Widget build(BuildContext context) {
+    final foreground = filled ? Colors.white : ClubProfileColors.text;
+    return GestureDetector(
+      onTap: onTap,
+      behavior: HitTestBehavior.opaque,
+      child: Container(
+        height: 46,
+        alignment: Alignment.center,
+        decoration: BoxDecoration(
+          color: filled ? ClubProfileColors.accent : Colors.transparent,
+          borderRadius: const BorderRadius.all(Radius.circular(14)),
+          border: filled ? null : Border.all(color: ClubProfileColors.border),
+        ),
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            if (icon != null) ...[
+              Icon(icon, size: 18, color: foreground),
+              const SizedBox(width: 6),
+            ],
+            // "Takip Ediliyor" is half again as long as "Following", and the
+            // pair splits the card in two, so the label has to give.
+            Flexible(
+              child: Text(
+                label,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: figtree(
+                  size: 15,
+                  weight: FontWeight.w700,
+                  color: foreground,
+                ),
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }

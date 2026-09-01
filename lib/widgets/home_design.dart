@@ -218,7 +218,7 @@ class HomeFeedHeader extends StatelessWidget {
               style: figtree(
                 size: 18,
                 weight: FontWeight.w800,
-                color: ClubUpColors.accentText,
+                color: ClubUpColors.text,
                 letterSpacing: -0.4,
               ),
             ),
@@ -240,9 +240,7 @@ class HomeFeedHeader extends StatelessWidget {
             style: figtree(
               size: 14,
               weight: feedTab == value ? FontWeight.w700 : FontWeight.w500,
-              color: feedTab == value
-                  ? ClubUpColors.accentText
-                  : ClubUpColors.text,
+              color: ClubUpColors.text,
             ),
           ),
           if (feedTab == value) ...[

@@ -136,7 +136,7 @@ class AppLocalizationsTr extends AppLocalizations {
   String get followClubs => 'Gönderilerini görmek için\nkulüp takip et';
 
   @override
-  String get endOfFeed => 'Bugünlük bu kadar 😀';
+  String get endOfFeed => 'Updates Are Coming!';
 
   @override
   String get exploreClubs => 'Tüm Kulüpleri Keşfet';

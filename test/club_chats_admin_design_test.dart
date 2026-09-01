@@ -449,17 +449,19 @@ void main() {
     expect(find.byKey(const ValueKey('club-inbox-lane-badge')), findsOneWidget);
     expect(find.text(S.chatsDmWithAdmins), findsOneWidget);
     expect(find.text('Sarah Chen'), findsWidgets);
-    expect(find.byKey(const ValueKey('chat-send-button')), findsOneWidget);
+    // The empty composer parks the camera in the trailing slot.
+    expect(find.byKey(const ValueKey('chat-camera-button')), findsOneWidget);
     expect(find.byIcon(Icons.attach_file_rounded), findsOneWidget);
 
     await tester.tap(find.byKey(const ValueKey('chat-attach-button')));
     await tester.pumpAndSettle();
 
+    // Library media only — a live capture is the composer camera's job.
     expect(find.byKey(const ValueKey('chat-attach-sheet')), findsOneWidget);
     expect(find.byKey(const ValueKey('chat-attach-photo')), findsOneWidget);
     expect(find.text(S.attachMedia), findsOneWidget);
-    expect(find.byKey(const ValueKey('chat-attach-camera')), findsOneWidget);
-    expect(find.text(S.takePhoto), findsOneWidget);
+    expect(find.byKey(const ValueKey('chat-attach-camera')), findsNothing);
+    expect(find.text(S.takePhoto), findsNothing);
     expect(tester.takeException(), isNull);
   });
 

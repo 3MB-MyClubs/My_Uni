@@ -281,19 +281,20 @@ class ClubSettingsIdentityCard extends StatelessWidget {
 }
 
 /// `detail-row` `350:46` — a 56pt row on the card's inner fill: a small muted
-/// glyph, the field name, and a chevron. The value itself is not drawn; the
-/// frame keeps these as pure navigation.
+/// glyph, the field name, an optional compact value, and a chevron.
 class ClubSettingsDetailRow extends StatelessWidget {
   const ClubSettingsDetailRow({
     super.key,
     required this.icon,
     required this.label,
     required this.onTap,
+    this.value,
   });
 
   final IconData icon;
   final String label;
   final VoidCallback onTap;
+  final String? value;
 
   @override
   Widget build(BuildContext context) {
@@ -323,6 +324,22 @@ class ClubSettingsDetailRow extends StatelessWidget {
                 ),
               ),
             ),
+            if (value != null) ...[
+              const SizedBox(width: 8),
+              Flexible(
+                child: Text(
+                  value!,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: figtree(
+                    size: 13.5,
+                    weight: FontWeight.w600,
+                    color: ClubProfileColors.text,
+                  ),
+                ),
+              ),
+              const SizedBox(width: 4),
+            ],
             Icon(
               Icons.chevron_right_rounded,
               size: 16,
