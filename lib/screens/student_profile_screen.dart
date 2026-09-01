@@ -9,6 +9,7 @@ import '../services/club_role_localization.dart';
 import '../services/mock_data.dart';
 import '../services/rsvp_store.dart';
 import '../services/student_activity_service.dart';
+import '../onboarding/onboarding_anchors.dart';
 import '../onboarding/widgets/starter_checklist_card.dart';
 import '../widgets/clubup_design.dart';
 import '../widgets/profile_design.dart';
@@ -99,10 +100,16 @@ class StudentProfileScreen extends StatelessWidget {
   final bool clubsLoading;
   final StudentProfileData data;
 
+  /// True only for the instance the bottom nav hosts, which is the one the
+  /// in-app tutorial spotlights. Keeps `tut-profile-*`'s [GlobalKey]s from
+  /// being mounted twice when this screen is pushed as a route as well.
+  final bool isTutorialHost;
+
   const StudentProfileScreen({
     super.key,
     required this.onSettings,
     required this.data,
+    this.isTutorialHost = false,
     this.onShare,
     this.onFindClubs,
     this.onSeeAllEvents,
@@ -153,37 +160,45 @@ class StudentProfileScreen extends StatelessWidget {
                   bottomInset + kProfileNavClearance,
                 ),
                 children: [
-                  ProfileHero(
-                    userId: data.userId,
-                    name: data.name,
-                    handle: '',
-                    bio: data.bio,
-                    nameBadge: boardMemberships.isEmpty
-                        ? null
-                        : ProfileRolePill(
-                            label: l10n.boardMemberLabel,
-                            semanticsLabel: l10n.boardMemberships,
-                            onTap: () => _showBoardMembershipsSheet(context),
-                          ),
-                    stats: [
-                      ProfileStat(
-                        value: '${data.clubs}',
-                        label: l10n.clubs,
-                        onTap:
-                            onClubsTap ??
-                            () => _openFollowedClubsScreen(context),
-                      ),
-                      ProfileStat(
-                        value: '${data.following}',
-                        label: l10n.following,
-                        onTap: onFollowingTap,
-                      ),
-                      ProfileStat(
-                        value: '${data.followers}',
-                        label: l10n.followers,
-                        onTap: onFollowersTap,
-                      ),
-                    ],
+                  KeyedSubtree(
+                    // `tut-profile-hero` 390:3
+                    key: isTutorialHost
+                        ? onboardingAnchors.keyFor(
+                            OnboardingAnchors.profileHero,
+                          )
+                        : null,
+                    child: ProfileHero(
+                      userId: data.userId,
+                      name: data.name,
+                      handle: '',
+                      bio: data.bio,
+                      nameBadge: boardMemberships.isEmpty
+                          ? null
+                          : ProfileRolePill(
+                              label: l10n.boardMemberLabel,
+                              semanticsLabel: l10n.boardMemberships,
+                              onTap: () => _showBoardMembershipsSheet(context),
+                            ),
+                      stats: [
+                        ProfileStat(
+                          value: '${data.clubs}',
+                          label: l10n.clubs,
+                          onTap:
+                              onClubsTap ??
+                              () => _openFollowedClubsScreen(context),
+                        ),
+                        ProfileStat(
+                          value: '${data.following}',
+                          label: l10n.following,
+                          onTap: onFollowingTap,
+                        ),
+                        ProfileStat(
+                          value: '${data.followers}',
+                          label: l10n.followers,
+                          onTap: onFollowersTap,
+                        ),
+                      ],
+                    ),
                   ),
                   const SizedBox(height: 4),
                   // Not in the frame, and invisible in every normal session:
@@ -195,7 +210,15 @@ class StudentProfileScreen extends StatelessWidget {
                   // shared onboarding widget.
                   const StarterChecklistCard(),
                   const SizedBox(height: 28),
-                  _buildClubsSection(context),
+                  KeyedSubtree(
+                    // `tut-profile-clubs` 390:248
+                    key: isTutorialHost
+                        ? onboardingAnchors.keyFor(
+                            OnboardingAnchors.profileClubs,
+                          )
+                        : null,
+                    child: _buildClubsSection(context),
+                  ),
                   const SizedBox(height: 28),
                   _StudentActivityHydrator(
                     userId: data.userId,

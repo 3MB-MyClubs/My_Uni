@@ -77,6 +77,30 @@ class SupabaseClubService {
     lazyContentLoader.invalidateContent();
   }
 
+  Future<void> updateClubInitials({
+    required Club club,
+    required String initials,
+  }) async {
+    final client = _client;
+    final value = normalizeClubInitials(initials);
+    if (client == null ||
+        !_looksLikeUuid(club.id) ||
+        !isValidClubInitials(value)) {
+      return;
+    }
+
+    final saved = await client
+        .from('clubs')
+        .update({'short_name': value})
+        .eq('id', club.id)
+        .select('short_name')
+        .maybeSingle();
+    if (saved == null || saved['short_name']?.toString() != value) {
+      throw StateError('Club initials update did not affect the owned club.');
+    }
+    lazyContentLoader.invalidateContent();
+  }
+
   Future<void> updateClubDescription({
     required Club club,
     required String description,

@@ -322,7 +322,16 @@ class _ThisWeekScreenState extends State<ThisWeekScreen> {
                   SliverToBoxAdapter(
                     child: Padding(
                       padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
-                      child: _searchBar(l10n),
+                      child: KeyedSubtree(
+                        // `tut-events-filters` — only on the nav-hosted
+                        // instance, so the key is never mounted twice.
+                        key: widget.isTutorialHost
+                            ? onboardingAnchors.keyFor(
+                                OnboardingAnchors.eventsSearch,
+                              )
+                            : null,
+                        child: _searchBar(l10n),
+                      ),
                     ),
                   ),
                   if (categories.isNotEmpty)

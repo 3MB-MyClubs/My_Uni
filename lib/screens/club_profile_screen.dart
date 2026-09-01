@@ -272,27 +272,6 @@ class _ClubProfileScreenState extends State<ClubProfileScreen>
       );
   }
 
-  String _handleFor(Club club) {
-    final shortName = club.shortName?.trim();
-    if (shortName != null && shortName.isNotEmpty) {
-      return shortName
-          .replaceFirst(RegExp(r'^@+'), '')
-          .replaceAll(RegExp(r'\s+'), '')
-          .toLowerCase();
-    }
-
-    final name = club.name;
-    final words = name.split(RegExp(r'[\s\-]+'));
-    final initials = words
-        .where((w) => w.isNotEmpty && RegExp(r'[A-Za-z]').hasMatch(w[0]))
-        .map((w) => w[0])
-        .join()
-        .toLowerCase();
-    return initials.isEmpty
-        ? name.toLowerCase().replaceAll(RegExp(r'\s+'), '')
-        : initials;
-  }
-
   String _monthAbbr(int m) {
     return AppLocalizations.of(context)!.monthAbbr(m.toString());
   }
@@ -406,7 +385,6 @@ class _ClubProfileScreenState extends State<ClubProfileScreen>
     required List<dynamic> clubPosts,
     required List<Event> clubEvents,
     required int memberCount,
-    required String handle,
   }) {
     final l10n = AppLocalizations.of(context)!;
     final isOwner = isCurrentAdminForClub(widget.club);
@@ -486,7 +464,10 @@ class _ClubProfileScreenState extends State<ClubProfileScreen>
                           borderRadius: 999,
                         ),
                         name: widget.club.name,
-                        handle: handle,
+                        // Recalculate inside the UserState listener so an
+                        // initials edit made in Settings updates this visible
+                        // @handle without reopening the profile screen.
+                        handle: clubHandle(widget.club),
                         description: widget.club.description,
                         categories: _categoryTagsFor(widget.club),
                         actions: _isStudentViewer
@@ -584,13 +565,12 @@ class _ClubProfileScreenState extends State<ClubProfileScreen>
     final subText = AppColors.secondaryText;
     final panelText = AppColors.text;
     final bodyText = _clubPageBodyText(context);
-    final handle = _handleFor(widget.club);
+    final handle = clubHandle(widget.club);
     if (_isClubSession || _isStudentViewer) {
       return _buildDesignProfile(
         clubPosts: clubPosts,
         clubEvents: clubEvents,
         memberCount: memberCount,
-        handle: handle,
       );
     }
     final showFollowAction = authService.isStudentSession && !_isThisClubAdmin;

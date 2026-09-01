@@ -15,6 +15,7 @@ import '../services/account_switcher_service.dart';
 import '../services/admin_moderation_service.dart';
 import '../services/chat_group_prefs.dart';
 import '../services/app_colors.dart';
+import '../onboarding/tutorial_page_tip.dart';
 import '../services/app_strings.dart';
 import '../services/auth_service.dart';
 import '../services/calendar_rsvp_helper.dart';
@@ -49,6 +50,7 @@ import '../widgets/club_stream_items.dart';
 import '../widgets/user_avatar.dart';
 import '../widgets/shared_post_message_card.dart';
 import '../widgets/sent_message_entrance.dart';
+import '../widgets/swipe_to_reply.dart';
 import 'chat_thread_screen.dart';
 import 'club_profile_screen.dart';
 import 'event_detail_screen.dart';
@@ -90,6 +92,7 @@ class ClubCommunityScreen extends StatefulWidget {
 class _ClubCommunityScreenState extends State<ClubCommunityScreen>
     with WidgetsBindingObserver {
   final _inputController = TextEditingController();
+  final _inputFocusNode = FocusNode();
 
   /// The Board lane's inline composer — `admin-chats-list` 331:136. Kept
   /// apart from [_inputController] so a half-written announcement and a
@@ -135,7 +138,9 @@ class _ClubCommunityScreenState extends State<ClubCommunityScreen>
       : ClubCommunityTab.chat;
 
   bool _showJumpButton = false;
-  String? _animatingSentMessageId;
+  ChatTypingSession? _typingSession;
+  Set<String> _lastTypingUserIds = const {};
+  final Set<String> _animatingSentMessageIds = {};
   ChatMessage? _replyingTo;
 
   static const List<Color> _clubColors = [
@@ -211,6 +216,8 @@ class _ClubCommunityScreenState extends State<ClubCommunityScreen>
     localeService.addListener(_onEnvChanged);
     clubChatPrefs.addListener(_onEnvChanged);
     chatStore.addListener(_onStoreChanged);
+    _inputController.addListener(_onTypingDraftChanged);
+    _inputFocusNode.addListener(_onTypingFocusChanged);
     _scrollController.addListener(_onScroll);
     // Post-frame: the community controller and the read receipt both notify
     // listeners, which is illegal while this route is still mounting.
@@ -223,6 +230,16 @@ class _ClubCommunityScreenState extends State<ClubCommunityScreen>
         unawaited(_loadMemberDirectory());
       }
       if (!canAccess) return;
+      _typingSession = chatStore.openTypingSession(
+        threadId: widget.threadId,
+        actorId: _myId,
+      );
+      _typingSession
+        ?..updateDraft(_inputController.text)
+        ..updateFocus(_inputFocusNode.hasFocus);
+      _lastTypingUserIds = chatStore
+          .typingUserIds(widget.threadId, excluding: _myId)
+          .toSet();
       _captureUnreadAnchor();
       _hydrateVisibleParticipants();
       _markVisibleMessagesSeen();
@@ -237,11 +254,14 @@ class _ClubCommunityScreenState extends State<ClubCommunityScreen>
     localeService.removeListener(_onEnvChanged);
     clubChatPrefs.removeListener(_onEnvChanged);
     chatStore.removeListener(_onStoreChanged);
+    _inputController.removeListener(_onTypingDraftChanged);
+    _inputFocusNode.removeListener(_onTypingFocusChanged);
     _communityInfo?.removeListener(_onCommunityInfoChanged);
-    chatStore.clearTyping(widget.threadId, _myId);
+    _typingSession?.dispose();
     _communityInfo?.dispose();
     _memberDirectoryRevision.dispose();
     _inputController.dispose();
+    _inputFocusNode.dispose();
     _noticeController.dispose();
     _directSearchController.dispose();
     _pinnedFlashTimer?.cancel();
@@ -260,7 +280,17 @@ class _ClubCommunityScreenState extends State<ClubCommunityScreen>
         _hydrateVisibleParticipants();
         _markVisibleMessagesSeen();
       });
+    } else {
+      _typingSession?.stop();
     }
+  }
+
+  void _onTypingDraftChanged() {
+    _typingSession?.updateDraft(_inputController.text);
+  }
+
+  void _onTypingFocusChanged() {
+    _typingSession?.updateFocus(_inputFocusNode.hasFocus);
   }
 
   void _onEnvChanged() {
@@ -273,6 +303,19 @@ class _ClubCommunityScreenState extends State<ClubCommunityScreen>
 
   void _onStoreChanged() {
     if (!mounted) return;
+    if (!chatStore.canAccessThread(widget.threadId, _myId)) {
+      _typingSession?.dispose();
+      _typingSession = null;
+      chatStore.clearTypingThread(widget.threadId);
+    }
+    final typingNow = chatStore
+        .typingUserIds(widget.threadId, excluding: _myId)
+        .toSet();
+    final typingAppeared = typingNow.difference(_lastTypingUserIds).isNotEmpty;
+    _lastTypingUserIds = typingNow;
+    if (typingAppeared && _tab == ClubCommunityTab.chat) {
+      _revealTypingIfNearLatest();
+    }
     _hydrateVisibleParticipants();
     _markVisibleMessagesSeen();
     final rateLimitMessage = chatStore.takeRateLimitFailureMessage();
@@ -296,6 +339,24 @@ class _ClubCommunityScreenState extends State<ClubCommunityScreen>
           SnackBar(content: Text(S.photoSavedLocallyUploadFailed)),
         );
     }
+  }
+
+  void _revealTypingIfNearLatest() {
+    final wasNearLatest =
+        !_scrollController.hasClients ||
+        _scrollController.position.pixels <= 80;
+    if (!wasNearLatest) return;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!_scrollController.hasClients ||
+          _scrollController.position.pixels > 80) {
+        return;
+      }
+      _scrollController.animateTo(
+        0,
+        duration: const Duration(milliseconds: 180),
+        curve: Curves.easeOutCubic,
+      );
+    });
   }
 
   void _onScroll() {
@@ -335,6 +396,7 @@ class _ClubCommunityScreenState extends State<ClubCommunityScreen>
 
   void _switchTab(ClubCommunityTab tab) {
     if (_tab == tab) return;
+    if (tab != ClubCommunityTab.chat) _typingSession?.stop();
     if (tab == ClubCommunityTab.solo) {
       // `admin-dm-list` 335:6 puts a chevron beside "Messages"; the lane it
       // goes back to is the one the reader left.
@@ -415,10 +477,12 @@ class _ClubCommunityScreenState extends State<ClubCommunityScreen>
   void _hydrateVisibleParticipants() {
     if (!chatStore.canAccessThread(widget.threadId, _myId)) return;
     final participantIds =
-        chatStore
-            .messagesFor(widget.threadId, viewerId: _myId)
-            .map((message) => message.senderId)
-            .toSet()
+        <String>{
+            ...chatStore
+                .messagesFor(widget.threadId, viewerId: _myId)
+                .map((message) => message.senderId),
+            ...chatStore.typingUserIds(widget.threadId, excluding: _myId),
+          }
           ..remove(_myId)
           ..removeAll(_requestedParticipantProfileIds);
     if (participantIds.isEmpty) return;
@@ -626,6 +690,7 @@ class _ClubCommunityScreenState extends State<ClubCommunityScreen>
   // ── Sending ─────────────────────────────────────────────────────────────────
 
   void _send(String text, List<String> mentions) {
+    _typingSession?.stop();
     final sent = chatStore.sendMessage(
       threadId: widget.threadId,
       senderId: _myId,
@@ -634,18 +699,19 @@ class _ClubCommunityScreenState extends State<ClubCommunityScreen>
       replyToMessageId: _replyingTo?.id,
     );
     if (sent == null) return;
+    _inputController.clear();
     if (mounted) {
       setState(() {
         _replyingTo = null;
-        _animatingSentMessageId = sent.id;
+        _animatingSentMessageIds.add(sent.id);
       });
     }
     _scrollToLatest();
   }
 
   void _finishSentMessageEntrance(String messageId) {
-    if (!mounted || _animatingSentMessageId != messageId) return;
-    setState(() => _animatingSentMessageId = null);
+    if (!mounted || !_animatingSentMessageIds.contains(messageId)) return;
+    setState(() => _animatingSentMessageIds.remove(messageId));
   }
 
   Future<String?> _ensureClubInboxThread() async {
@@ -924,7 +990,9 @@ class _ClubCommunityScreenState extends State<ClubCommunityScreen>
     if (mounted) {
       setState(() {
         _replyingTo = null;
-        _animatingSentMessageId = sentMessages.last.id;
+        _animatingSentMessageIds.addAll(
+          sentMessages.map((message) => message.id),
+        );
       });
     }
     _scrollToLatest();
@@ -1972,34 +2040,64 @@ class _ClubCommunityScreenState extends State<ClubCommunityScreen>
         ],
       );
     }
-    return Column(
+    return Stack(
       children: [
-        ClubRoomHeader(
-          avatar: ClubAvatar(
-            clubId: club.id,
-            clubName: club.name,
-            color: _accent,
-            imageUrl: club.logoUrl,
-            size: 38,
-            fontSize: 15,
-            shape: 'circle',
+        Positioned.fill(
+          child: Column(
+            children: [
+              ClubRoomHeader(
+                avatar: ClubAvatar(
+                  clubId: club.id,
+                  clubName: club.name,
+                  color: _accent,
+                  imageUrl: club.logoUrl,
+                  size: 38,
+                  fontSize: 15,
+                  shape: 'circle',
+                ),
+                clubName: club.name,
+                memberLine: S.clubMembersAndUnread(memberCount, 0),
+                lane: _designLane,
+                laneAnchorKey: _laneAnchorKey,
+                onLaneTap: () => unawaited(_openLaneMenu()),
+                onBack: widget.embedded
+                    ? null
+                    : () => Navigator.maybePop(context),
+                onOpenClub: _openDesignMembers,
+              ),
+              Expanded(
+                child: switch (_tab) {
+                  ClubCommunityTab.board => _buildDesignBoardLane(),
+                  ClubCommunityTab.chat => _buildDesignChatLane(),
+                  ClubCommunityTab.solo => _buildDesignDirectLane(),
+                },
+              ),
+            ],
           ),
-          clubName: club.name,
-          memberLine: S.clubMembersAndUnread(memberCount, 0),
-          lane: _designLane,
-          laneAnchorKey: _laneAnchorKey,
-          onLaneTap: () => unawaited(_openLaneMenu()),
-          onBack: widget.embedded ? null : () => Navigator.maybePop(context),
-          onOpenClub: _openDesignMembers,
         ),
-        Expanded(
-          child: switch (_tab) {
-            ClubCommunityTab.board => _buildDesignBoardLane(),
-            ClubCommunityTab.chat => _buildDesignChatLane(),
-            ClubCommunityTab.solo => _buildDesignDirectLane(),
-          },
-        ),
+        // `tut-announcements` 389:2162 — a page-level tip rather than a tour
+        // stop, so it fires the first time a student opens the Board lane
+        // whether or not they took the tour.
+        Positioned.fill(child: _buildAnnouncementsTip()),
       ],
+    );
+  }
+
+  /// The Board lane's one-off coach mark, spotlighting the first notice.
+  Widget _buildAnnouncementsTip() {
+    final notices = chatStore.noticesIn(widget.threadId);
+    final active =
+        _tab == ClubCommunityTab.board &&
+        authService.isStudentSession &&
+        !_isClubSideSession &&
+        notices.isNotEmpty;
+    return TutorialPageTipOverlay(
+      tipId: TutorialPageTips.announcements,
+      anchorKey: active ? _designNoticeAnchors[notices.first.id] : null,
+      pageLabel: () => S.tutorialPageAnnouncements,
+      title: () => S.tutorialAnnouncementsTitle,
+      body: () => S.tutorialAnnouncementsBody,
+      active: active,
     );
   }
 
@@ -2208,6 +2306,21 @@ class _ClubCommunityScreenState extends State<ClubCommunityScreen>
 
   // ── Chats lane ─────────────────────────────────────────────────────────────
 
+  Widget _typingBubble(List<ClubPerson> people, {bool design = false}) {
+    final visible = people.take(2).map(_designPerson).toList(growable: false);
+    final label = people.length == 1
+        ? S.typingOne(_firstName(visible.first.name))
+        : S.typingMany(visible.map((p) => _firstName(p.name)).join(' & '));
+    return ChatTypingBubble(
+      key: const ValueKey('club-typing-row'),
+      avatars: [
+        for (final person in visible)
+          design ? _designAvatar(person, 28) : _avatarFor(person, 28),
+      ],
+      semanticLabel: label,
+    );
+  }
+
   /// `club-chat-reply` 143:30 — the group-thread language from the CHATS area
   /// plus what only a club room has: announcement cards, a pinned strip, a
   /// seen count and typing.
@@ -2225,24 +2338,40 @@ class _ClubCommunityScreenState extends State<ClubCommunityScreen>
     for (var i = 0; i < messages.length; i++) {
       final message = messages[i];
       final previous = i == 0 ? null : messages[i - 1];
+      final next = i == messages.length - 1 ? null : messages[i + 1];
       if (previous == null ||
           !_sameDesignDay(previous.createdAt, message.createdAt)) {
         items.add(ChatDayDivider(label: _designDayLabel(message.createdAt)));
       }
+      if (message.kind == ChatMessageKind.announcement) {
+        items.add(_buildDesignChatAnnouncement(message));
+        continue;
+      }
+      final senderId = chatStore.senderIdForViewer(message, _myId);
+      final nextSenderId = next == null
+          ? null
+          : chatStore.senderIdForViewer(next, _myId);
+      final lastOfRun =
+          next == null ||
+          next.kind == ChatMessageKind.announcement ||
+          nextSenderId != senderId ||
+          !_sameDesignDay(next.createdAt, message.createdAt);
       items.add(
-        message.kind == ChatMessageKind.announcement
-            ? _buildDesignChatAnnouncement(message)
-            : _buildDesignClubBubble(message),
-      );
-    }
-    for (final person in typing) {
-      items.add(
-        ClubTypingBubble(
-          key: ValueKey('club-typing-${person.id}'),
-          avatar: _designAvatar(person, 28),
+        SentMessageEntrance(
+          key: ValueKey('sent-message-entrance-${message.id}'),
+          animate: _animatingSentMessageIds.contains(message.id),
+          onCompleted: () => _finishSentMessageEntrance(message.id),
+          child: _buildDesignClubBubble(message, showTail: lastOfRun),
         ),
       );
     }
+    if (typing.isNotEmpty) {
+      items.add(_typingBubble(typing, design: true));
+    }
+    final childIndexByKey = <Key, int>{
+      for (var i = 0; i < items.length; i++)
+        ?items[i].key: items.length - 1 - i,
+    };
 
     return Column(
       children: [
@@ -2271,6 +2400,7 @@ class _ClubCommunityScreenState extends State<ClubCommunityScreen>
                         reverse: true,
                         padding: const EdgeInsets.fromLTRB(16, 12, 16, 12),
                         itemCount: items.length,
+                        findChildIndexCallback: (key) => childIndexByKey[key],
                         itemBuilder: (context, i) =>
                             items[items.length - 1 - i],
                       ),
@@ -2297,6 +2427,7 @@ class _ClubCommunityScreenState extends State<ClubCommunityScreen>
         if (_canWrite)
           ChatComposerBar(
             controller: _inputController,
+            focusNode: _inputFocusNode,
             enabled: true,
             hint: S.communityComposerHint,
             onAttach: () => unawaited(_openDesignShareSheet()),
@@ -2411,42 +2542,47 @@ class _ClubCommunityScreenState extends State<ClubCommunityScreen>
     final body = message.content.trim();
     return KeyedSubtree(
       key: _designMessageAnchors.putIfAbsent(message.id, GlobalKey.new),
-      child: _pinnedMessageFlash(
-        message.id,
-        ClubNoticeCard(
-          key: ValueKey('club-chat-announcement-${message.id}'),
-          avatar: _designAvatar(person, 28),
-          authorName: person.name,
-          roleLabel: person.role,
-          whenLabel: _designNoticeWhen(message.createdAt),
-          title: title.isEmpty || title == body ? null : title,
-          body: body,
-          attachment: _designNoticeAttachment(message),
-          pinned: message.pinned,
-          reactions: {
-            for (final entry in message.reactions.entries)
-              entry.key: entry.value.length,
-          },
-          myReactions: {
-            for (final entry in message.reactions.entries)
-              if (entry.value.contains(_myId)) entry.key,
-          },
-          replyCount: chatStore.replyCountFor(message.id),
-          onToggleReaction: _canWrite
-              ? (emoji) => chatStore.toggleReaction(
-                  messageId: message.id,
-                  userId: _myId,
-                  emoji: emoji,
-                )
-              : null,
-          onLongPress: () => _showDesignMessageActions(message),
-          onOpenReplies: _canWrite ? () => _replyInChat(message) : null,
+      child: SwipeToReply(
+        key: ValueKey('club-swipe-reply-${message.id}'),
+        enabled: _canWrite,
+        onReply: () => _replyInChat(message),
+        child: _pinnedMessageFlash(
+          message.id,
+          ClubNoticeCard(
+            key: ValueKey('club-chat-announcement-${message.id}'),
+            avatar: _designAvatar(person, 28),
+            authorName: person.name,
+            roleLabel: person.role,
+            whenLabel: _designNoticeWhen(message.createdAt),
+            title: title.isEmpty || title == body ? null : title,
+            body: body,
+            attachment: _designNoticeAttachment(message),
+            pinned: message.pinned,
+            reactions: {
+              for (final entry in message.reactions.entries)
+                entry.key: entry.value.length,
+            },
+            myReactions: {
+              for (final entry in message.reactions.entries)
+                if (entry.value.contains(_myId)) entry.key,
+            },
+            replyCount: chatStore.replyCountFor(message.id),
+            onToggleReaction: _canWrite
+                ? (emoji) => chatStore.toggleReaction(
+                    messageId: message.id,
+                    userId: _myId,
+                    emoji: emoji,
+                  )
+                : null,
+            onLongPress: () => _showDesignMessageActions(message),
+            onOpenReplies: _canWrite ? () => _replyInChat(message) : null,
+          ),
         ),
       ),
     );
   }
 
-  Widget _buildDesignClubBubble(ChatMessage message) {
+  Widget _buildDesignClubBubble(ChatMessage message, {required bool showTail}) {
     final mine = chatStore.isMessageOwner(message, _myId);
     final senderId = chatStore.senderIdForViewer(message, _myId);
     final person = _designPerson(_personFor(senderId));
@@ -2457,6 +2593,7 @@ class _ClubCommunityScreenState extends State<ClubCommunityScreen>
     final bubble = ChatBubbleShell(
       key: ValueKey('club-message-bubble-${message.id}'),
       mine: mine,
+      showTail: showTail,
       maxWidth: maxWidth,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -2540,11 +2677,16 @@ class _ClubCommunityScreenState extends State<ClubCommunityScreen>
                         ],
                       ),
                     ),
-                  GestureDetector(
-                    key: ValueKey('club-message-${message.id}'),
-                    behavior: HitTestBehavior.opaque,
-                    onLongPress: () => _showDesignMessageActions(message),
-                    child: _pinnedMessageFlash(message.id, bubble),
+                  SwipeToReply(
+                    key: ValueKey('club-swipe-reply-${message.id}'),
+                    enabled: _canWrite,
+                    onReply: () => _replyInChat(message),
+                    child: GestureDetector(
+                      key: ValueKey('club-message-${message.id}'),
+                      behavior: HitTestBehavior.opaque,
+                      onLongPress: () => _showDesignMessageActions(message),
+                      child: _pinnedMessageFlash(message.id, bubble),
+                    ),
                   ),
                   if (message.reactions.isNotEmpty)
                     Padding(
@@ -3352,8 +3494,9 @@ class _ClubCommunityScreenState extends State<ClubCommunityScreen>
                 onSend: _send,
                 onAttach: (attachment) =>
                     unawaited(_handleAttachment(attachment)),
-                onTypingChanged: () =>
-                    chatStore.setTyping(widget.threadId, _myId),
+                onTypingChanged: _onTypingDraftChanged,
+                onFocusChanged: (focused) =>
+                    _typingSession?.updateFocus(focused),
               ),
             ],
           )
@@ -3482,6 +3625,10 @@ class _ClubCommunityScreenState extends State<ClubCommunityScreen>
     }
 
     final items = _buildStreamItems(messages, typing, t);
+    final childIndexByKey = <Key, int>{
+      for (var i = 0; i < items.length; i++)
+        ?items[i].key: items.length - 1 - i,
+    };
     return _withChatBackground(
       t,
       Stack(
@@ -3492,6 +3639,7 @@ class _ClubCommunityScreenState extends State<ClubCommunityScreen>
             reverse: true,
             padding: const EdgeInsets.fromLTRB(14, 2, 14, 14),
             itemCount: items.length,
+            findChildIndexCallback: (key) => childIndexByKey[key],
             itemBuilder: (context, index) => items[items.length - 1 - index],
           ),
           if (_showJumpButton)
@@ -3641,19 +3789,7 @@ class _ClubCommunityScreenState extends State<ClubCommunityScreen>
     }
 
     if (typing.isNotEmpty) {
-      items.add(
-        ClubTypingRow(
-          avatars: [
-            for (final person in typing.take(2)) _avatarFor(person, 22),
-          ],
-          label: typing.length == 1
-              ? S.typingOne(_firstName(typing.first.name))
-              : S.typingMany(
-                  typing.take(2).map((p) => _firstName(p.name)).join(' & '),
-                ),
-          t: t,
-        ),
-      );
+      items.add(_typingBubble(typing));
     }
     return items;
   }
@@ -3700,54 +3836,61 @@ class _ClubCommunityScreenState extends State<ClubCommunityScreen>
 
     return SentMessageEntrance(
       key: ValueKey('sent-message-entrance-${message.id}'),
-      animate: message.id == _animatingSentMessageId,
+      animate: _animatingSentMessageIds.contains(message.id),
       onCompleted: () => _finishSentMessageEntrance(message.id),
-      child: ClubMessageGroup(
-        key: ValueKey('club-message-${message.id}'),
-        message: message,
-        sender: sender,
-        avatar: _avatarFor(sender, 30),
-        mine: mine,
-        head: head,
-        style: style,
-        showRoles: showRoles,
-        timeLabel: _timeLabel(message.createdAt),
-        flagged: message.mentionsUser(_myId) && !mine,
-        t: t,
-        replySenderName: message.replyToSenderId == null
-            ? null
-            : _personFor(message.replyToSenderId!).name,
-        onLongPress: () => _showMessageActions(message),
-        onOpenSender: () => _openParticipantProfile(sender),
-        onUserLinkTap: _openSharedUserProfile,
-        statusLabel: mine
-            ? (chatStore.seenCountFor(message) > 1 ? S.seen : S.delivered)
-            : null,
-        attachments: [
-          if (message.kind == ChatMessageKind.photo &&
-              message.attachmentPath != null)
-            ClubPhotoAttachment(path: message.attachmentPath!, t: t),
-          if (message.kind == ChatMessageKind.file &&
-              message.attachmentPath != null &&
-              isVideoMediaPath(
-                message.attachmentName ?? message.attachmentPath!,
-              ))
-            ClubVideoAttachment(path: message.attachmentPath!, t: t),
-          if (message.kind == ChatMessageKind.file &&
-              message.attachmentPath != null &&
-              !isVideoMediaPath(
-                message.attachmentName ?? message.attachmentPath!,
-              ))
-            ClubFileChip(
-              message: message,
-              t: t,
-              onOpen: () => _showMessageActions(message),
-            ),
-          if (message.kind == ChatMessageKind.postShare &&
-              message.sharedPostId != null)
-            SharedPostMessageCard(postId: message.sharedPostId!),
-        ],
-        reactions: message.reactions.isEmpty ? null : _reactionsFor(message, t),
+      child: SwipeToReply(
+        key: ValueKey('club-swipe-reply-${message.id}'),
+        enabled: _canWrite,
+        onReply: () => _replyInChat(message),
+        child: ClubMessageGroup(
+          key: ValueKey('club-message-${message.id}'),
+          message: message,
+          sender: sender,
+          avatar: _avatarFor(sender, 30),
+          mine: mine,
+          head: head,
+          style: style,
+          showRoles: showRoles,
+          timeLabel: _timeLabel(message.createdAt),
+          flagged: message.mentionsUser(_myId) && !mine,
+          t: t,
+          replySenderName: message.replyToSenderId == null
+              ? null
+              : _personFor(message.replyToSenderId!).name,
+          onLongPress: () => _showMessageActions(message),
+          onOpenSender: () => _openParticipantProfile(sender),
+          onUserLinkTap: _openSharedUserProfile,
+          statusLabel: mine
+              ? (chatStore.seenCountFor(message) > 1 ? S.seen : S.delivered)
+              : null,
+          attachments: [
+            if (message.kind == ChatMessageKind.photo &&
+                message.attachmentPath != null)
+              ClubPhotoAttachment(path: message.attachmentPath!, t: t),
+            if (message.kind == ChatMessageKind.file &&
+                message.attachmentPath != null &&
+                isVideoMediaPath(
+                  message.attachmentName ?? message.attachmentPath!,
+                ))
+              ClubVideoAttachment(path: message.attachmentPath!, t: t),
+            if (message.kind == ChatMessageKind.file &&
+                message.attachmentPath != null &&
+                !isVideoMediaPath(
+                  message.attachmentName ?? message.attachmentPath!,
+                ))
+              ClubFileChip(
+                message: message,
+                t: t,
+                onOpen: () => _showMessageActions(message),
+              ),
+            if (message.kind == ChatMessageKind.postShare &&
+                message.sharedPostId != null)
+              SharedPostMessageCard(postId: message.sharedPostId!),
+          ],
+          reactions: message.reactions.isEmpty
+              ? null
+              : _reactionsFor(message, t),
+        ),
       ),
     );
   }

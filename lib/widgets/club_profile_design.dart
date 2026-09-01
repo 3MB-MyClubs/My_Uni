@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../l10n/app_localizations.dart';
 import '../services/theme_service.dart';
+import '../theme/specialized_semantic_palettes.dart';
 import 'clubup_design.dart';
 
 export 'clubup_design.dart' show figtree;
@@ -32,6 +33,9 @@ export 'clubup_design.dart' show figtree;
 class ClubProfileColors {
   const ClubProfileColors._();
 
+  static SpecializedSemanticPalette of(BuildContext context) =>
+      SpecializedSemanticPalettes.clubProfiles(Theme.of(context));
+
   static bool get _dark => themeService.isDark;
 
   /// Page background — `#FAF9F6` / `#0A0A0A`.
@@ -59,7 +63,7 @@ class ClubProfileColors {
   /// in dark, exactly as the frames draw it.
   static const Color accent = Color(0xFF800020);
 
-  /// Accent *text*: the handle chip, the category chips, "View all" and
+  /// Accent *text*: the category chips, "View all" and
   /// "Most Popular" all lift to `#FA526B` in dark — the same bright rose the
   /// EVENT CREATION section uses, not the `#E8A1A6` of CHATS and settings.
   static Color get accentText => _dark ? const Color(0xFFFA526B) : accent;
@@ -217,14 +221,21 @@ class ClubProfileCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final colors = ClubProfileColors.of(context);
     final card = Container(
       padding: padding,
       decoration: BoxDecoration(
-        color: ClubProfileColors.card,
+        color: colors.surface,
         borderRadius: BorderRadius.circular(radius),
         border: Border.all(color: ClubProfileColors.border),
       ),
-      child: child,
+      child: DefaultTextStyle.merge(
+        style: TextStyle(color: colors.onSurface),
+        child: IconTheme.merge(
+          data: IconThemeData(color: colors.onSurface),
+          child: child,
+        ),
+      ),
     );
     if (onTap == null && onLongPress == null) return card;
     return GestureDetector(
@@ -328,7 +339,7 @@ class ClubVerifiedName extends StatelessWidget {
   }
 }
 
-/// `club-identity-card` `337:30` — 64pt avatar, name, `@handle` chip, the
+/// `club-identity-card` `337:30` — 64pt avatar, name, plain `@handle`, the
 /// description and the category chips.
 class ClubProfileIdentityCard extends StatelessWidget {
   const ClubProfileIdentityCard({
@@ -393,7 +404,20 @@ class ClubProfileIdentityCard extends StatelessWidget {
                       ),
                     ),
                     const SizedBox(height: 6),
-                    ClubProfileChip(label: '@$handle'),
+                    Text(
+                      '@$handle',
+                      key: const ValueKey('club-profile-handle'),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: figtree(
+                        size: 14,
+                        weight: FontWeight.w600,
+                        color: themeService.isDark
+                            ? Colors.white
+                            : ClubProfileColors.text,
+                        height: 1.2,
+                      ),
+                    ),
                   ],
                 ),
               ),

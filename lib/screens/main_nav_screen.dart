@@ -15,6 +15,7 @@ import '../services/chat_store.dart';
 import '../services/theme_service.dart';
 import '../l10n/app_localizations.dart';
 import '../services/locale_service.dart';
+import '../services/mock_data.dart';
 import '../services/mock_clubup_profile.dart';
 import '../services/notification_navigation.dart';
 import '../services/push_notification_service.dart';
@@ -26,7 +27,9 @@ import '../onboarding/starter_checklist_service.dart';
 import '../widgets/lazy_indexed_stack.dart';
 import '../widgets/app_pressable.dart';
 import '../widgets/account_switcher_sheet.dart';
+import '../widgets/club_avatar.dart';
 import '../widgets/event_wizard_design.dart';
+import '../widgets/user_avatar.dart';
 import 'feed_screen.dart';
 import 'this_week_screen.dart';
 // my_calendar_screen is used from feed_screen, not nav;
@@ -66,7 +69,6 @@ class _MainNavScreenState extends ConsumerState<MainNavScreen>
 
   int _selectedIndex = 0;
   TutorialLaunchSource? _tutorialLaunchSource;
-  bool _automaticTutorialCheckStarted = false;
   bool _accountSwitcherOpening = false;
   double? _navDragDx;
   final ChatsController _chatsController = ChatsController();
@@ -196,24 +198,10 @@ class _MainNavScreenState extends ConsumerState<MainNavScreen>
     if (mounted) setState(() {});
   }
 
-  // Students get the student tour; club admins get the separate club tour.
-  // Neither runs for the super admin.
+  // Do not interrupt Home with the welcome/tutorial overlay. The tour remains
+  // available as an explicit replay from Settings.
   Future<void> _startInitialExperience() async {
-    if (!mounted || _automaticTutorialCheckStarted) return;
-    _automaticTutorialCheckStarted = true;
-    final profileId = _currentUserId;
-    // The tour decision belongs to the server flag, so wait for it before
-    // deciding; a failed load resolves as "already complete".
-    await onboardingService.loadFor(profileId);
-    if (!mounted || profileId != _currentUserId) return;
-    // A manual replay may have been requested while the backend read was in
-    // flight. Let that run own the screen and suppress the initial prompt.
-    if (_tutorialLaunchSource != null) return;
-    if ((authService.isStudentSession || _isClubAdmin) &&
-        !onboardingService.isComplete(profileId)) {
-      _startOnboarding(TutorialLaunchSource.automatic);
-      return;
-    }
+    if (!mounted) return;
     await _requestCalendarIfNeeded();
   }
 
@@ -279,16 +267,6 @@ class _MainNavScreenState extends ConsumerState<MainNavScreen>
       _chatsController.showStudents();
     }
   }
-
-  String get _onboardingFirstName {
-    final name =
-        authService.currentUser?.name ?? authService.currentAdmin?.name ?? '';
-    final parts = name.trim().split(' ');
-    return parts.isNotEmpty ? parts.first : '';
-  }
-
-  String get _onboardingUserId =>
-      authService.currentUser?.id ?? authService.currentAdmin?.id ?? '';
 
   Future<void> _requestCalendarIfNeeded() async {
     final service = ref.read(calendarServiceProvider);
@@ -657,14 +635,10 @@ class _MainNavScreenState extends ConsumerState<MainNavScreen>
                         usesModerationTab: _isPlatformModerator,
                       )
                     : studentOnboardingSteps(),
-                userId: _onboardingUserId,
-                firstName: _onboardingFirstName,
-                showChecklist: authService.isStudentSession,
                 onStepChanged: _onOnboardingStepChanged,
                 onComplete: _finishOnboarding,
                 onSkip: _finishOnboarding,
                 onNavigateHome: () => _selectNavIndex(0),
-                onDeepLink: _selectNavIndex,
               ),
             ),
         ],
@@ -729,6 +703,45 @@ class _MainNavScreenState extends ConsumerState<MainNavScreen>
     ];
   }
 
+  /// Uses the same frontend avatar state as profile screens and account rows.
+  /// No fetch is started here: photo updates flow through [UserAvatar] and
+  /// [ClubAvatar], and both widgets already own their initials fallback.
+  Widget? _buildProfileNavAvatar(double size) {
+    final linkedClub = accountSwitcherService.activeClub;
+    final admin = authService.currentAdmin;
+
+    if (linkedClub != null || (_isClubAdmin && admin != null)) {
+      final club = linkedClub ?? clubForId(admin!.id);
+      return IgnorePointer(
+        key: ValueKey<String>(
+          'profile-nav-club-avatar-${club?.id ?? admin!.id}',
+        ),
+        child: ClubAvatar(
+          clubId: club?.id ?? admin!.id,
+          clubName: club?.name ?? admin!.name,
+          color: AppColors.primaryRed,
+          imageUrl: club?.logoUrl,
+          profilePhotoFallbackId: admin?.id,
+          shape: 'circle',
+          size: size,
+          fontSize: size * 0.42,
+        ),
+      );
+    }
+
+    final user = authService.currentUser;
+    if (user == null) return null;
+    return IgnorePointer(
+      key: ValueKey<String>('profile-nav-user-avatar-${user.id}'),
+      child: UserAvatar(
+        userId: user.id,
+        name: user.name,
+        size: size,
+        fontSize: size * 0.42,
+      ),
+    );
+  }
+
   Key? _onboardingKeyForNavIndex(int index) {
     return switch (index) {
       0 => onboardingAnchors.keyFor(OnboardingAnchors.navHome),
@@ -745,7 +758,10 @@ class _MainNavScreenState extends ConsumerState<MainNavScreen>
     final slots = _buildNavSlots(context, unreadChats);
 
     return Container(
-      key: const ValueKey<String>('desktop-navigation-sidebar'),
+      // The student tour teaches the whole navigation surface first. On wide
+      // layouts the sidebar is that surface, so it must share the same anchor
+      // as the mobile capsule.
+      key: onboardingAnchors.keyFor(OnboardingAnchors.navBar),
       decoration: BoxDecoration(
         color: AppColors.card,
         border: Border(
@@ -755,6 +771,7 @@ class _MainNavScreenState extends ConsumerState<MainNavScreen>
         ),
       ),
       child: SafeArea(
+        key: const ValueKey<String>('desktop-navigation-sidebar'),
         right: false,
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -824,6 +841,9 @@ class _MainNavScreenState extends ConsumerState<MainNavScreen>
                         key: _onboardingKeyForNavIndex(slot.index!),
                         icon: slot.icon!,
                         activeIcon: slot.activeIcon!,
+                        avatar: slot.index == 4
+                            ? _buildProfileNavAvatar(26)
+                            : null,
                         label: slot.label!,
                         selected: _selectedIndex == slot.index,
                         badge: slot.badge,
@@ -879,6 +899,9 @@ class _MainNavScreenState extends ConsumerState<MainNavScreen>
           4,
         ),
         child: ClipRRect(
+          // `tut-home-nav` spotlights the bar as one 30-radius shape rather
+          // than a single tab, so the whole capsule is the tour's anchor.
+          key: onboardingAnchors.keyFor(OnboardingAnchors.navBar),
           borderRadius: BorderRadius.all(Radius.circular(30)),
           child: BackdropFilter.grouped(
             filter: ImageFilter.blur(sigmaX: 6, sigmaY: 6),
@@ -1070,6 +1093,11 @@ class _MainNavScreenState extends ConsumerState<MainNavScreen>
                                         ),
                                         icon: slot.icon!,
                                         activeIcon: slot.activeIcon!,
+                                        avatar: slot.index == 4
+                                            ? _buildProfileNavAvatar(
+                                                24 - (2 * shrink),
+                                              )
+                                            : null,
                                         label: slot.label!,
                                         selected: _selectedIndex == slot.index,
                                         badge: slot.badge,
@@ -1137,6 +1165,7 @@ class _DesktopContentCanvas extends StatelessWidget {
 class _DesktopNavItem extends StatelessWidget {
   final IconData icon;
   final IconData activeIcon;
+  final Widget? avatar;
   final String label;
   final bool selected;
   final int badge;
@@ -1147,6 +1176,7 @@ class _DesktopNavItem extends StatelessWidget {
     super.key,
     required this.icon,
     required this.activeIcon,
+    this.avatar,
     required this.label,
     required this.selected,
     required this.onTap,
@@ -1196,12 +1226,14 @@ class _DesktopNavItem extends StatelessWidget {
                 children: [
                   AnimatedSwitcher(
                     duration: const Duration(milliseconds: 180),
-                    child: Icon(
-                      selected ? activeIcon : icon,
-                      key: ValueKey<bool>(selected),
-                      color: foreground,
-                      size: 23,
-                    ),
+                    child:
+                        avatar ??
+                        Icon(
+                          selected ? activeIcon : icon,
+                          key: ValueKey<bool>(selected),
+                          color: foreground,
+                          size: 23,
+                        ),
                   ),
                   const SizedBox(width: 13),
                   Expanded(
@@ -1393,6 +1425,7 @@ class _NavSlot {
 class _NavItem extends StatelessWidget {
   final IconData icon;
   final IconData activeIcon;
+  final Widget? avatar;
   final String label;
   final bool selected;
   final int badge;
@@ -1406,6 +1439,7 @@ class _NavItem extends StatelessWidget {
     super.key,
     required this.icon,
     required this.activeIcon,
+    this.avatar,
     required this.label,
     required this.selected,
     required this.onTap,
@@ -1443,13 +1477,14 @@ class _NavItem extends StatelessWidget {
                   child: Stack(
                     clipBehavior: Clip.none,
                     children: [
-                      Icon(
-                        selected ? activeIcon : icon,
-                        color: selected
-                            ? AppColors.primaryRed
-                            : AppColors.secondaryText,
-                        size: 24 - (2 * shrink),
-                      ),
+                      avatar ??
+                          Icon(
+                            selected ? activeIcon : icon,
+                            color: selected
+                                ? AppColors.primaryRed
+                                : AppColors.secondaryText,
+                            size: 24 - (2 * shrink),
+                          ),
                       if (badge > 0)
                         Positioned(
                           top: -4,

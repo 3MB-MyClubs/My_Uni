@@ -32,6 +32,7 @@ import '../widgets/app_network_image.dart';
 import '../widgets/club_avatar.dart';
 import '../widgets/clubup_design.dart';
 import '../widgets/loading_skeleton.dart';
+import '../widgets/media_scrim.dart';
 import '../widgets/event_cover_image.dart';
 import '../widgets/event_share_sheet.dart';
 import '../widgets/user_avatar.dart';
@@ -1189,142 +1190,145 @@ class _AdminHero extends StatelessWidget {
     final hasImage = event.imagePath != null && event.imagePath!.isNotEmpty;
     final topInset = MediaQuery.paddingOf(context).top;
 
-    return SizedBox(
-      height: 340,
-      child: Stack(
-        fit: StackFit.expand,
-        children: [
-          if (hasImage)
-            _eventHeroImage(path: event.imagePath!, accent: accent)
-          else
-            _GradientHero(color: accent),
+    return AnnotatedRegion<SystemUiOverlayStyle>(
+      value: SystemUiOverlayStyle.light,
+      child: SizedBox(
+        height: 340,
+        child: Stack(
+          fit: StackFit.expand,
+          children: [
+            if (hasImage)
+              _eventHeroImage(path: event.imagePath!, accent: accent)
+            else
+              _GradientHero(color: accent),
 
-          // Scrim
-          Positioned.fill(
-            child: IgnorePointer(
-              child: DecoratedBox(
-                decoration: BoxDecoration(
-                  gradient: LinearGradient(
-                    begin: Alignment.topCenter,
-                    end: Alignment.bottomCenter,
-                    stops: const [0.0, 0.24, 0.5, 0.86, 1.0],
-                    colors: [
-                      Colors.black.withValues(alpha: 0.45),
-                      Colors.transparent,
-                      Colors.transparent,
-                      bg.withValues(alpha: 0.86),
-                      bg,
-                    ],
+            // Scrim
+            Positioned.fill(
+              child: IgnorePointer(
+                child: DecoratedBox(
+                  decoration: BoxDecoration(
+                    gradient: LinearGradient(
+                      begin: Alignment.topCenter,
+                      end: Alignment.bottomCenter,
+                      stops: const [0.0, 0.24, 0.5, 0.86, 1.0],
+                      colors: [
+                        Colors.black.withValues(alpha: 0.45),
+                        Colors.transparent,
+                        Colors.transparent,
+                        bg.withValues(alpha: 0.86),
+                        bg,
+                      ],
+                    ),
                   ),
                 ),
               ),
             ),
-          ),
 
-          // Nav row: back · MANAGING · edit/delete
-          Positioned(
-            top: topInset + 8,
-            left: 14,
-            right: 14,
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                _GlassButton(
-                  icon: Icons.arrow_back_ios_new_rounded,
-                  onTap: onBack,
-                ),
-                Container(
-                  padding: const EdgeInsets.fromLTRB(9, 5, 12, 5),
-                  decoration: BoxDecoration(
-                    color: Colors.black.withValues(alpha: 0.5),
-                    borderRadius: BorderRadius.all(Radius.circular(999)),
-                    border: Border.all(color: accent.withValues(alpha: 0.45)),
+            // Nav row: back · MANAGING · edit/delete
+            Positioned(
+              top: topInset + 8,
+              left: 14,
+              right: 14,
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  _GlassButton(
+                    icon: Icons.arrow_back_ios_new_rounded,
+                    onTap: onBack,
                   ),
-                  child: Row(
-                    mainAxisSize: MainAxisSize.min,
+                  Container(
+                    padding: const EdgeInsets.fromLTRB(9, 5, 12, 5),
+                    decoration: BoxDecoration(
+                      color: Colors.black.withValues(alpha: 0.5),
+                      borderRadius: BorderRadius.all(Radius.circular(999)),
+                      border: Border.all(color: accent.withValues(alpha: 0.45)),
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Container(
+                          width: 7,
+                          height: 7,
+                          decoration: BoxDecoration(
+                            color: accent,
+                            shape: BoxShape.circle,
+                          ),
+                        ),
+                        const SizedBox(width: 6),
+                        Text(
+                          AppLocalizations.of(context)!.managingBadge,
+                          style: const TextStyle(
+                            fontSize: 9.5,
+                            fontWeight: FontWeight.w800,
+                            letterSpacing: 0.8,
+                            color: Colors.white,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  Row(
                     children: [
-                      Container(
-                        width: 7,
-                        height: 7,
-                        decoration: BoxDecoration(
-                          color: accent,
-                          shape: BoxShape.circle,
-                        ),
-                      ),
-                      const SizedBox(width: 6),
-                      Text(
-                        AppLocalizations.of(context)!.managingBadge,
-                        style: const TextStyle(
-                          fontSize: 9.5,
-                          fontWeight: FontWeight.w800,
-                          letterSpacing: 0.8,
-                          color: Colors.white,
-                        ),
+                      _GlassButton(icon: Icons.edit_outlined, onTap: onEdit),
+                      const SizedBox(width: 9),
+                      _GlassButton(
+                        icon: Icons.delete_outline_rounded,
+                        onTap: onDelete,
                       ),
                     ],
-                  ),
-                ),
-                Row(
-                  children: [
-                    _GlassButton(icon: Icons.edit_outlined, onTap: onEdit),
-                    const SizedBox(width: 9),
-                    _GlassButton(
-                      icon: Icons.delete_outline_rounded,
-                      onTap: onDelete,
-                    ),
-                  ],
-                ),
-              ],
-            ),
-          ),
-
-          // Status pill + title
-          Positioned(
-            left: 0,
-            right: 0,
-            bottom: 0,
-            child: Padding(
-              padding: const EdgeInsets.fromLTRB(20, 0, 20, 18),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Container(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 11,
-                      vertical: 5,
-                    ),
-                    decoration: BoxDecoration(
-                      color: isLive ? accent : accent.withValues(alpha: 0.22),
-                      borderRadius: BorderRadius.all(Radius.circular(999)),
-                    ),
-                    child: Text(
-                      isLive
-                          ? AppLocalizations.of(context)!.happeningNowBadge
-                          : AppLocalizations.of(context)!.upcomingBadge,
-                      style: TextStyle(
-                        fontSize: 9.5,
-                        fontWeight: FontWeight.w800,
-                        letterSpacing: 0.8,
-                        color: isLive ? Colors.white : accent,
-                      ),
-                    ),
-                  ),
-                  const SizedBox(height: 11),
-                  Text(
-                    event.title,
-                    style: const TextStyle(
-                      fontSize: 26,
-                      fontWeight: FontWeight.w800,
-                      color: Colors.white,
-                      letterSpacing: -0.8,
-                      height: 1.12,
-                    ),
                   ),
                 ],
               ),
             ),
-          ),
-        ],
+
+            // Status pill + title
+            Positioned(
+              left: 0,
+              right: 0,
+              bottom: 0,
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(20, 0, 20, 18),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 11,
+                        vertical: 5,
+                      ),
+                      decoration: BoxDecoration(
+                        color: isLive ? accent : accent.withValues(alpha: 0.22),
+                        borderRadius: BorderRadius.all(Radius.circular(999)),
+                      ),
+                      child: Text(
+                        isLive
+                            ? AppLocalizations.of(context)!.happeningNowBadge
+                            : AppLocalizations.of(context)!.upcomingBadge,
+                        style: TextStyle(
+                          fontSize: 9.5,
+                          fontWeight: FontWeight.w800,
+                          letterSpacing: 0.8,
+                          color: isLive ? Colors.white : accent,
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 11),
+                    Text(
+                      event.title,
+                      style: const TextStyle(
+                        fontSize: 26,
+                        fontWeight: FontWeight.w800,
+                        color: Colors.white,
+                        letterSpacing: -0.8,
+                        height: 1.12,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -1639,96 +1643,89 @@ class _Hero extends StatelessWidget {
       420.0,
     );
 
-    return SizedBox(
-      height: heroHeight,
-      child: Stack(
-        fit: StackFit.expand,
-        children: [
-          EventCoverImage(
-            event: event,
-            color: accent,
-            fit: BoxFit.cover,
-            borderRadius: BorderRadius.zero,
-          ),
-          // `top-scrim` — keeps the status bar and glass buttons legible over
-          // whatever the cover photo happens to be.
-          Positioned(
-            top: 0,
-            left: 0,
-            right: 0,
-            child: Container(
-              height: 100 + topPad,
-              decoration: const BoxDecoration(
-                gradient: LinearGradient(
-                  begin: Alignment.topCenter,
-                  end: Alignment.bottomCenter,
-                  colors: [Color(0x99000000), Color(0x00000000)],
-                  stops: [0.25, 1.0],
+    return AnnotatedRegion<SystemUiOverlayStyle>(
+      value: SystemUiOverlayStyle.light,
+      child: SizedBox(
+        height: heroHeight,
+        child: Stack(
+          fit: StackFit.expand,
+          children: [
+            EventCoverImage(
+              event: event,
+              color: accent,
+              fit: BoxFit.cover,
+              borderRadius: BorderRadius.zero,
+            ),
+            // `top-scrim` — keeps the status bar and glass buttons legible over
+            // whatever the cover photo happens to be.
+            const Positioned.fill(
+              child: MediaScrim(position: MediaScrimPosition.top),
+            ),
+            Positioned(
+              top: topPad,
+              left: 0,
+              right: 0,
+              child: Padding(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 20,
+                  vertical: 12,
+                ),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    _HeroGlassButton(
+                      icon: Icons.arrow_back_rounded,
+                      onTap: onBack,
+                      semanticLabel: MaterialLocalizations.of(
+                        context,
+                      ).backButtonTooltip,
+                    ),
+                    Row(
+                      children: [
+                        if (canEngage) ...[
+                          _HeroGlassButton(
+                            key: const ValueKey('event-share-action'),
+                            icon: Icons.ios_share_rounded,
+                            onTap: onShare,
+                            semanticLabel: AppLocalizations.of(
+                              context,
+                            )!.shareAction,
+                          ),
+                          const SizedBox(width: 8),
+                          _HeroGlassButton(
+                            icon: saved
+                                ? Icons.bookmark_rounded
+                                : Icons.bookmark_border_rounded,
+                            onTap: onToggleSaved,
+                            semanticLabel: AppLocalizations.of(context)!.save,
+                          ),
+                        ],
+                        if (canDelete) ...[
+                          if (canEngage) const SizedBox(width: 8),
+                          _HeroGlassButton(
+                            icon: Icons.delete_outline_rounded,
+                            onTap: onDelete,
+                            semanticLabel: AppLocalizations.of(context)!.delete,
+                          ),
+                        ],
+                      ],
+                    ),
+                  ],
                 ),
               ),
             ),
-          ),
-          Positioned(
-            top: topPad,
-            left: 0,
-            right: 0,
-            child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  _HeroGlassButton(
-                    icon: Icons.arrow_back_rounded,
-                    onTap: onBack,
-                    semanticLabel: MaterialLocalizations.of(
-                      context,
-                    ).backButtonTooltip,
-                  ),
-                  Row(
-                    children: [
-                      if (canEngage) ...[
-                        _HeroGlassButton(
-                          key: const ValueKey('event-share-action'),
-                          icon: Icons.ios_share_rounded,
-                          onTap: onShare,
-                          semanticLabel: AppLocalizations.of(
-                            context,
-                          )!.shareAction,
-                        ),
-                        const SizedBox(width: 8),
-                        _HeroGlassButton(
-                          icon: saved
-                              ? Icons.bookmark_rounded
-                              : Icons.bookmark_border_rounded,
-                          onTap: onToggleSaved,
-                          semanticLabel: AppLocalizations.of(context)!.save,
-                        ),
-                      ],
-                      if (canDelete) ...[
-                        if (canEngage) const SizedBox(width: 8),
-                        _HeroGlassButton(
-                          icon: Icons.delete_outline_rounded,
-                          onTap: onDelete,
-                          semanticLabel: AppLocalizations.of(context)!.delete,
-                        ),
-                      ],
-                    ],
-                  ),
-                ],
+            if (isLive || isPast)
+              Positioned(
+                left: 20,
+                bottom: 16,
+                child: _StatusPill(
+                  isLive: isLive,
+                  isPast: isPast,
+                  accent: accent,
+                ),
               ),
-            ),
-          ),
-          if (isLive || isPast)
-            Positioned(
-              left: 20,
-              bottom: 16,
-              child: _StatusPill(
-                isLive: isLive,
-                isPast: isPast,
-                accent: accent,
-              ),
-            ),
-        ],
+          ],
+        ),
       ),
     );
   }

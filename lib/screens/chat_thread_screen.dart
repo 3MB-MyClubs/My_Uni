@@ -33,6 +33,7 @@ import '../services/user_profile_link.dart';
 import '../services/user_state.dart';
 import '../widgets/chat_campus_backdrop.dart';
 import '../widgets/chats_design.dart';
+import '../widgets/club_chat_design.dart';
 import '../widgets/clubup_design.dart';
 import '../widgets/chat_video_player.dart';
 import '../widgets/club_avatar.dart';
@@ -80,10 +81,12 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
   final _inputController = TextEditingController();
   final _inputFocusNode = FocusNode();
   final _scrollController = ScrollController();
+  ChatTypingSession? _typingSession;
+  Set<String> _lastTypingUserIds = const {};
   final Set<String> _requestedParticipantProfileIds = {};
   final Map<String, double> _photoAspectRatios = {};
   ClubCommunityInfoController? _communityInfo;
-  String? _animatingSentMessageId;
+  final Set<String> _animatingSentMessageIds = {};
   ChatMessage? _replyingTo;
 
   // In-thread message search — `search-results` 110:84. Client-side over the
@@ -178,6 +181,8 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
     themeService.addListener(_onEnvChanged);
     localeService.addListener(_onEnvChanged);
     chatStore.addListener(_onStoreChanged);
+    _inputController.addListener(_onTypingDraftChanged);
+    _inputFocusNode.addListener(_onTypingFocusChanged);
     _scrollController.addListener(_onMessageScroll);
     notificationInboxService.addListener(_onNotificationInboxChanged);
     // Post-frame: both can notifyListeners, which is illegal while this
@@ -188,6 +193,18 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
         unawaited(_communityInfo?.start());
       }
       if (!canAccess) return;
+      if (!_isClub) {
+        _typingSession = chatStore.openTypingSession(
+          threadId: widget.threadId,
+          actorId: _myId,
+        );
+        _typingSession
+          ?..updateDraft(_inputController.text)
+          ..updateFocus(_inputFocusNode.hasFocus);
+        _lastTypingUserIds = chatStore
+            .typingUserIds(widget.threadId, excluding: _myId)
+            .toSet();
+      }
       unawaited(chatStore.startChatV2Sync(_myId));
       unawaited(chatStore.loadInitialMessagesV2(widget.threadId));
       if (_isDirect) {
@@ -210,8 +227,11 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
     themeService.removeListener(_onEnvChanged);
     localeService.removeListener(_onEnvChanged);
     chatStore.removeListener(_onStoreChanged);
+    _inputController.removeListener(_onTypingDraftChanged);
+    _inputFocusNode.removeListener(_onTypingFocusChanged);
     _scrollController.removeListener(_onMessageScroll);
     notificationInboxService.removeListener(_onNotificationInboxChanged);
+    _typingSession?.dispose();
     _communityInfo?.dispose();
     _inputController.dispose();
     _inputFocusNode.dispose();
@@ -238,7 +258,17 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
         }
         _markVisibleMessagesSeen();
       });
+    } else {
+      _typingSession?.stop();
     }
+  }
+
+  void _onTypingDraftChanged() {
+    _typingSession?.updateDraft(_inputController.text);
+  }
+
+  void _onTypingFocusChanged() {
+    _typingSession?.updateFocus(_inputFocusNode.hasFocus);
   }
 
   void _onMessageScroll() {
@@ -316,6 +346,7 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
             ...chatStore
                 .messagesFor(widget.threadId, viewerId: _myId)
                 .map((message) => chatStore.senderIdForViewer(message, _myId)),
+            ...chatStore.typingUserIds(widget.threadId, excluding: _myId),
           }
           ..remove(_myId)
           ..removeAll(_requestedParticipantProfileIds);
@@ -336,6 +367,17 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
   /// actually was unread.
   void _onStoreChanged() {
     if (!mounted) return;
+    if (!chatStore.canAccessThread(widget.threadId, _myId)) {
+      _typingSession?.dispose();
+      _typingSession = null;
+      chatStore.clearTypingThread(widget.threadId);
+    }
+    final typingNow = chatStore
+        .typingUserIds(widget.threadId, excluding: _myId)
+        .toSet();
+    final typingAppeared = typingNow.difference(_lastTypingUserIds).isNotEmpty;
+    _lastTypingUserIds = typingNow;
+    if (typingAppeared) _revealTypingIfNearLatest();
     _hydrateVisibleParticipants();
     _markVisibleMessagesSeen();
     final rateLimitMessage = chatStore.takeRateLimitFailureMessage();
@@ -361,8 +403,27 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
     }
   }
 
+  void _revealTypingIfNearLatest() {
+    final wasNearLatest =
+        !_scrollController.hasClients ||
+        _scrollController.position.pixels <= 80;
+    if (!wasNearLatest) return;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!_scrollController.hasClients ||
+          _scrollController.position.pixels > 80) {
+        return;
+      }
+      _scrollController.animateTo(
+        0,
+        duration: const Duration(milliseconds: 180),
+        curve: Curves.easeOutCubic,
+      );
+    });
+  }
+
   /// Sends the composer draft, or [text] when a starter chip was tapped.
   void _send({String? text}) {
+    _typingSession?.stop();
     final sent = chatStore.sendMessage(
       threadId: widget.threadId,
       senderId: _myId,
@@ -374,15 +435,15 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
     if (mounted) {
       setState(() {
         _replyingTo = null;
-        if (text == null) _animatingSentMessageId = sent.id;
+        _animatingSentMessageIds.add(sent.id);
       });
     }
     _scrollToLatest();
   }
 
   void _finishSentMessageEntrance(String messageId) {
-    if (!mounted || _animatingSentMessageId != messageId) return;
-    setState(() => _animatingSentMessageId = null);
+    if (!mounted || !_animatingSentMessageIds.contains(messageId)) return;
+    setState(() => _animatingSentMessageIds.remove(messageId));
   }
 
   void _scrollToLatest() {
@@ -442,16 +503,13 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
               ),
             ),
             const SizedBox(height: 6),
+            // Live capture moved onto the composer's camera button, so the
+            // sheet only offers media that already exists in the library.
             for (final (attachment, icon, label) in [
               (
                 _ChatAttachment.photo,
                 Icons.photo_library_outlined,
                 S.attachMedia,
-              ),
-              (
-                _ChatAttachment.camera,
-                Icons.photo_camera_outlined,
-                S.takePhoto,
               ),
             ])
               InkWell(
@@ -596,7 +654,9 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
     if (mounted) {
       setState(() {
         _replyingTo = null;
-        _animatingSentMessageId = sentMessages.last.id;
+        _animatingSentMessageIds.addAll(
+          sentMessages.map((message) => message.id),
+        );
       });
     }
     _scrollToLatest();
@@ -1050,7 +1110,8 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
   // ── CHATS handoff: the student thread ──────────────────────────────────────
   // `chat-dm` 102:7, `chat-group` 102:123, `chats-clubs` 225:5 and
   // `search-results` 110:84. Flat bubbles on a flat page: no wallpaper, no
-  // gradient, no tail, no shadow, and a 36pt composer.
+  // gradient or shadow, and a 36pt composer. The active UI adds a restrained
+  // tail to the bottom bubble of each sender run.
   //
   // The `CLUB CHATS` section (label `543:32`) added the club side of one of
   // these: `admin-direct-messages` 335:255 / 331:438 is a private inbox read
@@ -1128,6 +1189,10 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
             widget.threadId,
             viewerId: _myId,
           );
+          final typing = chatStore.typingUserIds(
+            widget.threadId,
+            excluding: _myId,
+          );
           final matches = _searchOpen
               ? _designSearchMatches(messages)
               : const <ChatMessage>[];
@@ -1138,9 +1203,9 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
               else
                 _buildDesignThreadHeader(),
               Expanded(
-                child: messages.isEmpty
+                child: messages.isEmpty && typing.isEmpty
                     ? _buildNewChatIntro()
-                    : _buildDesignMessageList(messages, matches),
+                    : _buildDesignMessageList(messages, matches, typing),
               ),
               if (!_searchOpen)
                 ChatComposerBar(
@@ -1148,15 +1213,13 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
                   focusNode: _inputFocusNode,
                   enabled: chatStore.canWriteThread(widget.threadId, _myId),
                   hint: S.typeMessage,
-                  // Club-side inboxes use a single attachment entry point.
-                  // The sheet then separates library media from a live camera
-                  // capture, matching the familiar WhatsApp flow. Keep the
-                  // student-facing club inbox icon unchanged.
-                  attachIcon: _isClubInbox && !_isClubInboxBoardViewer
-                      ? Icons.photo_camera_outlined
-                      : Icons.attach_file_rounded,
+                  // The paperclip's sheet only offers library media; a live
+                  // capture lives on the trailing camera button, which morphs
+                  // into the send button while a draft exists.
                   onAttach: _openAttachSheet,
                   onSend: _send,
+                  onCameraCapture: () =>
+                      _pickAttachment(_ChatAttachment.camera),
                   banner: _replyingTo == null
                       ? null
                       : _designReplyBanner(_replyingTo!),
@@ -1316,7 +1379,7 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
                   child: Icon(
                     Icons.chevron_left_rounded,
                     size: 24,
-                    color: ChatsColors.accentText,
+                    color: ChatsColors.backIcon,
                   ),
                 ),
               ),
@@ -1418,7 +1481,7 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
                     child: Icon(
                       Icons.chevron_left_rounded,
                       size: 24,
-                      color: ChatsColors.accentText,
+                      color: ChatsColors.backIcon,
                     ),
                   ),
                 ),
@@ -1565,6 +1628,7 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
   Widget _buildDesignMessageList(
     List<ChatMessage> messages,
     List<ChatMessage> matches,
+    List<String> typing,
   ) {
     final matchIds = matches.map((m) => m.id).toSet();
     _searchAnchors.removeWhere((id, _) => !matchIds.contains(id));
@@ -1575,31 +1639,53 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
     for (var i = 0; i < messages.length; i++) {
       final m = messages[i];
       final prev = i > 0 ? messages[i - 1] : null;
+      final next = i < messages.length - 1 ? messages[i + 1] : null;
       if (prev == null || !_sameDay(prev.createdAt, m.createdAt)) {
         items.add(ChatDayDivider(label: _dayLabel(m.createdAt)));
       }
+      final senderId = chatStore.senderIdForViewer(m, _myId);
+      final nextSenderId = next == null
+          ? null
+          : chatStore.senderIdForViewer(next, _myId);
+      final lastOfRun =
+          next == null ||
+          nextSenderId != senderId ||
+          !_sameDay(next.createdAt, m.createdAt);
       items.add(
         SentMessageEntrance(
           key: ValueKey('sent-message-entrance-${m.id}'),
-          animate: m.id == _animatingSentMessageId,
+          animate: _animatingSentMessageIds.contains(m.id),
           onCompleted: () => _finishSentMessageEntrance(m.id),
-          child: _designBubbleRow(m, anchor: _searchAnchors[m.id]),
+          child: _designBubbleRow(
+            m,
+            anchor: _searchAnchors[m.id],
+            showTail: lastOfRun,
+          ),
         ),
       );
     }
+    if (typing.isNotEmpty) items.add(_typingBubble(typing));
+    final childIndexByKey = <Key, int>{
+      for (var i = 0; i < items.length; i++)
+        ?items[i].key: items.length - 1 - i,
+    };
     return ListView.builder(
       controller: _scrollController,
       reverse: true,
       padding: const EdgeInsets.fromLTRB(16, 12, 16, 12),
       itemCount: items.length,
+      findChildIndexCallback: (key) => childIndexByKey[key],
       itemBuilder: (context, i) => items[items.length - 1 - i],
     );
   }
 
-  /// One message. The handoff repeats the sender name and avatar on **every**
-  /// incoming group message rather than grouping runs, and gives outgoing
-  /// messages neither, so there is no first/last-of-run bookkeeping here.
-  Widget _designBubbleRow(ChatMessage m, {GlobalKey? anchor}) {
+  /// One message. Sender labels and avatars remain visible on every incoming
+  /// group message, while only the bottom bubble in a sender run gets a tail.
+  Widget _designBubbleRow(
+    ChatMessage m, {
+    GlobalKey? anchor,
+    required bool showTail,
+  }) {
     final mine = chatStore.isMessageOwner(m, _myId);
     final senderId = chatStore.senderIdForViewer(m, _myId);
     final (senderName, senderIsAdmin) = _senderInfo(senderId);
@@ -1634,6 +1720,7 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
     final bubble = ChatBubbleShell(
       key: ValueKey('chat-message-bubble-${m.id}'),
       mine: mine,
+      showTail: showTail,
       maxWidth: _designBubbleMaxWidth(context, inset: showAvatar),
       padding: photoPath != null
           ? const EdgeInsets.all(2)
@@ -2302,7 +2389,7 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
                       child: Icon(
                         Icons.arrow_back_ios_new_rounded,
                         size: 17,
-                        color: AppColors.primaryRed,
+                        color: ChatsColors.backIcon,
                       ),
                     ),
                   ),
@@ -2474,6 +2561,78 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
     return parenthetical?.group(1) ?? club.name;
   }
 
+  Widget _typingBubble(List<String> actorIds) {
+    final visibleActors = actorIds.take(2).toList(growable: false);
+    final names = visibleActors
+        .map((id) {
+          final name = _senderInfo(id).$1.trim();
+          return name.isEmpty ? S.studentProfile : name;
+        })
+        .toList(growable: false);
+    final semanticLabel = actorIds.length == 1
+        ? S.typingOne(names.first)
+        : S.typingMany(names.join(' & '));
+
+    final avatars = <Widget>[];
+    if (_isDirect) {
+      final peer = _peer;
+      final peerId = ChatStore.dmPeerOf(widget.threadId, _myId) ?? '';
+      avatars.add(
+        UserAvatar(
+          userId: peer?.id ?? peerId,
+          name: peer?.name ?? _senderInfo(peerId).$1,
+          size: 28,
+          fontSize: 11,
+        ),
+      );
+    } else if (_isClubInbox) {
+      final conversation = _clubInbox;
+      final club = _club;
+      final showingStudent =
+          conversation != null && conversation.profileId != _myId;
+      if (showingStudent) {
+        final student = _userForId(conversation.profileId);
+        avatars.add(
+          UserAvatar(
+            userId: conversation.profileId,
+            name: student?.name ?? _senderInfo(conversation.profileId).$1,
+            size: 28,
+            fontSize: 11,
+          ),
+        );
+      } else if (club != null) {
+        avatars.add(
+          ClubAvatar(
+            clubId: club.id,
+            clubName: club.name,
+            color: _colorForClub(club.id),
+            imageUrl: club.logoUrl,
+            size: 28,
+            fontSize: 11,
+            shape: 'circle',
+          ),
+        );
+      }
+    } else {
+      avatars.addAll(
+        visibleActors.map(
+          (id) => UserAvatar(
+            userId: id,
+            name: _senderInfo(id).$1,
+            size: 28,
+            fontSize: 11,
+          ),
+        ),
+      );
+    }
+
+    return ChatTypingBubble(
+      key: const ValueKey('chat-typing-bubble'),
+      avatars: avatars,
+      semanticLabel: semanticLabel,
+    );
+  }
+
   Widget _buildNewChatIntro() {
     final memberIds = _isGroup
         ? chatStore
@@ -2561,14 +2720,21 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
   // ── Message list ────────────────────────────────────────────────────────────
 
   Widget _buildMessageList(List<ChatMessage> messages) {
-    if (messages.isEmpty) return _buildNewChatIntro();
+    final typing = chatStore.typingUserIds(widget.threadId, excluding: _myId);
+    if (messages.isEmpty && typing.isEmpty) return _buildNewChatIntro();
 
     final items = _buildItems(messages);
+    if (typing.isNotEmpty) items.add(_typingBubble(typing));
+    final childIndexByKey = <Key, int>{
+      for (var i = 0; i < items.length; i++)
+        ?items[i].key: items.length - 1 - i,
+    };
     return ListView.builder(
       controller: _scrollController,
       reverse: true,
       padding: const EdgeInsets.fromLTRB(14, 12, 14, 10),
       itemCount: items.length,
+      findChildIndexCallback: (key) => childIndexByKey[key],
       itemBuilder: (context, i) => items[items.length - 1 - i],
     );
   }
@@ -2598,7 +2764,7 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
       items.add(
         SentMessageEntrance(
           key: ValueKey('sent-message-entrance-${m.id}'),
-          animate: m.id == _animatingSentMessageId,
+          animate: _animatingSentMessageIds.contains(m.id),
           onCompleted: () => _finishSentMessageEntrance(m.id),
           child: _buildBubbleRow(
             m,
@@ -2882,7 +3048,7 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
                       ],
                     ),
                   ),
-                // Swipe right to reply, same as long-press → Reply. Gated on
+                // Swipe left to reply, same as long-press → Reply. Gated on
                 // the same write check, so read-only threads stay inert.
                 SwipeToReply(
                   key: ValueKey('chat-swipe-reply-${m.id}'),

@@ -767,16 +767,21 @@ class ClubSystemStrip extends StatelessWidget {
 
 /// `bubble-typing` `143:70` — three dots in a bubble beside the sender's
 /// avatar, animating in sequence.
-class ClubTypingBubble extends StatefulWidget {
-  final Widget avatar;
+class ChatTypingBubble extends StatefulWidget {
+  final List<Widget> avatars;
+  final String semanticLabel;
 
-  const ClubTypingBubble({super.key, required this.avatar});
+  const ChatTypingBubble({
+    super.key,
+    required this.avatars,
+    required this.semanticLabel,
+  });
 
   @override
-  State<ClubTypingBubble> createState() => _ClubTypingBubbleState();
+  State<ChatTypingBubble> createState() => _ChatTypingBubbleState();
 }
 
-class _ClubTypingBubbleState extends State<ClubTypingBubble>
+class _ChatTypingBubbleState extends State<ChatTypingBubble>
     with SingleTickerProviderStateMixin {
   late final AnimationController _controller = AnimationController(
     vsync: this,
@@ -791,52 +796,68 @@ class _ClubTypingBubbleState extends State<ClubTypingBubble>
 
   @override
   Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.only(top: 8),
-      child: Row(
-        children: [
-          SizedBox(width: 28, height: 28, child: widget.avatar),
-          const SizedBox(width: 8),
-          Container(
-            width: 63,
-            height: 35,
-            alignment: Alignment.center,
-            decoration: BoxDecoration(
-              color: ChatsColors.fill,
-              borderRadius: BorderRadius.circular(kChatBubbleRadius),
-            ),
-            child: AnimatedBuilder(
-              animation: _controller,
-              builder: (context, _) => Row(
-                mainAxisSize: MainAxisSize.min,
+    return Semantics(
+      container: true,
+      liveRegion: true,
+      label: widget.semanticLabel,
+      excludeSemantics: true,
+      child: Padding(
+        padding: const EdgeInsets.only(top: 8),
+        child: Row(
+          children: [
+            SizedBox(
+              width: widget.avatars.length > 1 ? 38 : 28,
+              height: 28,
+              child: Stack(
+                clipBehavior: Clip.none,
                 children: [
-                  for (var i = 0; i < 3; i++) ...[
-                    if (i > 0) const SizedBox(width: 5),
-                    Opacity(
-                      opacity:
-                          0.35 +
-                          0.65 *
-                              (((_controller.value * 3) - i).clamp(0.0, 1.0) *
-                                  (1 -
-                                      ((_controller.value * 3) - i - 1).clamp(
-                                        0.0,
-                                        1.0,
-                                      ))),
-                      child: Container(
-                        width: 7,
-                        height: 7,
-                        decoration: BoxDecoration(
-                          color: ChatsColors.muted,
-                          shape: BoxShape.circle,
-                        ),
-                      ),
-                    ),
-                  ],
+                  for (var i = 0; i < widget.avatars.length && i < 2; i++)
+                    Positioned(left: i * 10, child: widget.avatars[i]),
                 ],
               ),
             ),
-          ),
-        ],
+            const SizedBox(width: 8),
+            Container(
+              width: 63,
+              height: 35,
+              alignment: Alignment.center,
+              decoration: BoxDecoration(
+                color: ChatsColors.fill,
+                borderRadius: BorderRadius.circular(kChatBubbleRadius),
+              ),
+              child: AnimatedBuilder(
+                animation: _controller,
+                builder: (context, _) => Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    for (var i = 0; i < 3; i++) ...[
+                      if (i > 0) const SizedBox(width: 5),
+                      Opacity(
+                        opacity:
+                            0.35 +
+                            0.65 *
+                                (((_controller.value * 3) - i).clamp(0.0, 1.0) *
+                                    (1 -
+                                        ((_controller.value * 3) - i - 1).clamp(
+                                          0.0,
+                                          1.0,
+                                        ))),
+                        child: Container(
+                          width: 7,
+                          height: 7,
+                          decoration: BoxDecoration(
+                            color: ChatsColors.muted,
+                            shape: BoxShape.circle,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ],
+                ),
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }

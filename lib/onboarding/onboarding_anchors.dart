@@ -23,10 +23,30 @@ class OnboardingAnchors {
   static const String navSearch = 'nav.search';
   static const String navChats = 'nav.chats';
   static const String navProfile = 'nav.profile';
+
+  /// The whole floating bar. `tut-home-nav` spotlights the bar as one shape
+  /// rather than a single tab, so it needs its own anchor.
+  static const String navBar = 'nav.bar';
+
   static const String homeFeedToggle = 'home.feedToggle';
+
+  /// The This Week search field (`tut-events-filters`).
+  static const String eventsSearch = 'events.search';
   static const String eventsRsvp = 'events.rsvp';
   static const String searchField = 'search.field';
   static const String chatsCompose = 'chats.compose';
+
+  /// The Clubs / Friends lane pill in the Chats header (`tut-chats-tabs`).
+  static const String chatsLaneDropdown = 'chats.laneDropdown';
+
+  /// The student profile's identity card (`tut-profile-hero`) and the
+  /// My Clubs section under it (`tut-profile-clubs`).
+  static const String profileHero = 'profile.hero';
+  static const String profileClubs = 'profile.clubs';
+
+  /// The pinned-announcements panel inside a club chat. Not a tour stop — it
+  /// anchors the standalone page tip (`tut-announcements`).
+  static const String announcements = 'chats.announcements';
 
   // Club-admin-only anchors (see clubAdminSteps in onboarding_steps.dart).
   static const String clubCreateButton = 'club.createButton';

@@ -31,7 +31,9 @@ import '../widgets/club_avatar.dart';
 import '../widgets/club_follow_button.dart';
 import '../widgets/event_cover_image.dart';
 import '../widgets/loading_skeleton.dart';
+import '../widgets/media_scrim.dart';
 import '../widgets/user_follow_button.dart';
+import '../theme/app_semantic_colors.dart';
 import '../models/share.dart';
 import '../models/news_post.dart';
 import '../models/event.dart';
@@ -1151,12 +1153,6 @@ class _FeedScreenState extends State<FeedScreen> {
                         child: Row(
                           mainAxisSize: MainAxisSize.min,
                           children: [
-                            Icon(
-                              Icons.check_circle_rounded,
-                              size: 18,
-                              color: AppColors.primaryRed,
-                            ),
-                            const SizedBox(width: 8),
                             Text(
                               AppLocalizations.of(context)!.endOfFeed,
                               textAlign: TextAlign.center,
@@ -1165,6 +1161,11 @@ class _FeedScreenState extends State<FeedScreen> {
                                 fontWeight: FontWeight.w600,
                                 color: AppColors.secondaryText,
                               ),
+                            ),
+                            const SizedBox(width: 8),
+                            const Text(
+                              '🙂',
+                              style: TextStyle(fontSize: 18, height: 1),
                             ),
                           ],
                         ),
@@ -1214,7 +1215,7 @@ class _FeedScreenState extends State<FeedScreen> {
 
   String get _greetingName {
     final activeClub = accountSwitcherService.activeClub;
-    if (activeClub != null) return activeClub.name;
+    if (activeClub != null) return '@${clubHandle(activeClub)}';
     final student = authService.currentUser;
     if (authService.isStudentSession && student != null) {
       return _firstName(student.name);
@@ -1223,7 +1224,7 @@ class _FeedScreenState extends State<FeedScreen> {
     final admin = authService.currentAdmin;
     if (admin != null) {
       final club = managedClubForAdmin(admin.id);
-      return club?.name ?? _firstName(admin.name);
+      return club != null ? '@${clubHandle(club)}' : _firstName(admin.name);
     }
 
     return '';
@@ -4296,18 +4297,7 @@ class _EventCardState extends State<_EventCard> {
                     cacheWidth: 700,
                     cacheHeight: 320,
                   ),
-                  DecoratedBox(
-                    decoration: BoxDecoration(
-                      gradient: LinearGradient(
-                        begin: Alignment.topCenter,
-                        end: Alignment.bottomCenter,
-                        colors: [
-                          Colors.black.withValues(alpha: 0.04),
-                          Colors.black.withValues(alpha: 0.64),
-                        ],
-                      ),
-                    ),
-                  ),
+                  const MediaScrim(position: MediaScrimPosition.bottom),
                   // Big date in background
                   Positioned(
                     right: 16,
@@ -4317,7 +4307,9 @@ class _EventCardState extends State<_EventCard> {
                       style: TextStyle(
                         fontSize: 80,
                         fontWeight: FontWeight.w900,
-                        color: Colors.white.withValues(alpha: 0.15),
+                        color: context.semanticColors.onMedia.withValues(
+                          alpha: 0.15,
+                        ),
                       ),
                     ),
                   ),
@@ -4334,13 +4326,15 @@ class _EventCardState extends State<_EventCard> {
                             vertical: 4,
                           ),
                           decoration: BoxDecoration(
-                            color: Colors.white.withValues(alpha: 0.2),
+                            color: context.semanticColors.onMedia.withValues(
+                              alpha: 0.2,
+                            ),
                             borderRadius: BorderRadius.all(Radius.circular(20)),
                           ),
                           child: Text(
                             '${_monthAbbr(dt.month)} ${dt.day}  ·  ${_fmt12(dt)}',
                             style: TextStyle(
-                              color: Colors.white,
+                              color: context.semanticColors.onMedia,
                               fontSize: 12,
                               fontWeight: FontWeight.w600,
                             ),
@@ -4350,7 +4344,7 @@ class _EventCardState extends State<_EventCard> {
                         Text(
                           widget.event.title,
                           style: TextStyle(
-                            color: Colors.white,
+                            color: context.semanticColors.onMedia,
                             fontSize: 18,
                             fontWeight: FontWeight.bold,
                             shadows: [
@@ -4665,18 +4659,7 @@ class _EventRailCardState extends State<_EventRailCard> {
                     cacheWidth: 440,
                     cacheHeight: 220,
                   ),
-                  DecoratedBox(
-                    decoration: BoxDecoration(
-                      gradient: LinearGradient(
-                        begin: Alignment.topCenter,
-                        end: Alignment.bottomCenter,
-                        colors: [
-                          Colors.black.withValues(alpha: 0.04),
-                          Colors.black.withValues(alpha: 0.32),
-                        ],
-                      ),
-                    ),
-                  ),
+                  const MediaScrim(position: MediaScrimPosition.top),
                   Positioned(
                     left: 9,
                     top: 8,
@@ -4689,13 +4672,15 @@ class _EventRailCardState extends State<_EventRailCard> {
                         color: Colors.black.withValues(alpha: 0.68),
                         borderRadius: BorderRadius.all(Radius.circular(999)),
                         border: Border.all(
-                          color: Colors.white.withValues(alpha: 0.14),
+                          color: context.semanticColors.onMedia.withValues(
+                            alpha: 0.14,
+                          ),
                         ),
                       ),
                       child: Text(
                         dateTimeLabel,
                         style: TextStyle(
-                          color: Colors.white.withValues(alpha: 0.94),
+                          color: context.semanticColors.onMedia,
                           fontSize: 10.5,
                           fontWeight: FontWeight.w800,
                           letterSpacing: -0.1,

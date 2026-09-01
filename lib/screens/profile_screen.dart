@@ -817,6 +817,9 @@ class _ProfileScreenState extends State<ProfileScreen> {
           }).toList();
 
           return StudentProfileScreen(
+            // [ProfileScreen] is only ever built by MainNavScreen's tab 4, so
+            // this instance is always the one the tutorial spotlights.
+            isTutorialHost: true,
             data: StudentProfileData(
               userId: user.id,
               initials: _initialsFor(name),

@@ -8,7 +8,10 @@ import 'package:flutter_application_1/features/calendar/providers/calendar_provi
 import 'package:flutter_application_1/features/calendar/providers/calendar_state.dart';
 import 'package:flutter_application_1/features/calendar/services/calendar_service.dart';
 import 'package:flutter_application_1/l10n/app_localizations.dart';
+import 'package:flutter_application_1/models/club.dart';
+import 'package:flutter_application_1/models/event.dart';
 import 'package:flutter_application_1/onboarding/onboarding_anchors.dart';
+import 'package:flutter_application_1/onboarding/onboarding_steps.dart';
 import 'package:flutter_application_1/onboarding/onboarding_service.dart';
 import 'package:flutter_application_1/onboarding/starter_checklist_service.dart';
 import 'package:flutter_application_1/onboarding/widgets/onboarding_guide_card.dart';
@@ -20,6 +23,7 @@ import 'package:flutter_application_1/services/chat_store.dart';
 import 'package:flutter_application_1/services/content_store.dart';
 import 'package:flutter_application_1/services/hive_bootstrap.dart';
 import 'package:flutter_application_1/services/locale_service.dart';
+import 'package:flutter_application_1/services/mock_data.dart';
 import 'package:flutter_application_1/services/personalization_service.dart';
 import 'package:flutter_application_1/services/theme_service.dart';
 import 'package:flutter_application_1/services/user_prefs_service.dart';
@@ -61,7 +65,7 @@ void main() {
     );
     expect(guideRect.overlaps(targetRect), isFalse);
     expect(skipRect.overlaps(targetRect), isFalse);
-    expect(skipRect.overlaps(guideRect.inflate(12)), isFalse);
+    expect(guideRect.contains(skipRect.center), isTrue);
   }
 
   testWidgets('student completes the campus tour and uses the checklist', (
@@ -82,8 +86,50 @@ void main() {
     ]);
     contentStore.applyToLists();
 
-    expect(authService.login('alice@ku.edu.tr', '111111'), isTrue);
-    const userId = 'u1';
+    const testEmail = 'onboarding.drive@ku.edu.tr';
+    const testPassword = '135790';
+    if (!authService.login(testEmail, testPassword)) {
+      expect(
+        authService.signUp('Onboarding Student', testEmail, testPassword),
+        isTrue,
+      );
+    }
+    final userId = authService.currentUser!.id;
+
+    // Runtime data no longer ships with bundled fixtures. Supply one upcoming
+    // event so the event-card coach mark exercises a real anchor rather than
+    // the flow's card-only fallback for empty states.
+    const fixtureClubId = 'onboarding-drive-club';
+    const fixtureEventId = 'onboarding-drive-event';
+    clubs.removeWhere((club) => club.id == fixtureClubId);
+    events.removeWhere((event) => event.id == fixtureEventId);
+    clubs.add(
+      Club(
+        id: fixtureClubId,
+        name: 'Campus Tour Club',
+        description: 'Integration-test fixture',
+        adminUserIds: const [],
+      ),
+    );
+    final eventStart = DateTime.now().add(const Duration(days: 1));
+    events.add(
+      Event(
+        id: fixtureEventId,
+        clubId: fixtureClubId,
+        title: 'Campus Tour Event',
+        description: 'Integration-test fixture',
+        dateTime: eventStart,
+        endTime: eventStart.add(const Duration(hours: 1)),
+        location: 'Koç University',
+        attendeeUserIds: const [],
+      ),
+    );
+    addTearDown(() {
+      events.removeWhere((event) => event.id == fixtureEventId);
+      clubs.removeWhere((club) => club.id == fixtureClubId);
+      authService.logout();
+    });
+
     userPrefsService.load(userId);
     await themeService.markThemeChosen(userId, false);
     await localeService.markLanguageChosen(userId, 'en');
@@ -111,9 +157,9 @@ void main() {
     await binding.convertFlutterSurfaceToImage();
     await tester.pump(const Duration(milliseconds: 400));
 
-    expect(find.text(S.onboardingWelcomeTitle('Alice')), findsOneWidget);
-    expect(find.text(S.onboardingShowMeAround), findsOneWidget);
-    expect(find.text(S.onboardingExploreOnMyOwn), findsOneWidget);
+    expect(find.text(S.tutorialWelcomeTitle), findsOneWidget);
+    expect(find.text(S.tutorialStartTour), findsOneWidget);
+    expect(find.text(S.tutorialSkipForNow), findsOneWidget);
     await shot(tester, 'onboarding-01-welcome');
 
     await themeService.setDark(true);
@@ -126,28 +172,13 @@ void main() {
     await themeService.setDark(false);
     await tester.pump(const Duration(milliseconds: 400));
 
-    await tester.tap(find.text(S.onboardingShowMeAround));
+    await tester.tap(find.text(S.tutorialStartTour));
     await settleFlow(tester);
 
-    final guideLines = <String>[
-      S.onboardingStudentHome,
-      S.onboardingStudentFeedToggle,
-      S.onboardingStudentRsvp,
-      S.onboardingStudentExplore,
-      S.onboardingStudentCompose,
-      S.onboardingStudentProfile,
-    ];
-    final targetKeys = <GlobalKey>[
-      onboardingAnchors.keyFor(OnboardingAnchors.navHome),
-      onboardingAnchors.keyFor(OnboardingAnchors.homeFeedToggle),
-      onboardingAnchors.keyFor(OnboardingAnchors.eventsRsvp),
-      onboardingAnchors.keyFor(OnboardingAnchors.searchField),
-      onboardingAnchors.keyFor(OnboardingAnchors.chatsCompose),
-      onboardingAnchors.keyFor(OnboardingAnchors.navProfile),
-    ];
+    final tourSteps = resolveOnboardingSteps(studentOnboardingSteps());
 
-    expect(find.text(guideLines.first), findsOneWidget);
-    expectChromeClearOf(tester, targetKeys.first);
+    expect(find.text(tourSteps.first.step.body()), findsOneWidget);
+    expectChromeClearOf(tester, tourSteps.first.step.targetKey);
     await shot(tester, 'onboarding-02-home');
 
     await themeService.setDark(true);
@@ -160,35 +191,37 @@ void main() {
     await themeService.setDark(false);
     await tester.pump(const Duration(milliseconds: 400));
 
-    // Exercise the alternate advancement path once: tapping the real,
-    // spotlit Home control advances the overlay as well as reaching the nav.
+    // Exercise the alternate advancement path once. The whole navigation bar
+    // is the first target; the overlay consumes this tap so it advances the
+    // tour without accidentally switching tabs.
     await tester.tap(
-      find.byKey(onboardingAnchors.keyFor(OnboardingAnchors.navHome)),
+      find.byKey(tourSteps.first.step.targetKey),
+      // The onboarding overlay intentionally owns this hit while the real
+      // navigation bar remains underneath it.
+      warnIfMissed: false,
     );
     await settleFlow(tester);
 
-    for (var index = 1; index < guideLines.length; index++) {
-      expect(find.text(guideLines[index]), findsOneWidget);
-      expectChromeClearOf(tester, targetKeys[index]);
+    for (var index = 1; index < tourSteps.length; index++) {
+      final step = tourSteps[index];
+      expect(find.text(step.step.body()), findsOneWidget);
+      expectChromeClearOf(tester, step.step.targetKey);
       await shot(tester, 'onboarding-${index + 2}-stop-${index + 1}');
-      final advanceLabel = index == guideLines.length - 1
-          ? S.onboardingFinish
-          : S.onboardingNext;
+      final advanceLabel = step.isPageEnd ? S.tutorialGotIt : S.onboardingNext;
       await tester.tap(find.text(advanceLabel));
       await settleFlow(tester);
     }
 
-    expect(find.text(S.onboardingFinishTitle), findsOneWidget);
-    expect(find.text(S.checklistFollowClub), findsOneWidget);
-    expect(find.text(S.checklistRsvpEvent), findsOneWidget);
-    expect(find.text(S.checklistSayHi), findsOneWidget);
-    expect(find.text(S.onboardingLetsGo), findsOneWidget);
+    expect(find.text(S.tutorialFinishTitle), findsOneWidget);
+    expect(find.text(S.tutorialReplayTour), findsOneWidget);
+    expect(find.text(S.tutorialExploreClubUp), findsOneWidget);
+    expect(find.text(S.checklistTitle), findsNothing);
     expect(onboardingService.isComplete(userId), isFalse);
     await shot(tester, 'onboarding-08-finish');
 
     // The one final CTA starts the Home transition while the overlay fades,
     // then persists completion and starts the checklist.
-    await tester.tap(find.text(S.onboardingLetsGo));
+    await tester.tap(find.text(S.tutorialExploreClubUp));
     await settleFlow(tester);
     expect(find.byKey(const ValueKey('onboarding-skip-button')), findsNothing);
     expect(onboardingService.isComplete(userId), isTrue);
@@ -227,7 +260,11 @@ void main() {
     await tester.pump(const Duration(milliseconds: 500));
     await tester.tap(find.byKey(const ValueKey('starter-checklist-close')));
     await tester.pump(const Duration(milliseconds: 500));
-    expect(find.byType(StarterChecklistCard), findsNothing);
+    // The Profile screen keeps the card widget mounted; dismissal collapses
+    // its contents instead of replacing the widget itself.
+    expect(find.byType(StarterChecklistCard), findsOneWidget);
+    expect(find.text(S.checklistTitle), findsNothing);
+    expect(find.byKey(const ValueKey('starter-checklist-close')), findsNothing);
     expect(starterChecklistService.isActiveFor(userId), isFalse);
     await shot(tester, 'onboarding-12-profile-checklist-dismissed');
     expect(tester.takeException(), isNull);

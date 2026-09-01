@@ -52,7 +52,10 @@ class SettingsColors {
   static Color get icon =>
       _dark ? const Color(0xFFE8A1A6) : const Color(0xFF800020);
 
-  /// The back button's ring, unchanged between themes.
+  /// The icon-only back control stays neutral in both appearances.
+  static Color get backIcon => _dark ? Colors.white : Colors.black;
+
+  /// Shared burgundy accent used by settings subpages.
   static const Color accent = Color(0xFF800020);
 
   /// The selected half of a segmented toggle — `#8B1111`, not the accent.
@@ -67,7 +70,7 @@ const double kSettingsPagePadding = 24;
 
 // ── chrome ───────────────────────────────────────────────────────────────────
 
-/// `header` — the ringed back circle and the page title.
+/// `header` — the subtle icon-only back control and the page title.
 class SettingsHeaderBar extends StatelessWidget {
   const SettingsHeaderBar({
     super.key,
@@ -86,11 +89,18 @@ class SettingsHeaderBar extends StatelessWidget {
       padding: const EdgeInsets.fromLTRB(kSettingsPagePadding, 15, 24, 15),
       child: Row(
         children: [
-          ProfileCircleButton(
-            icon: Icons.chevron_left_rounded,
-            iconSize: 22,
+          IconButton(
+            key: const ValueKey('settings-back-button'),
+            onPressed: onBack,
             tooltip: backTooltip,
-            onTap: onBack,
+            padding: EdgeInsets.zero,
+            constraints: const BoxConstraints.tightFor(width: 34, height: 34),
+            style: IconButton.styleFrom(
+              foregroundColor: SettingsColors.backIcon,
+              backgroundColor: Colors.transparent,
+              disabledBackgroundColor: Colors.transparent,
+            ),
+            icon: const Icon(Icons.chevron_left_rounded, size: 22),
           ),
           const SizedBox(width: 12),
           Expanded(

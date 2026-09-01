@@ -70,6 +70,13 @@ class UserPrefsService {
         final name = _box.get(k);
         final club = clubForId(cid);
         if (name != null && club != null) club.name = name as String;
+      } else if (k.startsWith('clubInitials_')) {
+        final cid = k.substring('clubInitials_'.length);
+        final initials = _box.get(k);
+        final club = clubForId(cid);
+        if (initials != null && club != null) {
+          club.shortName = initials as String;
+        }
       } else if (k.startsWith('clubCategory_')) {
         final cid = k.substring('clubCategory_'.length);
         final category = _box.get(k);
@@ -96,6 +103,13 @@ class UserPrefsService {
   Future<void> saveClubName(String clubId, String name) async {
     if (!_initialized) return;
     await _box.put('clubName_$clubId', name);
+  }
+
+  /// Persists club initials for offline/mock sessions. Supabase remains the
+  /// shared source of truth for configured builds.
+  Future<void> saveClubInitials(String clubId, String initials) async {
+    if (!_initialized) return;
+    await _box.put('clubInitials_$clubId', initials);
   }
 
   /// Persists a club's category/tag summary globally (visible to everyone).

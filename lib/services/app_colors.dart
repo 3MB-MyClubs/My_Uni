@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../theme/app_semantic_colors.dart';
 import 'theme_service.dart';
 
 // ─── Raw dark-theme constants (used in ThemeData builder, not widget code) ────
@@ -29,6 +30,11 @@ class DarkColors {
 
 // ─── Theme-aware dynamic color accessors (use in all widget code) ─────────────
 class AppColors {
+  /// Contextual entry point for new code. The static getters below remain for
+  /// source compatibility with older screens while migration is in progress.
+  static AppSemanticColors semanticOf(BuildContext context) =>
+      AppSemanticColors.of(context);
+
   // Theme-sensitive: return dark or light value based on current preference
   static Color get primaryRed =>
       themeService.isDark ? DarkColors.primaryRed : LightColors.primaryRed;
@@ -99,7 +105,9 @@ class LightColors {
   static const Color text = Color(0xFF1A0610);
   static const Color bodyText = Color(0xFF3A1828);
   static const Color mutedText = Color(0xFF7A5868);
-  static const Color secondaryText = Color(0xFF9A7888);
+  // Darkened from the original decorative mauve so normal-size supporting
+  // text clears WCAG AA on both the page and card surfaces.
+  static const Color secondaryText = Color(0xFF715361);
   static const Color lightGray = Color(0xFFEDE2DE);
   static const Color darkGray = Color(0xFFD4C4BE);
   static const Color divider = Color(0x1F9E2045);

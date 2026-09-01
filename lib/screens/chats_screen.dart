@@ -502,65 +502,75 @@ class _ChatsScreenState extends State<ChatsScreen> {
             top: 0,
             bottom: 0,
             child: Center(
-              child: GestureDetector(
-                key: const ValueKey('chats-filter-dropdown'),
-                behavior: HitTestBehavior.opaque,
-                onTap: () => setState(() => _filterMenuOpen = !_filterMenuOpen),
-                child: AnimatedContainer(
-                  duration: const Duration(milliseconds: 180),
-                  curve: Curves.easeOutCubic,
-                  height: 28,
-                  padding: const EdgeInsets.symmetric(horizontal: 12),
-                  decoration: BoxDecoration(
-                    color: _filterMenuOpen
-                        ? ChatsColors.fill
-                        : Colors.transparent,
-                    borderRadius: BorderRadius.circular(999),
-                  ),
-                  child: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Flexible(
-                        child: AnimatedSwitcher(
-                          duration: const Duration(milliseconds: 220),
-                          switchInCurve: Curves.easeOutCubic,
-                          switchOutCurve: Curves.easeInCubic,
-                          transitionBuilder: (child, animation) =>
-                              FadeTransition(
-                                opacity: animation,
-                                child: SlideTransition(
-                                  position: Tween<Offset>(
-                                    begin: const Offset(0, 0.16),
-                                    end: Offset.zero,
-                                  ).animate(animation),
-                                  child: child,
+              // `tut-chats-tabs` spotlights the lane pill. Wrapped rather than
+              // keyed directly so the dropdown keeps the key its tests use.
+              child: KeyedSubtree(
+                key: widget.isTutorialHost
+                    ? onboardingAnchors.keyFor(
+                        OnboardingAnchors.chatsLaneDropdown,
+                      )
+                    : null,
+                child: GestureDetector(
+                  key: const ValueKey('chats-filter-dropdown'),
+                  behavior: HitTestBehavior.opaque,
+                  onTap: () =>
+                      setState(() => _filterMenuOpen = !_filterMenuOpen),
+                  child: AnimatedContainer(
+                    duration: const Duration(milliseconds: 180),
+                    curve: Curves.easeOutCubic,
+                    height: 28,
+                    padding: const EdgeInsets.symmetric(horizontal: 12),
+                    decoration: BoxDecoration(
+                      color: _filterMenuOpen
+                          ? ChatsColors.fill
+                          : Colors.transparent,
+                      borderRadius: BorderRadius.circular(999),
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Flexible(
+                          child: AnimatedSwitcher(
+                            duration: const Duration(milliseconds: 220),
+                            switchInCurve: Curves.easeOutCubic,
+                            switchOutCurve: Curves.easeInCubic,
+                            transitionBuilder: (child, animation) =>
+                                FadeTransition(
+                                  opacity: animation,
+                                  child: SlideTransition(
+                                    position: Tween<Offset>(
+                                      begin: const Offset(0, 0.16),
+                                      end: Offset.zero,
+                                    ).animate(animation),
+                                    child: child,
+                                  ),
                                 ),
+                            child: Text(
+                              _filterLabel,
+                              key: ValueKey(_filterLabel),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: figtree(
+                                size: 18,
+                                weight: FontWeight.w800,
+                                color: ChatsColors.text,
                               ),
-                          child: Text(
-                            _filterLabel,
-                            key: ValueKey(_filterLabel),
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                            style: figtree(
-                              size: 18,
-                              weight: FontWeight.w800,
-                              color: ChatsColors.text,
                             ),
                           ),
                         ),
-                      ),
-                      const SizedBox(width: 6),
-                      AnimatedRotation(
-                        turns: _filterMenuOpen ? 0.5 : 0,
-                        duration: const Duration(milliseconds: 240),
-                        curve: Curves.easeOutCubic,
-                        child: Icon(
-                          Icons.keyboard_arrow_down_rounded,
-                          size: 16,
-                          color: ChatsColors.text,
+                        const SizedBox(width: 6),
+                        AnimatedRotation(
+                          turns: _filterMenuOpen ? 0.5 : 0,
+                          duration: const Duration(milliseconds: 240),
+                          curve: Curves.easeOutCubic,
+                          child: Icon(
+                            Icons.keyboard_arrow_down_rounded,
+                            size: 16,
+                            color: ChatsColors.text,
+                          ),
                         ),
-                      ),
-                    ],
+                      ],
+                    ),
                   ),
                 ),
               ),
@@ -783,6 +793,7 @@ class _ChatsScreenState extends State<ChatsScreen> {
     final title = _titleFor(t);
     return _designRowShell(
       rowKey: ValueKey('chat-thread-row-${t.threadId}'),
+      flashId: t.threadId,
       unread: unread > 0,
       onTap: () => _openThread(
         t.threadId,
@@ -863,6 +874,7 @@ class _ChatsScreenState extends State<ChatsScreen> {
     final academicSummary = userState.academicSummaryFor(user.id);
     return _designRowShell(
       rowKey: ValueKey('chat-person-result-${user.id}'),
+      flashId: user.id,
       unread: false,
       onTap: () => _openDmWith(user),
       avatar: UserAvatar(
@@ -885,6 +897,7 @@ class _ChatsScreenState extends State<ChatsScreen> {
     required String subtitle,
     Key? titleKey,
     Widget? trailing,
+    String? flashId,
   }) {
     final titleText = Text(
       title,
@@ -897,50 +910,64 @@ class _ChatsScreenState extends State<ChatsScreen> {
         letterSpacing: -0.1,
       ),
     );
-    return Material(
-      color: unread ? ChatsColors.unreadRow : Colors.transparent,
-      child: InkWell(
-        key: rowKey,
-        onTap: onTap,
-        child: DecoratedBox(
-          decoration: BoxDecoration(
-            border: Border(bottom: BorderSide(color: ChatsColors.border)),
-          ),
-          child: SizedBox(
-            height: 72,
-            child: Row(
-              children: [
-                const SizedBox(width: 20),
-                SizedBox(width: 44, height: 44, child: avatar),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: Column(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      titleKey == null
-                          ? titleText
-                          : KeyedSubtree(key: titleKey, child: titleText),
-                      const SizedBox(height: 4),
-                      Text(
-                        subtitle,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: figtree(
-                          size: 13,
-                          weight: unread ? FontWeight.w500 : FontWeight.w400,
-                          color: unread ? ChatsColors.text : ChatsColors.muted,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-                if (trailing != null) ...[
+    final query = _query.trim();
+    return ChatSearchFlash(
+      token: '$query|$flashId',
+      active: query.isNotEmpty && flashId != null,
+      builder: (context, wash) => Material(
+        // Blend under the ink and the unread wash rather than over them; at
+        // rest the row keeps exactly the color it had before the pulse existed.
+        color: wash.a == 0
+            ? (unread ? ChatsColors.unreadRow : Colors.transparent)
+            : Color.alphaBlend(
+                wash,
+                unread ? ChatsColors.unreadRow : ChatsColors.background,
+              ),
+        child: InkWell(
+          key: rowKey,
+          onTap: onTap,
+          child: DecoratedBox(
+            decoration: BoxDecoration(
+              border: Border(bottom: BorderSide(color: ChatsColors.border)),
+            ),
+            child: SizedBox(
+              height: 72,
+              child: Row(
+                children: [
+                  const SizedBox(width: 20),
+                  SizedBox(width: 44, height: 44, child: avatar),
                   const SizedBox(width: 12),
-                  SizedBox(width: 60, height: 37, child: trailing),
+                  Expanded(
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        titleKey == null
+                            ? titleText
+                            : KeyedSubtree(key: titleKey, child: titleText),
+                        const SizedBox(height: 4),
+                        Text(
+                          subtitle,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: figtree(
+                            size: 13,
+                            weight: unread ? FontWeight.w500 : FontWeight.w400,
+                            color: unread
+                                ? ChatsColors.text
+                                : ChatsColors.muted,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  if (trailing != null) ...[
+                    const SizedBox(width: 12),
+                    SizedBox(width: 60, height: 37, child: trailing),
+                  ],
+                  const SizedBox(width: 20),
                 ],
-                const SizedBox(width: 20),
-              ],
+              ),
             ),
           ),
         ),
@@ -969,7 +996,7 @@ class _ChatsScreenState extends State<ChatsScreen> {
               child: Icon(
                 Icons.chevron_left_rounded,
                 size: 24,
-                color: ChatsColors.accentText,
+                color: ChatsColors.backIcon,
               ),
             ),
           ),
@@ -1084,55 +1111,62 @@ class _ChatsScreenState extends State<ChatsScreen> {
         final club = thread.clubId == null ? null : clubForId(thread.clubId!);
         final title = _titleFor(thread);
         final memberCount = club == null ? 0 : clubMemberCount(club.id);
-        return InkWell(
-          key: ValueKey('club-search-result-${thread.threadId}'),
-          onTap: () => _openThread(thread.threadId),
-          child: SizedBox(
-            height: 64,
-            child: Row(
-              children: [
-                const SizedBox(width: 16),
-                if (club != null)
-                  ClubAvatar(
-                    clubId: club.id,
-                    clubName: club.name,
-                    color: _colorForClub(club.id),
-                    imageUrl: club.logoUrl,
-                    size: 44,
-                    fontSize: 17,
-                    shape: 'circle',
-                  )
-                else
-                  const SizedBox(width: 44, height: 44),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: Column(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      _highlightedTitle(title),
-                      const SizedBox(height: 3),
-                      Text(
-                        S.clubMembersAndUnread(memberCount, thread.unread),
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: figtree(
-                          size: 11,
-                          weight: FontWeight.w500,
-                          color: ChatsColors.muted,
-                        ),
+        return ChatSearchFlash(
+          token: '${_query.trim()}|${thread.threadId}',
+          active: _query.trim().isNotEmpty,
+          builder: (context, wash) => Material(
+            color: Color.alphaBlend(wash, ChatsColors.background),
+            child: InkWell(
+              key: ValueKey('club-search-result-${thread.threadId}'),
+              onTap: () => _openThread(thread.threadId),
+              child: SizedBox(
+                height: 64,
+                child: Row(
+                  children: [
+                    const SizedBox(width: 16),
+                    if (club != null)
+                      ClubAvatar(
+                        clubId: club.id,
+                        clubName: club.name,
+                        color: _colorForClub(club.id),
+                        imageUrl: club.logoUrl,
+                        size: 44,
+                        fontSize: 17,
+                        shape: 'circle',
+                      )
+                    else
+                      const SizedBox(width: 44, height: 44),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          _highlightedTitle(title),
+                          const SizedBox(height: 3),
+                          Text(
+                            S.clubMembersAndUnread(memberCount, thread.unread),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: figtree(
+                              size: 11,
+                              weight: FontWeight.w500,
+                              color: ChatsColors.muted,
+                            ),
+                          ),
+                        ],
                       ),
-                    ],
-                  ),
+                    ),
+                    const SizedBox(width: 10),
+                    Icon(
+                      Icons.chevron_right_rounded,
+                      size: 18,
+                      color: ChatsColors.muted,
+                    ),
+                    const SizedBox(width: 16),
+                  ],
                 ),
-                const SizedBox(width: 10),
-                Icon(
-                  Icons.chevron_right_rounded,
-                  size: 18,
-                  color: ChatsColors.muted,
-                ),
-                const SizedBox(width: 16),
-              ],
+              ),
             ),
           ),
         );

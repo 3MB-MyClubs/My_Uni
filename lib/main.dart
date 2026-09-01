@@ -24,7 +24,6 @@ import 'screens/onboarding_carousel_screen.dart';
 import 'services/app_bootstrap.dart';
 import 'services/auth_service.dart';
 import 'services/mock_clubup_profile.dart';
-import 'services/app_colors.dart';
 import 'services/hive_bootstrap.dart';
 import 'services/user_prefs_service.dart';
 import 'services/chat_store.dart';
@@ -53,6 +52,8 @@ import 'services/terms_acceptance_service.dart';
 import 'services/onboarding_intro_service.dart';
 import 'services/app_update_service.dart';
 import 'services/startup_log.dart';
+import 'theme/app_semantic_colors.dart';
+import 'theme/app_theme.dart';
 
 @pragma('vm:entry-point')
 Future<void> firebaseMessagingBackgroundHandler(RemoteMessage message) async {
@@ -370,10 +371,12 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
   String? _prefsLoadedForUserId;
   bool _didLogInitialRoute = false;
 
-  // _buildTheme reads only const palettes (DarkColors/LightColors), so both
-  // ThemeData graphs are immutable for the process lifetime.
+  // Theme graphs are built from explicit variants and never read the mutable
+  // global preference service.
   ThemeData? _lightTheme;
   ThemeData? _darkTheme;
+  ThemeData? _highContrastLightTheme;
+  ThemeData? _highContrastDarkTheme;
 
   @override
   void initState() {
@@ -587,154 +590,6 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
       _showIntroThisLaunch = false;
       _showSignUp = showSignUp;
     });
-  }
-
-  ThemeData _buildTheme(bool isDark) {
-    // Use raw DarkColors/LightColors (const) — AppColors getters read from
-    // themeService.isDark which may differ from the isDark param here.
-    final bg = isDark ? DarkColors.background : LightColors.background;
-    final crd = isDark ? DarkColors.card : LightColors.card;
-    final txt = isDark ? DarkColors.text : LightColors.text;
-    final sub = isDark ? DarkColors.secondaryText : LightColors.secondaryText;
-    final div = isDark ? DarkColors.divider : LightColors.divider;
-    final ltRed = isDark ? DarkColors.lightRed : LightColors.lightRed;
-    final lGray = isDark ? DarkColors.lightGray : LightColors.lightGray;
-    final bright = isDark ? Brightness.dark : Brightness.light;
-    final red = isDark ? DarkColors.primaryRed : LightColors.primaryRed;
-    final elevatedSurface = isDark
-        ? DarkColors.surfaceAlt
-        : LightColors.surfaceAlt;
-    const buttonMotion = Duration(milliseconds: 160);
-    final buttonOverlay = WidgetStateProperty.resolveWith<Color?>((states) {
-      if (states.contains(WidgetState.pressed)) {
-        return (isDark ? Colors.white : red).withValues(alpha: 0.14);
-      }
-      if (states.contains(WidgetState.hovered) ||
-          states.contains(WidgetState.focused)) {
-        return (isDark ? Colors.white : red).withValues(alpha: 0.08);
-      }
-      return null;
-    });
-    final sharedButtonMotion = ButtonStyle(
-      animationDuration: buttonMotion,
-      overlayColor: buttonOverlay,
-      splashFactory: InkRipple.splashFactory,
-      enableFeedback: true,
-    );
-
-    return ThemeData(
-      brightness: bright,
-      colorScheme: ColorScheme(
-        brightness: bright,
-        primary: red,
-        onPrimary: Colors.white,
-        secondary: AppColors.accentGold,
-        onSecondary: isDark ? Colors.black : Colors.white,
-        error: const Color(0xFFCF6679),
-        onError: Colors.black,
-        surface: crd,
-        onSurface: txt,
-      ),
-      scaffoldBackgroundColor: bg,
-      cardColor: crd,
-      canvasColor: crd,
-      dividerColor: div,
-      appBarTheme: AppBarTheme(
-        backgroundColor: crd,
-        foregroundColor: txt,
-        elevation: 0,
-        centerTitle: true,
-        surfaceTintColor: Colors.transparent,
-      ),
-      bottomNavigationBarTheme: BottomNavigationBarThemeData(
-        backgroundColor: crd,
-        selectedItemColor: red,
-        unselectedItemColor: sub,
-        type: BottomNavigationBarType.fixed,
-      ),
-      navigationBarTheme: NavigationBarThemeData(
-        backgroundColor: crd,
-        indicatorColor: ltRed,
-        iconTheme: WidgetStateProperty.resolveWith((states) {
-          if (states.contains(WidgetState.selected)) {
-            return IconThemeData(color: red);
-          }
-          return IconThemeData(color: sub);
-        }),
-        labelTextStyle: WidgetStateProperty.resolveWith((states) {
-          if (states.contains(WidgetState.selected)) {
-            return TextStyle(
-              color: AppColors.primaryRed,
-              fontWeight: FontWeight.w600,
-            );
-          }
-          return TextStyle(color: sub);
-        }),
-      ),
-      textTheme: TextTheme(
-        bodyLarge: TextStyle(color: txt),
-        bodyMedium: TextStyle(color: txt),
-        bodySmall: TextStyle(color: sub),
-        titleLarge: TextStyle(color: txt, fontWeight: FontWeight.bold),
-        titleMedium: TextStyle(color: txt),
-      ),
-      elevatedButtonTheme: ElevatedButtonThemeData(
-        style: ElevatedButton.styleFrom(
-          backgroundColor: red,
-          foregroundColor: Colors.white,
-          shape: const RoundedRectangleBorder(
-            borderRadius: BorderRadius.all(Radius.circular(16)),
-          ),
-          textStyle: TextStyle(fontWeight: FontWeight.bold),
-        ).merge(sharedButtonMotion),
-      ),
-      filledButtonTheme: FilledButtonThemeData(style: sharedButtonMotion),
-      outlinedButtonTheme: OutlinedButtonThemeData(style: sharedButtonMotion),
-      textButtonTheme: TextButtonThemeData(style: sharedButtonMotion),
-      iconButtonTheme: IconButtonThemeData(style: sharedButtonMotion),
-      inputDecorationTheme: InputDecorationTheme(
-        filled: true,
-        fillColor: lGray,
-        hintStyle: TextStyle(color: sub),
-        border: OutlineInputBorder(
-          borderRadius: const BorderRadius.all(Radius.circular(12)),
-          borderSide: BorderSide.none,
-        ),
-        focusedBorder: OutlineInputBorder(
-          borderRadius: const BorderRadius.all(Radius.circular(12)),
-          borderSide: BorderSide(color: red, width: 1.5),
-        ),
-      ),
-      dialogTheme: DialogThemeData(backgroundColor: elevatedSurface),
-      popupMenuTheme: PopupMenuThemeData(color: elevatedSurface),
-      bottomSheetTheme: BottomSheetThemeData(
-        backgroundColor: elevatedSurface,
-        modalBackgroundColor: elevatedSurface,
-      ),
-      chipTheme: ChipThemeData(
-        backgroundColor: ltRed,
-        labelStyle: TextStyle(color: AppColors.primaryRed),
-      ),
-      switchTheme: SwitchThemeData(
-        thumbColor: WidgetStateProperty.resolveWith(
-          (s) => s.contains(WidgetState.selected) ? red : sub,
-        ),
-        trackColor: WidgetStateProperty.resolveWith(
-          (s) => s.contains(WidgetState.selected) ? AppColors.darkRed : lGray,
-        ),
-      ),
-      pageTransitionsTheme: const PageTransitionsTheme(
-        builders: {
-          TargetPlatform.android: _SmoothPageTransitionsBuilder(),
-          TargetPlatform.iOS: _SmoothPageTransitionsBuilder(),
-          TargetPlatform.macOS: _SmoothPageTransitionsBuilder(),
-          TargetPlatform.windows: _SmoothPageTransitionsBuilder(),
-          TargetPlatform.linux: _SmoothPageTransitionsBuilder(),
-        },
-      ),
-      splashFactory: InkRipple.splashFactory,
-      useMaterial3: true,
-    );
   }
 
   @override
@@ -967,8 +822,14 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
           debugShowCheckedModeBanner: false,
           title: 'ClubUp',
           themeMode: isDark ? ThemeMode.dark : ThemeMode.light,
-          theme: _lightTheme ??= _buildTheme(false),
-          darkTheme: _darkTheme ??= _buildTheme(true),
+          theme: _lightTheme ??= AppTheme.build(AppThemeVariant.light),
+          darkTheme: _darkTheme ??= AppTheme.build(AppThemeVariant.dark),
+          highContrastTheme: _highContrastLightTheme ??= AppTheme.build(
+            AppThemeVariant.highContrastLight,
+          ),
+          highContrastDarkTheme: _highContrastDarkTheme ??= AppTheme.build(
+            AppThemeVariant.highContrastDark,
+          ),
           locale: Locale(localeService.languageCode),
           localizationsDelegates: const [
             AppLocalizations.delegate,
@@ -981,14 +842,17 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
           builder: (context, child) {
             final navigator = child ?? const SizedBox.shrink();
             final sessionGate = sessionGateBuilder?.call();
+            Widget content;
             if (sessionGate != null) {
-              if (destinationKey == 'terms-check') return sessionGate;
-              return _WebEntryFrame(child: sessionGate);
+              content = destinationKey == 'terms-check'
+                  ? sessionGate
+                  : _WebEntryFrame(child: sessionGate);
+            } else if (_isLaunching || destinationKey == 'main-navigation') {
+              content = navigator;
+            } else {
+              content = _WebEntryFrame(child: navigator);
             }
-            if (_isLaunching || destinationKey == 'main-navigation') {
-              return navigator;
-            }
-            return _WebEntryFrame(child: navigator);
+            return AppSystemUiOverlay(child: content);
           },
           home: visibleHome,
         );
@@ -1032,17 +896,20 @@ class _WebEntryFrame extends StatelessWidget {
             .clamp(0.0, constraints.maxHeight)
             .toDouble();
         final media = MediaQuery.of(context);
-        final isDark = Theme.of(context).brightness == Brightness.dark;
+        final theme = Theme.of(context);
+        final isDark = theme.brightness == Brightness.dark;
+        final semantic = context.semanticColors;
+        final background = theme.scaffoldBackgroundColor;
 
         return DecoratedBox(
           decoration: BoxDecoration(
-            color: AppColors.background,
+            color: background,
             gradient: RadialGradient(
               center: const Alignment(-0.75, -0.8),
               radius: 1.5,
               colors: [
-                AppColors.primaryRed.withValues(alpha: isDark ? 0.15 : 0.08),
-                AppColors.background,
+                semantic.brand.withValues(alpha: isDark ? 0.15 : 0.08),
+                background,
               ],
             ),
           ),
@@ -1052,7 +919,7 @@ class _WebEntryFrame extends StatelessWidget {
               height: height,
               clipBehavior: Clip.antiAlias,
               decoration: BoxDecoration(
-                color: AppColors.background,
+                color: background,
                 borderRadius: const BorderRadius.all(Radius.circular(24)),
                 border: Border.all(
                   color: Colors.white.withValues(alpha: isDark ? 0.08 : 0.75),
@@ -1073,39 +940,6 @@ class _WebEntryFrame extends StatelessWidget {
           ),
         );
       },
-    );
-  }
-}
-
-class _SmoothPageTransitionsBuilder extends PageTransitionsBuilder {
-  const _SmoothPageTransitionsBuilder();
-
-  @override
-  Widget buildTransitions<T>(
-    PageRoute<T> route,
-    BuildContext context,
-    Animation<double> animation,
-    Animation<double> secondaryAnimation,
-    Widget child,
-  ) {
-    final reduceMotion =
-        MediaQuery.maybeOf(context)?.disableAnimations ?? false;
-    if (route.isFirst || reduceMotion) return child;
-
-    final curved = CurvedAnimation(
-      parent: animation,
-      curve: Curves.easeOutCubic,
-      reverseCurve: Curves.easeInCubic,
-    );
-    return FadeTransition(
-      opacity: curved,
-      child: SlideTransition(
-        position: Tween<Offset>(
-          begin: const Offset(0.045, 0),
-          end: Offset.zero,
-        ).animate(curved),
-        child: child,
-      ),
     );
   }
 }

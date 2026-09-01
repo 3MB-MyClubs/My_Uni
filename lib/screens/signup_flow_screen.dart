@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../l10n/app_localizations.dart';
 import '../services/signup_service.dart';
+import '../theme/app_semantic_colors.dart';
 import '../widgets/language_toggle.dart';
 import 'signup_steps/signup_theme.dart';
 import 'signup_steps/step_email.dart';
@@ -129,12 +130,14 @@ class _SignupFlowScreenState extends State<SignupFlowScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final semantic = context.semanticColors;
     return Theme(
       key: const ValueKey('signup-flow-theme'),
-      data: SC.theme(),
+      data: SC.theme(context),
       child: Scaffold(
         key: const ValueKey('signup-flow-scaffold'),
-        backgroundColor: SC.bg,
+        backgroundColor: theme.scaffoldBackgroundColor,
         body: SafeArea(
           child: Column(
             children: [
@@ -147,7 +150,7 @@ class _SignupFlowScreenState extends State<SignupFlowScreen> {
                       IconButton(
                         icon: Icon(
                           Icons.arrow_back_ios_new_rounded,
-                          color: SC.burgundy,
+                          color: semantic.brand,
                           size: 20,
                         ),
                         onPressed: _goBack,
@@ -160,7 +163,7 @@ class _SignupFlowScreenState extends State<SignupFlowScreen> {
                         style: TextStyle(
                           fontSize: 11,
                           letterSpacing: 1.0,
-                          color: SC.muted,
+                          color: semantic.textSecondary,
                           fontWeight: FontWeight.w500,
                         ),
                       ),
@@ -175,8 +178,8 @@ class _SignupFlowScreenState extends State<SignupFlowScreen> {
                     borderRadius: BorderRadius.all(Radius.circular(2)),
                     child: LinearProgressIndicator(
                       value: (_currentStep + 1) / _totalSteps,
-                      backgroundColor: SC.hair,
-                      valueColor: AlwaysStoppedAnimation<Color>(SC.burgundy),
+                      backgroundColor: theme.colorScheme.outlineVariant,
+                      valueColor: AlwaysStoppedAnimation<Color>(semantic.brand),
                       minHeight: 3,
                     ),
                   ),

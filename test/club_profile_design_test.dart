@@ -65,6 +65,7 @@ void main() {
     club = Club(
       id: clubId,
       name: 'Rooftop Collective',
+      shortName: 'RC',
       description: 'A curator of deep grooves, fine arts and sunset sessions.',
       categoryName: 'Music, Arts',
       adminUserIds: const [adminId],
@@ -216,7 +217,18 @@ void main() {
     expect(badgeIcons[1].icon, Icons.check_rounded);
     expect(badgeIcons[1].color, Colors.white);
     expect(find.text('Rooftop Collective'), findsWidgets);
-    expect(find.text('@rc'), findsOneWidget);
+    expect(find.text('@RC'), findsOneWidget);
+    final handle = tester.widget<Text>(
+      find.byKey(const ValueKey('club-profile-handle')),
+    );
+    expect(handle.style?.color, ClubProfileColors.text);
+    expect(
+      find.ancestor(
+        of: find.byKey(const ValueKey('club-profile-handle')),
+        matching: find.byType(ClubProfileChip),
+      ),
+      findsNothing,
+    );
 
     // `categories-row` 426:20 splits the club's comma-separated categories.
     expect(find.text('Music'), findsOneWidget);
@@ -247,6 +259,23 @@ void main() {
 
     // The club's own header keeps the insights entry the frame draws.
     expect(find.byKey(const ValueKey('club-profile-insights')), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('the public @handle updates when club initials change', (
+    tester,
+  ) async {
+    signInClubAdmin();
+    await pumpProfile(tester);
+
+    expect(find.text('@RC'), findsOneWidget);
+
+    club.shortName = 'IES';
+    userState.bumpClubInfo();
+    await tester.pump();
+
+    expect(find.text('@RC'), findsNothing);
+    expect(find.text('@IES'), findsOneWidget);
     expect(tester.takeException(), isNull);
   });
 
@@ -311,7 +340,7 @@ void main() {
     expect(find.byType(ClubProfileIdentityCard), findsOneWidget);
     expect(find.byType(ClubProfileStatsRow), findsOneWidget);
     expect(find.byType(ClubProfileSegmentedTabs), findsWidgets);
-    expect(find.text('@rc'), findsOneWidget);
+    expect(find.text('@RC'), findsOneWidget);
     expect(find.text('Music'), findsOneWidget);
 
     // None of the admin controls.
@@ -731,6 +760,11 @@ void main() {
     expect(ClubProfileColors.card, const Color(0xFF121212));
     expect(ClubProfileColors.accent, const Color(0xFF800020));
     expect(ClubProfileColors.accentText, const Color(0xFFFA526B));
+
+    final handle = tester.widget<Text>(
+      find.byKey(const ValueKey('club-profile-handle')),
+    );
+    expect(handle.style?.color, Colors.white);
 
     final chip = tester.widget<Text>(
       find.descendant(

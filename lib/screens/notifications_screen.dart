@@ -780,22 +780,25 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
                   // Title and count pill share a baseline (the design aligns
                   // them on it rather than on the box bottom), so the pill sits
                   // on the title's baseline no matter how tall it grows.
-                  Flexible(
+                  Expanded(
                     child: Row(
                       crossAxisAlignment: CrossAxisAlignment.baseline,
                       textBaseline: TextBaseline.alphabetic,
                       children: [
                         Flexible(
-                          child: Text(
-                            AppLocalizations.of(context)!.notifications,
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                            style: TextStyle(
-                              fontSize: 26,
-                              fontWeight: FontWeight.w800,
-                              letterSpacing: -0.6,
-                              height: 1.15,
-                              color: AppColors.text,
+                          child: FittedBox(
+                            fit: BoxFit.scaleDown,
+                            alignment: Alignment.centerLeft,
+                            child: Text(
+                              AppLocalizations.of(context)!.notifications,
+                              maxLines: 1,
+                              style: TextStyle(
+                                fontSize: 23,
+                                fontWeight: FontWeight.w800,
+                                letterSpacing: -0.6,
+                                height: 1.15,
+                                color: AppColors.text,
+                              ),
                             ),
                           ),
                         ),
@@ -828,7 +831,6 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
                       ],
                     ),
                   ),
-                  const Spacer(),
                   if (totalUnread > 0)
                     AnimatedOpacity(
                       opacity: _markAllReadInProgress ? 0.55 : 1,

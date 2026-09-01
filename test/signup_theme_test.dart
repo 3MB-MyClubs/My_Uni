@@ -1,8 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_application_1/screens/signup_flow_screen.dart';
 import 'package:flutter_application_1/screens/signup_steps/signup_theme.dart';
+import 'package:flutter_application_1/l10n/app_localizations.dart';
 import 'package:flutter_application_1/services/app_colors.dart';
 import 'package:flutter_application_1/services/theme_service.dart';
+import 'package:flutter_application_1/theme/app_theme.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
@@ -14,6 +16,11 @@ void main() {
     await themeService.setDark(true);
     await tester.pumpWidget(
       MaterialApp(
+        key: const ValueKey('dark-app'),
+        theme: AppTheme.build(AppThemeVariant.dark),
+        themeMode: ThemeMode.light,
+        localizationsDelegates: AppLocalizations.localizationsDelegates,
+        supportedLocales: AppLocalizations.supportedLocales,
         home: SignupFlowScreen(key: const ValueKey('dark'), onSignUp: (_) {}),
       ),
     );
@@ -33,6 +40,11 @@ void main() {
     await themeService.setDark(false);
     await tester.pumpWidget(
       MaterialApp(
+        key: const ValueKey('light-app'),
+        theme: AppTheme.build(AppThemeVariant.light),
+        themeMode: ThemeMode.light,
+        localizationsDelegates: AppLocalizations.localizationsDelegates,
+        supportedLocales: AppLocalizations.supportedLocales,
         home: SignupFlowScreen(key: const ValueKey('light'), onSignUp: (_) {}),
       ),
     );

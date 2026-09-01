@@ -183,6 +183,9 @@ void main() {
     expect(find.text(S.replyingTo(S.you)), findsOneWidget);
 
     await tester.enterText(find.byType(TextField), 'This is my reply');
+    // A frame for the camera-to-send morph to hand the slot to the send
+    // button.
+    await tester.pump();
     await tester.tap(find.byKey(const ValueKey('chat-send-button')));
     await tester.pumpAndSettle();
 
