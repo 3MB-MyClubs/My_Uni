@@ -31,7 +31,7 @@ import '../widgets/club_avatar.dart';
 import '../widgets/club_follow_button.dart';
 import '../widgets/event_cover_image.dart';
 import '../widgets/loading_skeleton.dart';
-import '../widgets/media_scrim.dart';
+import '../widgets/dynamic_contrast_text.dart';
 import '../widgets/user_follow_button.dart';
 import '../theme/app_semantic_colors.dart';
 import '../models/share.dart';
@@ -4297,7 +4297,6 @@ class _EventCardState extends State<_EventCard> {
                     cacheWidth: 700,
                     cacheHeight: 320,
                   ),
-                  const MediaScrim(position: MediaScrimPosition.bottom),
                   // Big date in background
                   Positioned(
                     right: 16,
@@ -4319,38 +4318,16 @@ class _EventCardState extends State<_EventCard> {
                       crossAxisAlignment: CrossAxisAlignment.start,
                       mainAxisAlignment: MainAxisAlignment.end,
                       children: [
-                        // Date chip
-                        Container(
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 10,
-                            vertical: 4,
-                          ),
-                          decoration: BoxDecoration(
-                            color: context.semanticColors.onMedia.withValues(
-                              alpha: 0.2,
-                            ),
-                            borderRadius: BorderRadius.all(Radius.circular(20)),
-                          ),
-                          child: Text(
-                            '${_monthAbbr(dt.month)} ${dt.day}  ·  ${_fmt12(dt)}',
-                            style: TextStyle(
-                              color: context.semanticColors.onMedia,
-                              fontSize: 12,
-                              fontWeight: FontWeight.w600,
-                            ),
-                          ),
+                        DynamicContrastText(
+                          '${_monthAbbr(dt.month)} ${dt.day}  ·  ${_fmt12(dt)}',
+                          fontSize: 12,
+                          fontWeight: FontWeight.w600,
                         ),
                         const SizedBox(height: 8),
-                        Text(
+                        DynamicContrastText(
                           widget.event.title,
-                          style: TextStyle(
-                            color: context.semanticColors.onMedia,
-                            fontSize: 18,
-                            fontWeight: FontWeight.bold,
-                            shadows: [
-                              Shadow(blurRadius: 4, color: Colors.black45),
-                            ],
-                          ),
+                          fontSize: 18,
+                          fontWeight: FontWeight.bold,
                         ),
                       ],
                     ),
@@ -4659,33 +4636,14 @@ class _EventRailCardState extends State<_EventRailCard> {
                     cacheWidth: 440,
                     cacheHeight: 220,
                   ),
-                  const MediaScrim(position: MediaScrimPosition.top),
                   Positioned(
                     left: 9,
                     top: 8,
-                    child: Container(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 9,
-                        vertical: 4,
-                      ),
-                      decoration: BoxDecoration(
-                        color: Colors.black.withValues(alpha: 0.68),
-                        borderRadius: BorderRadius.all(Radius.circular(999)),
-                        border: Border.all(
-                          color: context.semanticColors.onMedia.withValues(
-                            alpha: 0.14,
-                          ),
-                        ),
-                      ),
-                      child: Text(
-                        dateTimeLabel,
-                        style: TextStyle(
-                          color: context.semanticColors.onMedia,
-                          fontSize: 10.5,
-                          fontWeight: FontWeight.w800,
-                          letterSpacing: -0.1,
-                        ),
-                      ),
+                    child: DynamicContrastText(
+                      dateTimeLabel,
+                      fontSize: 10.5,
+                      fontWeight: FontWeight.w800,
+                      letterSpacing: -0.1,
                     ),
                   ),
                 ],

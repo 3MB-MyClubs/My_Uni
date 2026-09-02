@@ -1900,4 +1900,25 @@ class S {
       _t('Replay the tour', 'Turu tekrar izle');
   static String get tutorialExploreClubUp =>
       _t('Explore ClubUp', 'ClubUp’ı keşfet');
+
+  // ── EVENT ATTENDEES area
+  // A student is shown their friends going, never the guest list, and never a
+  // headcount — so none of these carry a number. The singular exists only
+  // because "Friends that are going" reads wrong for exactly one.
+  static String get friendsGoingLabel =>
+      _t('Friends that are going', 'Arkadaşların katılıyor');
+  static String get oneFriendGoingLabel =>
+      _t('A friend is going', 'Bir arkadaşın katılıyor');
+  static String get friendsGoingTitle =>
+      _t('Friends going', 'Katılan arkadaşlar');
+  // The empty list has to say why it is empty rather than claim nobody is
+  // going — the event may well be full.
+  static String get friendsGoingEmpty => _t(
+    'None of your friends are going yet',
+    'Arkadaşlarından kimse henüz katılmıyor',
+  );
+  static String get attendeesHiddenForClubs => _t(
+    'Only the hosting club can see who is going',
+    'Kimlerin katıldığını yalnızca etkinliği düzenleyen kulüp görebilir',
+  );
 }

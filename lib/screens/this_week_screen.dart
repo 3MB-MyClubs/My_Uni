@@ -1,3 +1,5 @@
+import 'dart:async' show unawaited;
+
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import '../l10n/app_localizations.dart';
@@ -8,11 +10,13 @@ import '../models/user.dart';
 import '../services/app_colors.dart';
 import '../services/auth_service.dart';
 import '../services/content_store.dart';
+import '../services/event_attendee_visibility.dart';
 import '../services/lazy_content_loader.dart';
 import '../services/mock_data.dart';
 import '../services/people_service.dart';
 import '../services/moderation_service.dart';
 import '../services/rsvp_store.dart';
+import '../services/user_prefs_service.dart';
 import '../services/user_state.dart';
 import '../services/view_tracker.dart';
 import '../onboarding/onboarding_anchors.dart';
@@ -105,12 +109,18 @@ class _ThisWeekScreenState extends State<ThisWeekScreen> {
   String _query = '';
   final _searchController = TextEditingController();
 
-  /// Bookmarked events. The `clubup-events` card has a bookmark control, but
-  /// there is no persisted saved-events state in the app yet (`userState` only
-  /// has `savedPostIds`) and adding one means a new synced prefs field. Kept in
-  /// memory for the session so the control behaves, and deliberately not
-  /// written anywhere — see the note in the handoff summary.
-  final Set<String> _bookmarked = {};
+  /// Saving an event writes the same `userState.savedPostIds` set the feed and
+  /// the event detail already use, which `userPrefsService` persists per user
+  /// and Saved items reads back. This card used to keep its own session-only
+  /// set instead, so a bookmark here never reached Saved items and was gone on
+  /// the next launch.
+  void _toggleSaved(String eventId) {
+    final userId = authService.currentUser?.id ?? '';
+    // Saved items is a student surface; a club session has nowhere to read it.
+    if (!authService.isStudentSession || userId.isEmpty) return;
+    userState.toggleSave(eventId);
+    unawaited(userPrefsService.save(userId));
+  }
 
   @override
   void initState() {
@@ -355,24 +365,27 @@ class _ThisWeekScreenState extends State<ThisWeekScreen> {
                             padding: EdgeInsets.only(
                               bottom: i < results.length - 1 ? 12 : 0,
                             ),
-                            child: _WeekEventRow(
-                              key: ValueKey(ev.id),
-                              event: ev,
-                              color: _clubColor(ev.clubId),
-                              bookmarked: _bookmarked.contains(ev.id),
-                              onBookmark: () => setState(() {
-                                if (!_bookmarked.add(ev.id)) {
-                                  _bookmarked.remove(ev.id);
-                                }
-                              }),
-                              onTap: () => _openEvent(ev),
-                              // Anchor the tour's "RSVP" step to the first
-                              // card — only on the nav-hosted instance.
-                              rsvpAnchorKey: (i == 0 && widget.isTutorialHost)
-                                  ? onboardingAnchors.keyFor(
-                                      OnboardingAnchors.eventsRsvp,
-                                    )
-                                  : null,
+                            // Listens to userState so a save made on the event
+                            // detail or in the Home feed shows here too — the
+                            // nav keeps every tab mounted in an IndexedStack,
+                            // so this row would otherwise hold a stale icon.
+                            child: ListenableBuilder(
+                              listenable: userState,
+                              builder: (_, _) => _WeekEventRow(
+                                key: ValueKey(ev.id),
+                                event: ev,
+                                color: _clubColor(ev.clubId),
+                                bookmarked: userState.isSaved(ev.id),
+                                onBookmark: () => _toggleSaved(ev.id),
+                                onTap: () => _openEvent(ev),
+                                // Anchor the tour's "RSVP" step to the first
+                                // card — only on the nav-hosted instance.
+                                rsvpAnchorKey: (i == 0 && widget.isTutorialHost)
+                                    ? onboardingAnchors.keyFor(
+                                        OnboardingAnchors.eventsRsvp,
+                                      )
+                                    : null,
+                              ),
                             ),
                           );
                         }, childCount: results.length),
@@ -591,7 +604,12 @@ class _WeekEventRow extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final club = clubForId(event.clubId);
-    final going = event.attendeeUserIds.length;
+    // A student is only shown the attendees they follow each other with, and
+    // the headcount counts exactly those faces. See [attendeeVisibilityFor].
+    final attendance = attendeeVisibilityFor(
+      event,
+      attendeeIds: event.attendeeUserIds,
+    );
 
     return GestureDetector(
       key: rsvpAnchorKey,
@@ -693,14 +711,18 @@ class _WeekEventRow extends StatelessWidget {
                           ],
                         ),
                       ],
-                      if (going > 0) ...[
+                      if (attendance.count > 0) ...[
                         const SizedBox(height: 6),
                         Row(
                           children: [
-                            _AttendeeStack(userIds: event.attendeeUserIds),
-                            const SizedBox(width: 4),
+                            if (attendance.visibleIds.isNotEmpty) ...[
+                              _AttendeeStack(userIds: attendance.visibleIds),
+                              const SizedBox(width: 4),
+                            ],
                             Text(
-                              AppLocalizations.of(context)!.goingCount(going),
+                              AppLocalizations.of(
+                                context,
+                              )!.goingCount(attendance.count),
                               style: figtree(
                                 size: 11,
                                 weight: FontWeight.w600,
@@ -723,6 +745,7 @@ class _WeekEventRow extends StatelessWidget {
                 selected: bookmarked,
                 label: AppLocalizations.of(context)!.save,
                 child: GestureDetector(
+                  key: ValueKey('event-save-${event.id}'),
                   onTap: onBookmark,
                   behavior: HitTestBehavior.opaque,
                   child: SizedBox(
