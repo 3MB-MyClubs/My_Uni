@@ -18,6 +18,16 @@ const List<String> kInterests = [
 
 const List<String> kTimeSlots = ['Morning', 'Afternoon', 'Evening', 'Weekend'];
 
+/// Canonical identity for programme names that differ only by backend/display
+/// spelling, such as "Chemical & Biological" versus "Chemical and Biological".
+String normalizeAcademicProgramName(String program) {
+  return program
+      .trim()
+      .toLowerCase()
+      .replaceAll('&', 'and')
+      .replaceAll(RegExp(r'\s+'), ' ');
+}
+
 const List<String> kAcademicPrograms = [
   'Archaeology and History of Art',
   'Business Administration',
