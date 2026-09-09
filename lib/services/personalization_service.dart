@@ -2,6 +2,7 @@ import 'package:flutter/foundation.dart';
 import 'package:hive/hive.dart';
 
 import 'mock_data.dart';
+import 'guest_session.dart';
 
 // ── Interest & time labels ────────────────────────────────────────────────────
 
@@ -178,6 +179,7 @@ class PersonalizationService extends ChangeNotifier {
   // ── Save ────────────────────────────────────────────────────────────────────
 
   Future<void> save(String userId) async {
+    if (guestSession.isActive) return;
     if (_box == null) return;
     await _box!.putAll({
       'ob_$userId': onboardingComplete,

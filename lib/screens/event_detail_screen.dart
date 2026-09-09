@@ -42,6 +42,9 @@ import 'club_profile_screen.dart';
 import 'create_event_screen.dart';
 import 'event_attendee_list_screen.dart';
 import 'user_profile_screen.dart';
+import '../models/content_audience.dart';
+import '../services/content_visibility.dart';
+import '../widgets/content_audience_sheet.dart';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Event detail — recreation of the "Event Information" design handoff.
@@ -340,9 +343,10 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
     }
   }
 
-  Color get _accent => _event.accentColorHex != null
-      ? Color(int.parse('FF${_event.accentColorHex}', radix: 16))
-      : widget.color;
+  Color get _accent {
+    final accent = tryParseEventAccentColor(_event.accentColorHex);
+    return accent == null ? widget.color : Color(accent);
+  }
 
   // ── Actions ─────────────────────────────────────────────────────────────────
   void _toggleSaved() {
@@ -1726,14 +1730,35 @@ class _Hero extends StatelessWidget {
                 ),
               ),
             ),
-            if (isLive || isPast)
+            // The status pill and the audience badge share one row so a
+            // restricted live event does not stack two pills on the same spot.
+            if (isLive ||
+                isPast ||
+                audienceForEvent(event) != ContentAudience.everyone)
               Positioned(
                 left: 20,
                 bottom: 16,
-                child: _StatusPill(
-                  isLive: isLive,
-                  isPast: isPast,
-                  accent: accent,
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    if (isLive || isPast)
+                      _StatusPill(
+                        isLive: isLive,
+                        isPast: isPast,
+                        accent: accent,
+                      ),
+                    if ((isLive || isPast) &&
+                        audienceForEvent(event) != ContentAudience.everyone)
+                      const SizedBox(width: 8),
+                    // The media variant: a 10% wash of the club accent is
+                    // invisible over an arbitrary cover photo, and this badge
+                    // sits directly beside `_StatusPill`, which solved the
+                    // same problem with a scrim and white text.
+                    ContentAudiencePill.onMedia(
+                      key: ValueKey('content-audience-pill-${event.id}'),
+                      audience: audienceForEvent(event),
+                    ),
+                  ],
                 ),
               ),
           ],

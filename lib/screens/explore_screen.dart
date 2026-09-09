@@ -7,6 +7,7 @@ import '../models/user.dart';
 import '../services/academic_year_options.dart';
 import '../services/app_strings.dart';
 import '../services/auth_service.dart';
+import '../services/guest_world.dart' show kGuestIdPrefix;
 import '../services/lazy_content_loader.dart';
 import '../services/mock_data.dart';
 import '../services/people_service.dart';
@@ -299,6 +300,10 @@ class _ExploreScreenState extends State<ExploreScreen> {
       if (person.id == _myId || moderationService.isUserBlocked(person.id)) {
         return false;
       }
+      // The guest joyride seeds a fabricated campus so its demo screens have
+      // activity. Those accounts must never be discoverable in the student
+      // directory.
+      if (person.id.startsWith(kGuestIdPrefix)) return false;
       final major = normalizeAcademicProgramName(
         userState.majors[person.id] ?? '',
       );

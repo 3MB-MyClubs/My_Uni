@@ -5,8 +5,10 @@ import '../models/event.dart';
 import '../screens/event_detail_screen.dart';
 import '../services/app_colors.dart';
 import '../services/app_strings.dart';
+import '../services/content_visibility.dart';
 import '../services/mock_data.dart';
 import '../services/supabase_content_service.dart';
+import 'content_audience_sheet.dart';
 import 'event_cover_image.dart';
 import 'dynamic_contrast_text.dart';
 
@@ -185,6 +187,16 @@ class _SharedEventMessageCardState extends State<SharedEventMessageCard> {
                         '$date · $time',
                         fontSize: 10.5,
                         fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                    // See the note on the shared post card: a forwarded event
+                    // is exactly where its audience is least obvious.
+                    Positioned(
+                      right: 9,
+                      top: 8,
+                      child: ContentAudiencePill.onMedia(
+                        key: ValueKey('content-audience-pill-${event.id}'),
+                        audience: audienceForEvent(event),
                       ),
                     ),
                   ],

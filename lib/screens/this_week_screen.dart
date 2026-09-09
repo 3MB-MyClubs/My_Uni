@@ -5,6 +5,7 @@ import 'package:intl/intl.dart';
 import '../l10n/app_localizations.dart';
 import '../services/locale_service.dart';
 import '../services/theme_service.dart';
+import '../models/content_audience.dart';
 import '../models/event.dart';
 import '../models/user.dart';
 import '../services/app_colors.dart';
@@ -22,11 +23,13 @@ import '../services/view_tracker.dart';
 import '../onboarding/onboarding_anchors.dart';
 import '../widgets/club_avatar.dart';
 import '../widgets/clubup_design.dart';
+import '../widgets/content_audience_sheet.dart';
 import '../widgets/event_cover_image.dart';
 import '../widgets/user_avatar.dart';
 import '../widgets/app_motion.dart';
 import '../widgets/instagram_refresh_control.dart';
 import 'event_detail_screen.dart';
+import '../services/content_visibility.dart';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Helpers
@@ -183,6 +186,7 @@ class _ThisWeekScreenState extends State<ThisWeekScreen> {
         .where(
           (e) =>
               clubForId(e.clubId) != null &&
+              canViewEvent(e) &&
               e.endTime.isAfter(now) &&
               e.dateTime.isBefore(endExclusive),
         )
@@ -239,12 +243,15 @@ class _ThisWeekScreenState extends State<ThisWeekScreen> {
     if (viewerId.isEmpty) return [];
     final now = DateTime.now();
     return events.where((event) {
-        if (moderationService.isClubBlocked(event.clubId)) return false;
-        if (!_isCreatedInApp(event)) return false;
-        if (!event.endTime.isAfter(now)) return false;
-        return !viewTracker.viewerIds(event.id).contains(viewerId);
-      }).toList()
-      ..sort((a, b) => _createdAtForEvent(b).compareTo(_createdAtForEvent(a)));
+      if (moderationService.isClubBlocked(event.clubId)) return false;
+      // Without this the bell would announce an event the student cannot open.
+      if (!canViewEvent(event)) return false;
+      if (!_isCreatedInApp(event)) return false;
+      if (!event.endTime.isAfter(now)) return false;
+      return !viewTracker.viewerIds(event.id).contains(viewerId);
+    }).toList()..sort(
+      (a, b) => _createdAtForEvent(b).compareTo(_createdAtForEvent(a)),
+    );
   }
 
   Future<void> _openNewEventNotifications() async {
@@ -610,6 +617,7 @@ class _WeekEventRow extends StatelessWidget {
       event,
       attendeeIds: event.attendeeUserIds,
     );
+    final audience = audienceForEvent(event);
 
     return GestureDetector(
       key: rsvpAnchorKey,
@@ -647,22 +655,47 @@ class _WeekEventRow extends StatelessWidget {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Container(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 8,
-                          vertical: 2,
-                        ),
-                        decoration: BoxDecoration(
-                          color: ClubUpColors.accent.withValues(alpha: 0.1),
-                          borderRadius: BorderRadius.circular(6),
-                        ),
-                        child: Text(
-                          _whenLabel(context),
-                          style: figtree(
-                            size: 11,
-                            weight: FontWeight.w700,
-                            color: ClubUpColors.accentText,
-                          ),
+                      // The chip line shares the card's top edge with the
+                      // bookmark control, so it keeps the title's 28px gutter,
+                      // and it wraps rather than running under it — the
+                      // Turkish badge is half again as wide as the English.
+                      Padding(
+                        padding: const EdgeInsets.only(right: 28),
+                        child: Wrap(
+                          spacing: 6,
+                          runSpacing: 4,
+                          crossAxisAlignment: WrapCrossAlignment.center,
+                          children: [
+                            Container(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 8,
+                                vertical: 2,
+                              ),
+                              decoration: BoxDecoration(
+                                color: ClubUpColors.accent.withValues(
+                                  alpha: 0.1,
+                                ),
+                                borderRadius: BorderRadius.circular(6),
+                              ),
+                              child: Text(
+                                _whenLabel(context),
+                                style: figtree(
+                                  size: 11,
+                                  weight: FontWeight.w700,
+                                  color: ClubUpColors.accentText,
+                                ),
+                              ),
+                            ),
+                            if (audience != ContentAudience.everyone)
+                              ContentAudiencePill(
+                                key: ValueKey(
+                                  'content-audience-pill-${event.id}',
+                                ),
+                                audience: audience,
+                                accent: ClubUpColors.accent,
+                                foreground: ClubUpColors.accentText,
+                              ),
+                          ],
                         ),
                       ),
                       const SizedBox(height: 6),
