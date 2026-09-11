@@ -35,7 +35,9 @@ import '../services/student_club_role_service.dart';
 import '../services/theme_service.dart';
 import '../services/user_profile_link.dart';
 import '../services/user_state.dart';
+import '../widgets/brief_toast.dart';
 import '../widgets/chat_campus_backdrop.dart';
+import '../widgets/chat_reaction_strip.dart';
 import '../widgets/club_avatar.dart';
 import '../widgets/chats_design.dart';
 import '../widgets/club_board_lane.dart';
@@ -1402,9 +1404,7 @@ class _ClubCommunityScreenState extends State<ClubCommunityScreen>
                 onTap: () {
                   Clipboard.setData(ClipboardData(text: message.content));
                   Navigator.of(sheetContext).pop();
-                  ScaffoldMessenger.of(
-                    context,
-                  ).showSnackBar(SnackBar(content: Text(S.copied)));
+                  showBriefToast(context, S.copied);
                 },
               ),
             if (chatStore.isMessageOwner(message, _myId))
@@ -2700,58 +2700,33 @@ class _ClubCommunityScreenState extends State<ClubCommunityScreen>
                   if (message.reactions.isNotEmpty)
                     Padding(
                       padding: const EdgeInsets.only(top: 4),
-                      child: Wrap(
-                        spacing: 5,
-                        alignment: mine
-                            ? WrapAlignment.end
-                            : WrapAlignment.start,
-                        children: [
-                          for (final entry in message.reactions.entries)
-                            GestureDetector(
-                              key: ValueKey(
-                                'club-bubble-reaction-${message.id}-${entry.key}',
-                              ),
-                              onTap: () => chatStore.toggleReaction(
-                                messageId: message.id,
-                                userId: _myId,
-                                emoji: entry.key,
-                              ),
-                              child: Container(
-                                height: 22,
-                                padding: const EdgeInsets.symmetric(
-                                  horizontal: 8,
-                                ),
-                                decoration: BoxDecoration(
-                                  color: entry.value.contains(_myId)
-                                      ? ChatsColors.accent.withValues(
-                                          alpha: 0.10,
-                                        )
-                                      : ChatsColors.card,
-                                  borderRadius: BorderRadius.circular(999),
-                                  border: Border.all(
-                                    color: entry.value.contains(_myId)
-                                        ? ChatsColors.accent
-                                        : ChatsColors.border,
-                                  ),
-                                ),
-                                // Align with both factors, not
-                                // Container.alignment: a bare Align expands to
-                                // the Wrap's loose width.
-                                child: Align(
-                                  widthFactor: 1,
-                                  heightFactor: 1,
-                                  child: Text(
-                                    '${entry.key} ${entry.value.length}',
-                                    style: figtree(
-                                      size: 11,
-                                      weight: FontWeight.w600,
-                                      color: ChatsColors.muted,
-                                    ),
-                                  ),
-                                ),
-                              ),
-                            ),
-                        ],
+                      child: ChatReactionStrip(
+                        key: ValueKey('club-reactions-${message.id}'),
+                        messageId: message.id,
+                        reactions: message.reactions,
+                        myId: _myId,
+                        alignEnd: mine,
+                        keyPrefix: 'club-bubble-reaction',
+                        style: ChatReactionStyle(
+                          mineFill: ChatsColors.accent.withValues(alpha: 0.10),
+                          mineBorder: ChatsColors.accent,
+                          otherFill: ChatsColors.card,
+                          border: ChatsColors.border,
+                          chipHeight: 22,
+                          chipPadding: const EdgeInsets.symmetric(
+                            horizontal: 8,
+                          ),
+                          label: figtree(
+                            size: 11,
+                            weight: FontWeight.w600,
+                            color: ChatsColors.muted,
+                          ),
+                        ),
+                        onToggle: (emoji) => chatStore.toggleReaction(
+                          messageId: message.id,
+                          userId: _myId,
+                          emoji: emoji,
+                        ),
                       ),
                     ),
                   if (mine && seen > 0)
@@ -3134,9 +3109,7 @@ class _ClubCommunityScreenState extends State<ClubCommunityScreen>
             onTap: () {
               Clipboard.setData(ClipboardData(text: message.content));
               if (!mounted) return;
-              ScaffoldMessenger.of(
-                context,
-              ).showSnackBar(SnackBar(content: Text(S.copied)));
+              showBriefToast(context, S.copied);
             },
           ),
         ClubMessageAction(
@@ -3917,15 +3890,15 @@ class _ClubCommunityScreenState extends State<ClubCommunityScreen>
       going: rsvpStore.isAttending(event.id),
       t: t,
       compact: compact,
-      audienceBadge: audienceForEvent(event) == ContentAudience.everyone
+      audienceMark: audienceForEvent(event) == ContentAudience.everyone
           ? null
-          : ContentAudiencePill(
-              key: ValueKey('content-audience-pill-${event.id}'),
+          : ContentAudienceIcon(
+              key: ValueKey('content-audience-icon-${event.id}'),
               audience: audienceForEvent(event),
               // `t.accent` is the raw club colour; `t.red` is the same accent
               // corrected for legibility on this surface.
-              accent: t.accent,
-              foreground: t.red,
+              color: t.red,
+              size: 13,
             ),
       onToggleRsvp: () => _toggleRsvp(event),
       onOpen: onOpen ?? () => _openEvent(event),

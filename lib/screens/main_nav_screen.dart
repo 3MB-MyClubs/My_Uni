@@ -23,7 +23,6 @@ import '../onboarding/onboarding_anchors.dart';
 import '../onboarding/onboarding_flow.dart';
 import '../onboarding/onboarding_service.dart';
 import '../onboarding/onboarding_steps.dart';
-import '../onboarding/starter_checklist_service.dart';
 import '../widgets/lazy_indexed_stack.dart';
 import '../widgets/app_pressable.dart';
 import '../widgets/account_switcher_sheet.dart';
@@ -253,7 +252,7 @@ class _MainNavScreenState extends ConsumerState<MainNavScreen>
   }
 
   // The flow starts the animated return Home before invoking this callback;
-  // this method owns persistence and the post-tour checklist lifecycle.
+  // this method owns persisting that the tour was completed.
   Future<void> _finishOnboarding() async {
     final source = _tutorialLaunchSource;
     if (source == null) return;
@@ -266,10 +265,7 @@ class _MainNavScreenState extends ConsumerState<MainNavScreen>
       debugPrint('Could not persist tutorial completion: $error');
     }
     if (!mounted) return;
-    if (authService.isStudentSession) {
-      await starterChecklistService.startFor(profileId);
-    }
-    if (mounted && source == TutorialLaunchSource.automatic) {
+    if (source == TutorialLaunchSource.automatic) {
       await _requestCalendarIfNeeded();
     }
   }

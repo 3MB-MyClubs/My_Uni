@@ -5,7 +5,6 @@ import 'package:intl/intl.dart';
 import '../l10n/app_localizations.dart';
 import '../services/locale_service.dart';
 import '../services/theme_service.dart';
-import '../models/content_audience.dart';
 import '../models/event.dart';
 import '../models/user.dart';
 import '../services/app_colors.dart';
@@ -655,46 +654,47 @@ class _WeekEventRow extends StatelessWidget {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      // The chip line shares the card's top edge with the
-                      // bookmark control, so it keeps the title's 28px gutter,
-                      // and it wraps rather than running under it — the
-                      // Turkish badge is half again as wide as the English.
+                      // The date chip shares the card's top edge with the
+                      // bookmark control, so it keeps the title's 28px gutter.
+                      // The audience mark rides beside it: a glyph fits on
+                      // this line where the old text badge wrapped under it.
                       Padding(
                         padding: const EdgeInsets.only(right: 28),
-                        child: Wrap(
-                          spacing: 6,
-                          runSpacing: 4,
-                          crossAxisAlignment: WrapCrossAlignment.center,
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
                           children: [
-                            Container(
-                              padding: const EdgeInsets.symmetric(
-                                horizontal: 8,
-                                vertical: 2,
-                              ),
-                              decoration: BoxDecoration(
-                                color: ClubUpColors.accent.withValues(
-                                  alpha: 0.1,
+                            Flexible(
+                              child: Container(
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 8,
+                                  vertical: 2,
                                 ),
-                                borderRadius: BorderRadius.circular(6),
-                              ),
-                              child: Text(
-                                _whenLabel(context),
-                                style: figtree(
-                                  size: 11,
-                                  weight: FontWeight.w700,
-                                  color: ClubUpColors.accentText,
+                                decoration: BoxDecoration(
+                                  color: ClubUpColors.accent.withValues(
+                                    alpha: 0.1,
+                                  ),
+                                  borderRadius: BorderRadius.circular(6),
+                                ),
+                                child: Text(
+                                  _whenLabel(context),
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: figtree(
+                                    size: 11,
+                                    weight: FontWeight.w700,
+                                    color: ClubUpColors.accentText,
+                                  ),
                                 ),
                               ),
                             ),
-                            if (audience != ContentAudience.everyone)
-                              ContentAudiencePill(
-                                key: ValueKey(
-                                  'content-audience-pill-${event.id}',
-                                ),
-                                audience: audience,
-                                accent: ClubUpColors.accent,
-                                foreground: ClubUpColors.accentText,
+                            ContentAudienceIcon(
+                              key: ValueKey(
+                                'content-audience-icon-${event.id}',
                               ),
+                              audience: audience,
+                              color: ClubUpColors.accentText,
+                              size: 13,
+                            ),
                           ],
                         ),
                       ),

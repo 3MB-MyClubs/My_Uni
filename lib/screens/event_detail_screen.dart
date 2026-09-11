@@ -27,6 +27,7 @@ import '../l10n/app_localizations.dart';
 import '../services/checkin_store.dart';
 import '../services/chat_store.dart';
 import '../services/supabase_interaction_service.dart';
+import '../services/theme_service.dart';
 import '../services/user_prefs_service.dart';
 import '../services/user_state.dart';
 import '../services/view_tracker.dart';
@@ -42,16 +43,37 @@ import 'club_profile_screen.dart';
 import 'create_event_screen.dart';
 import 'event_attendee_list_screen.dart';
 import 'user_profile_screen.dart';
-import '../models/content_audience.dart';
 import '../services/content_visibility.dart';
 import '../widgets/content_audience_sheet.dart';
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Event detail — recreation of the "Event Information" design handoff.
-// Full-bleed hero photo, ticket-style date/time/location card, host card,
-// registration link, about, tags, programme timeline, speakers and a sticky
-// register / add-to-calendar CTA.
+// Event detail — recreation of the `Event new design light` / `…black` frames
+// (`283:381` / `283:497`).
+//
+// A full-bleed hero photo that dissolves into the page, then one 20px column
+// on a uniform 32px rhythm: title block, host, who is going, about, tags,
+// speakers, programme schedule, bring friends and the registration CTA — with
+// the RSVP / add-to-calendar bar floating over the bottom clearance.
+//
+// The frames paint their accent `#1DA1F2`; that is a leftover from the Figma
+// template and the burgundy `ClubUpColors.accent` is used throughout instead,
+// as in every other area redesigned from this handoff.
 // ─────────────────────────────────────────────────────────────────────────────
+
+/// Normalises a hand-typed link — a bare `linkedin.com/in/x` as readily as a
+/// full URL — into something [launchUrl] will accept, or null when it cannot.
+/// Shared by the registration action and the speaker cards on both the student
+/// and the club-admin view, which all used to carry their own copy.
+Uri? _externalUri(String value) {
+  final trimmed = value.trim();
+  if (trimmed.isEmpty) return null;
+  final withScheme = trimmed.startsWith(RegExp(r'https?://'))
+      ? trimmed
+      : 'https://$trimmed';
+  final uri = Uri.tryParse(withScheme);
+  if (uri == null || uri.host.isEmpty) return null;
+  return uri;
+}
 
 bool _isRemoteEventImagePath(String path) =>
     path.startsWith('http://') || path.startsWith('https://');
@@ -585,12 +607,10 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
-                  // Hero photo + nav + status + title
+                  // Hero photo, nav actions and the audience badge
                   _Hero(
                     event: event,
                     accent: accent,
-                    isLive: _isLive,
-                    isPast: _isPast,
                     saved: _saved,
                     canDelete: _canDeleteEvent,
                     canEngage: canEngage,
@@ -600,161 +620,179 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
                     onDelete: _confirmDelete,
                   ),
 
-                  // `title-block` — time badge, event name, location
+                  // `scrollable-content` 283:410 — one 20px column with a
+                  // uniform 32px gap between every section, hairlines
+                  // included, so each rule is 32px clear on both sides.
                   Padding(
-                    padding: const EdgeInsets.fromLTRB(20, 20, 20, 0),
-                    child: _EventTitleBlock(
-                      event: event,
-                      whenLabel: _whenBadgeLabel(),
-                    ),
-                  ),
-
-                  const Padding(
-                    padding: EdgeInsets.fromLTRB(20, 20, 20, 0),
-                    child: _EventDivider(),
-                  ),
-
-                  // Host
-                  Padding(
-                    padding: const EdgeInsets.fromLTRB(20, 20, 20, 0),
-                    child: _HostCard(
-                      event: event,
-                      accent: accent,
-                      onView: _openClub,
-                    ),
-                  ),
-
-                  const Padding(
-                    padding: EdgeInsets.fromLTRB(20, 20, 20, 0),
-                    child: _EventDivider(),
-                  ),
-
-                  // Registration link
-                  if (hasReg)
-                    Padding(
-                      padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
-                      child: _RegistrationCard(
-                        url: event.registrationUrl!.trim(),
-                        accent: accent,
-                      ),
-                    ),
-
-                  // About
-                  Padding(
-                    padding: const EdgeInsets.fromLTRB(20, 20, 20, 0),
+                    padding: const EdgeInsets.fromLTRB(20, 28, 20, 0),
                     child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
                       children: [
-                        _SecHead(AppLocalizations.of(context)!.aboutThisEvent),
-                        const SizedBox(height: 8),
-                        Text(
-                          event.description,
-                          style: figtree(
-                            size: 14,
-                            weight: FontWeight.w400,
-                            color: ClubUpColors.muted,
-                            height: 1.5,
-                          ),
+                        // `title-block` — time badge, event name, location
+                        _EventTitleBlock(
+                          event: event,
+                          whenLabel: _whenBadgeLabel(),
                         ),
-                      ],
-                    ),
-                  ),
 
-                  // Tags
-                  if (event.tags.isNotEmpty)
-                    Padding(
-                      padding: const EdgeInsets.fromLTRB(20, 20, 20, 0),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
+                        const _EventSectionRule(),
+
+                        // `host-section` — the Follow pill is ours; the frames
+                        // leave that half of the row empty.
+                        _HostCard(
+                          event: event,
+                          accent: accent,
+                          onView: _openClub,
+                        ),
+
+                        // `attendee-section` 294:5 — promoted from below the
+                        // speakers to directly under the host.
+                        //
+                        // Its rule lives inside the builder, not beside it:
+                        // there is nothing to show whenever the viewer can see
+                        // no attendees — which is every session without
+                        // Supabase, guest mode included — and a rule left
+                        // behind by a collapsed section reads as a doubled
+                        // hairline around an empty band.
+                        ListenableBuilder(
+                          listenable: rsvpStore,
+                          builder: (_, _) {
+                            // A student only ever learns about the attendees
+                            // they follow each other with — names, faces and
+                            // headcount alike. See [attendeeVisibilityFor].
+                            final visibility = attendeeVisibilityFor(
+                              _event,
+                              attendeeIds: _attendees.map((user) => user.id),
+                              totalCount: _rsvpCount,
+                            );
+                            if (visibility.isEmpty) {
+                              return const SizedBox.shrink();
+                            }
+                            return Column(
+                              crossAxisAlignment: CrossAxisAlignment.stretch,
+                              children: [
+                                const _EventSectionRule(),
+                                _AttendingCard(
+                                  // The viewer's own RSVP counts towards
+                                  // "going" but is not one of the people they
+                                  // follow.
+                                  followedUserIds: visibility.visibleIds
+                                      .where((id) => id != _currentSessionId)
+                                      .toList(growable: false),
+                                  count: visibility.count,
+                                  onTap: visibility.showsNames
+                                      ? _openAttendees
+                                      : null,
+                                ),
+                              ],
+                            );
+                          },
+                        ),
+
+                        const _EventSectionRule(),
+
+                        // `about-section`
+                        Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            _SecHead(
+                              AppLocalizations.of(context)!.aboutThisEvent,
+                            ),
+                            const SizedBox(height: 12),
+                            Text(
+                              event.description,
+                              style: figtree(
+                                size: 15,
+                                weight: FontWeight.w400,
+                                color: ClubUpColors.muted,
+                                height: 1.6,
+                              ),
+                            ),
+                          ],
+                        ),
+
+                        if (event.tags.isNotEmpty) ...[
+                          const _EventSectionRule(),
+                          // `tags-row` — the leading chip carries the accent.
                           Wrap(
                             spacing: 8,
                             runSpacing: 8,
                             children: [
-                              for (final tag in event.tags)
-                                _EventTag(label: tag),
+                              for (var i = 0; i < event.tags.length; i++)
+                                _EventTag(
+                                  label: event.tags[i],
+                                  accented: i == 0,
+                                ),
                             ],
                           ),
                         ],
-                      ),
-                    ),
 
-                  // Programme
-                  if (hasProgramme)
-                    Padding(
-                      padding: const EdgeInsets.fromLTRB(16, 24, 16, 0),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          _SecHead(AppLocalizations.of(context)!.programme),
-                          const SizedBox(height: 12),
-                          _ProgrammeTimeline(
-                            slots: event.schedule!,
-                            accent: accent,
+                        // Speakers, programme and registration run
+                        // divider-free: the last `Line` in the frames is
+                        // `283:455`, above the speakers heading.
+                        if (hasSpeakers) ...[
+                          const _EventSectionRule(),
+                          Column(
+                            crossAxisAlignment: CrossAxisAlignment.stretch,
+                            children: [
+                              Align(
+                                alignment: Alignment.centerLeft,
+                                child: _SecHead(
+                                  AppLocalizations.of(context)!.speakers,
+                                ),
+                              ),
+                              const SizedBox(height: 16),
+                              _EventSpeakerCards(speakers: event.speakers),
+                            ],
                           ),
                         ],
-                      ),
-                    ),
 
-                  // Speakers
-                  if (hasSpeakers) ...[
-                    Padding(
-                      padding: const EdgeInsets.fromLTRB(16, 24, 16, 0),
-                      child: _SecHead(AppLocalizations.of(context)!.speakers),
-                    ),
-                    const SizedBox(height: 12),
-                    _SpeakersRow(speakers: event.speakers),
-                  ],
+                        if (hasProgramme) ...[
+                          if (hasSpeakers)
+                            const SizedBox(height: _EventSectionRule.gap)
+                          else
+                            const _EventSectionRule(),
+                          Column(
+                            crossAxisAlignment: CrossAxisAlignment.stretch,
+                            children: [
+                              Align(
+                                alignment: Alignment.centerLeft,
+                                child: _SecHead(
+                                  AppLocalizations.of(
+                                    context,
+                                  )!.programmeSchedule,
+                                ),
+                              ),
+                              const SizedBox(height: 16),
+                              _EventProgramme(slots: event.schedule!),
+                            ],
+                          ),
+                        ],
 
-                  const Padding(
-                    padding: EdgeInsets.fromLTRB(20, 20, 20, 0),
-                    child: _EventDivider(),
+                        // Friend invitations belong to student accounts only,
+                        // and are not in the frames — kept because nothing
+                        // else on the screen invites anyone.
+                        if (canEngage) ...[
+                          const _EventSectionRule(),
+                          _BringFriendsSection(
+                            friends: _quickInviteFriends,
+                            invitedFriendIds: _invitedFriendIds,
+                            onInvite: _inviteFriend,
+                            onSeeAll: _showAllSuggestedFriends,
+                            onShare: _shareEvent,
+                          ),
+                        ],
+
+                        // `registration-section` — the page's one filled CTA,
+                        // last in the column.
+                        if (hasReg) ...[
+                          const SizedBox(height: _EventSectionRule.gap),
+                          _EventRegistrationCta(
+                            url: event.registrationUrl!.trim(),
+                          ),
+                        ],
+                      ],
+                    ),
                   ),
-
-                  // People attending
-                  Padding(
-                    padding: const EdgeInsets.fromLTRB(20, 20, 20, 0),
-                    child: ListenableBuilder(
-                      listenable: rsvpStore,
-                      builder: (_, _) {
-                        // A student only ever learns about the attendees they
-                        // follow each other with — names, faces and headcount
-                        // alike. See [attendeeVisibilityFor].
-                        final visibility = attendeeVisibilityFor(
-                          _event,
-                          attendeeIds: _attendees.map((user) => user.id),
-                          totalCount: _rsvpCount,
-                        );
-                        return _AttendingCard(
-                          // The viewer's own RSVP counts towards "going" but is
-                          // not one of the people they follow.
-                          followedUserIds: visibility.visibleIds
-                              .where((id) => id != _currentSessionId)
-                              .toList(growable: false),
-                          count: visibility.count,
-                          onTap: visibility.showsNames ? _openAttendees : null,
-                        );
-                      },
-                    ),
-                  ),
-
-                  // Friend invitations belong to student accounts only.
-                  if (canEngage) ...[
-                    const Padding(
-                      padding: EdgeInsets.fromLTRB(20, 20, 20, 0),
-                      child: _EventDivider(),
-                    ),
-                    Padding(
-                      padding: const EdgeInsets.fromLTRB(20, 20, 20, 0),
-                      child: _BringFriendsSection(
-                        friends: _quickInviteFriends,
-                        invitedFriendIds: _invitedFriendIds,
-                        onInvite: _inviteFriend,
-                        onSeeAll: _showAllSuggestedFriends,
-                        onShare: _shareEvent,
-                      ),
-                    ),
-                  ],
 
                   const SizedBox(height: 24),
                 ],
@@ -1623,8 +1661,6 @@ class _AdminSecHead extends StatelessWidget {
 class _Hero extends StatelessWidget {
   final Event event;
   final Color accent;
-  final bool isLive;
-  final bool isPast;
   final bool saved;
   final bool canDelete;
   final bool canEngage;
@@ -1636,8 +1672,6 @@ class _Hero extends StatelessWidget {
   const _Hero({
     required this.event,
     required this.accent,
-    required this.isLive,
-    required this.isPast,
     required this.saved,
     required this.canDelete,
     required this.canEngage,
@@ -1651,12 +1685,13 @@ class _Hero extends StatelessWidget {
   Widget build(BuildContext context) {
     final topPad = MediaQuery.paddingOf(context).top;
 
-    // Match the Home feed's photo block — same edge-to-edge width, sized off
-    // the same `width - 40` basis — but keep the crop a touch shorter than a
-    // square feed photo so the event details still start above the fold.
-    final heroHeight = ((MediaQuery.sizeOf(context).width - 40) * 0.9).clamp(
+    // `hero-container` 283:382 — 420 tall on the 402-wide frame, so the crop
+    // scales straight off the width instead of the old `width - 40` basis.
+    // The taller photo is what gives `hero-bottom-fade` room to melt into the
+    // page without swallowing the title block.
+    final heroHeight = (MediaQuery.sizeOf(context).width * 1.0448).clamp(
       240.0,
-      420.0,
+      460.0,
     );
 
     return AnnotatedRegion<SystemUiOverlayStyle>(
@@ -1672,10 +1707,45 @@ class _Hero extends StatelessWidget {
               fit: BoxFit.cover,
               borderRadius: BorderRadius.zero,
             ),
-            // `top-scrim` — keeps the status bar and glass buttons legible over
-            // whatever the cover photo happens to be.
-            const Positioned.fill(
-              child: MediaScrim(position: MediaScrimPosition.top),
+            // `top-scrim` 283:384 — a 100px band, not the full height: the
+            // frame only darkens the status bar and the glass buttons, and a
+            // full-height scrim would fight `hero-bottom-fade` below. The
+            // gradient itself stays [MediaScrim]'s semantic ramp (a little
+            // stronger than the frame's flat 60% black, and high-contrast
+            // aware) rather than a literal copy.
+            const Positioned(
+              top: 0,
+              left: 0,
+              right: 0,
+              child: SizedBox(
+                height: 100,
+                child: MediaScrim(position: MediaScrimPosition.top),
+              ),
+            ),
+            // `hero-bottom-fade` 656:4 / 656:12 — the photo dissolves into the
+            // page over the last 140px so there is no hard edge between the
+            // cover and the content. Theme-aware: it has to land on exactly
+            // the colour the page is painted.
+            Positioned(
+              left: 0,
+              right: 0,
+              bottom: 0,
+              child: IgnorePointer(
+                child: Container(
+                  height: 140,
+                  decoration: BoxDecoration(
+                    gradient: LinearGradient(
+                      begin: Alignment.topCenter,
+                      end: Alignment.bottomCenter,
+                      colors: [
+                        ClubUpColors.background.withValues(alpha: 0),
+                        ClubUpColors.background,
+                      ],
+                      stops: const [0.25, 0.75],
+                    ),
+                  ),
+                ),
+              ),
             ),
             Positioned(
               top: topPad,
@@ -1691,6 +1761,7 @@ class _Hero extends StatelessWidget {
                   children: [
                     _HeroGlassButton(
                       icon: Icons.arrow_back_rounded,
+                      iconSize: 20,
                       onTap: onBack,
                       semanticLabel: MaterialLocalizations.of(
                         context,
@@ -1730,37 +1801,10 @@ class _Hero extends StatelessWidget {
                 ),
               ),
             ),
-            // The status pill and the audience badge share one row so a
-            // restricted live event does not stack two pills on the same spot.
-            if (isLive ||
-                isPast ||
-                audienceForEvent(event) != ContentAudience.everyone)
-              Positioned(
-                left: 20,
-                bottom: 16,
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    if (isLive || isPast)
-                      _StatusPill(
-                        isLive: isLive,
-                        isPast: isPast,
-                        accent: accent,
-                      ),
-                    if ((isLive || isPast) &&
-                        audienceForEvent(event) != ContentAudience.everyone)
-                      const SizedBox(width: 8),
-                    // The media variant: a 10% wash of the club accent is
-                    // invisible over an arbitrary cover photo, and this badge
-                    // sits directly beside `_StatusPill`, which solved the
-                    // same problem with a scrim and white text.
-                    ContentAudiencePill.onMedia(
-                      key: ValueKey('content-audience-pill-${event.id}'),
-                      audience: audienceForEvent(event),
-                    ),
-                  ],
-                ),
-              ),
+            // Nothing else rides the hero. The audience mark moved down to
+            // the time badge in `_EventTitleBlock`, where it sits beside the
+            // date the way it does on every card that leads here — and off a
+            // cover photo that `hero-bottom-fade` half-dissolves anyway.
           ],
         ),
       ),
@@ -1770,20 +1814,30 @@ class _Hero extends StatelessWidget {
 
 /// `back-button` / `bookmark-button` — a translucent blurred disc so the
 /// control reads over any photo.
+///
+/// The two frames disagree here on purpose. `283:400` (light) frosts the disc
+/// almost opaque — `rgba(255,255,255,0.7)` behind an 8px blur, a 40% white
+/// hairline and a `#18181B` glyph — while `283:516` (dark) keeps the dim
+/// `rgba(255,255,255,0.2)` disc and a white glyph. So this is one of the few
+/// spots on the screen where the *treatment*, not just the token, is
+/// theme-dependent.
 class _HeroGlassButton extends StatelessWidget {
   final IconData icon;
   final VoidCallback onTap;
   final String? semanticLabel;
+  final double iconSize;
 
   const _HeroGlassButton({
     super.key,
     required this.icon,
     required this.onTap,
     this.semanticLabel,
+    this.iconSize = 18,
   });
 
   @override
   Widget build(BuildContext context) {
+    final dark = themeService.isDark;
     return Semantics(
       button: true,
       label: semanticLabel,
@@ -1792,13 +1846,26 @@ class _HeroGlassButton extends StatelessWidget {
         child: ClipRRect(
           borderRadius: BorderRadius.circular(18),
           child: BackdropFilter(
-            filter: ImageFilter.blur(sigmaX: 6, sigmaY: 6),
+            filter: ImageFilter.blur(
+              sigmaX: dark ? 6 : 8,
+              sigmaY: dark ? 6 : 8,
+            ),
             child: Container(
               width: 36,
               height: 36,
               alignment: Alignment.center,
-              color: Colors.white.withValues(alpha: 0.2),
-              child: Icon(icon, size: 20, color: Colors.white),
+              decoration: BoxDecoration(
+                color: Colors.white.withValues(alpha: dark ? 0.2 : 0.7),
+                borderRadius: BorderRadius.circular(18),
+                border: Border.all(
+                  color: Colors.white.withValues(alpha: dark ? 0.2 : 0.4),
+                ),
+              ),
+              child: Icon(
+                icon,
+                size: iconSize,
+                color: dark ? Colors.white : const Color(0xFF18181B),
+              ),
             ),
           ),
         ),
@@ -1820,42 +1887,62 @@ class _EventTitleBlock extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Container(
-          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-          decoration: BoxDecoration(
-            color: ClubUpColors.accent.withValues(alpha: 0.1),
-            borderRadius: BorderRadius.circular(8),
-          ),
-          child: Text(
-            whenLabel,
-            style: figtree(
-              size: 12,
-              weight: FontWeight.w700,
+        Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+              decoration: BoxDecoration(
+                // `time-badge` — a 10% wash in light, doubled to 20% in dark so
+                // the pill still separates from the `#121212` page.
+                color: ClubUpColors.accent.withValues(
+                  alpha: themeService.isDark ? 0.2 : 0.1,
+                ),
+                borderRadius: BorderRadius.circular(999),
+              ),
+              child: Text(
+                whenLabel,
+                style: figtree(
+                  size: 12,
+                  weight: FontWeight.w700,
+                  color: ClubUpColors.accentText,
+                ),
+              ),
+            ),
+            const SizedBox(width: 2),
+            // A restricted event says so next to its date here too, so the
+            // card and the page it opens answer the question the same way.
+            ContentAudienceIcon(
+              key: ValueKey('content-audience-icon-${event.id}'),
+              audience: audienceForEvent(event),
               color: ClubUpColors.accentText,
             ),
-          ),
+          ],
         ),
-        const SizedBox(height: 12),
+        const SizedBox(height: 16),
+        // `event-title` — the frames set this in Figtree Black (900). Only
+        // 400–800 are bundled, so w800 is both the closest weight and the one
+        // Flutter would resolve w900 to anyway.
         Text(
           event.title,
           style: figtree(
-            size: 24,
+            size: 34,
             weight: FontWeight.w800,
             color: ClubUpColors.text,
-            height: 1.2,
+            height: 1.1,
           ),
         ),
         if (event.location.trim().isNotEmpty) ...[
-          const SizedBox(height: 12),
+          const SizedBox(height: 16),
           Row(
             children: [
               Container(
-                width: 28,
-                height: 28,
+                width: 32,
+                height: 32,
                 alignment: Alignment.center,
                 decoration: BoxDecoration(
                   color: ClubUpColors.chip,
-                  borderRadius: BorderRadius.circular(8),
+                  borderRadius: BorderRadius.circular(10),
                 ),
                 child: Icon(
                   Icons.place_outlined,
@@ -1863,7 +1950,7 @@ class _EventTitleBlock extends StatelessWidget {
                   color: ClubUpColors.muted,
                 ),
               ),
-              const SizedBox(width: 8),
+              const SizedBox(width: 10),
               Expanded(
                 child: Text(
                   event.location,
@@ -1882,97 +1969,64 @@ class _EventTitleBlock extends StatelessWidget {
   }
 }
 
-/// The hairline the handoff puts between every section of the detail screen.
-class _EventDivider extends StatelessWidget {
-  const _EventDivider();
+/// The hairline the handoff puts between sections of the detail screen, with
+/// the 32px of air the frames give it on each side baked in.
+///
+/// `scrollable-content` 283:410 is a 32px-gap flex whose hairlines are just
+/// more children, so a rule always sits 32px clear of the section above and
+/// below it. Carrying the spacing here keeps that invariant in one place
+/// instead of at every call site.
+class _EventSectionRule extends StatelessWidget {
+  /// The gap above and below every section boundary.
+  static const double gap = 32;
+
+  const _EventSectionRule();
 
   @override
-  Widget build(BuildContext context) =>
-      Divider(height: 1, thickness: 1, color: ClubUpColors.border);
+  Widget build(BuildContext context) => Column(
+    mainAxisSize: MainAxisSize.min,
+    children: [
+      const SizedBox(height: gap),
+      Divider(height: 1, thickness: 1, color: ClubUpColors.border),
+      const SizedBox(height: gap),
+    ],
+  );
 }
 
 /// `tag-*` — a student-side copy. The shared [_Tag] is also used by the club
 /// admin event screen, whose design has not been reviewed yet.
+///
+/// The frames draw the first chip accent-tinted and the rest neutral. Real
+/// [Event.tags] are free text, so [accented] is driven purely by position —
+/// the leading tag reads as the event's category — rather than by matching
+/// words, which would only ever work for English tags.
 class _EventTag extends StatelessWidget {
   final String label;
+  final bool accented;
 
-  const _EventTag({required this.label});
+  const _EventTag({required this.label, this.accented = false});
 
   @override
   Widget build(BuildContext context) {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
       decoration: BoxDecoration(
-        color: ClubUpColors.card,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: ClubUpColors.border),
+        color: accented
+            ? ClubUpColors.accent.withValues(alpha: 0.08)
+            : ClubUpColors.card,
+        borderRadius: BorderRadius.circular(999),
+        border: Border.all(
+          color: accented
+              ? ClubUpColors.accent.withValues(alpha: 0.2)
+              : ClubUpColors.border,
+        ),
       ),
       child: Text(
         label,
         style: figtree(
-          size: 12,
-          weight: FontWeight.w600,
-          color: ClubUpColors.text,
-        ),
-      ),
-    );
-  }
-}
-
-class _StatusPill extends StatelessWidget {
-  final bool isLive;
-  final bool isPast;
-  final Color accent;
-  const _StatusPill({
-    required this.isLive,
-    required this.isPast,
-    required this.accent,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    if (isLive) {
-      return Container(
-        padding: const EdgeInsets.symmetric(horizontal: 11, vertical: 5),
-        decoration: BoxDecoration(
-          color: const Color(0xFFD43A3A),
-          borderRadius: BorderRadius.all(Radius.circular(999)),
-        ),
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            const _PulseDot(color: Colors.white),
-            const SizedBox(width: 6),
-            Text(
-              AppLocalizations.of(context)!.happeningNowBadge,
-              style: const TextStyle(
-                fontSize: 9.5,
-                fontWeight: FontWeight.w800,
-                color: Colors.white,
-                letterSpacing: 0.8,
-              ),
-            ),
-          ],
-        ),
-      );
-    }
-    final label = isPast
-        ? AppLocalizations.of(context)!.pastBadge
-        : AppLocalizations.of(context)!.upcomingBadge;
-    final bg = isPast ? Colors.black.withValues(alpha: 0.55) : accent;
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 11, vertical: 5),
-      decoration: BoxDecoration(
-        color: bg,
-        borderRadius: BorderRadius.all(Radius.circular(999)),
-      ),
-      child: Text(
-        label,
-        style: const TextStyle(
-          fontSize: 9.5,
-          fontWeight: FontWeight.w800,
-          color: Colors.white,
-          letterSpacing: 0.8,
+          size: 13,
+          weight: FontWeight.w700,
+          color: accented ? ClubUpColors.accentText : ClubUpColors.text,
         ),
       ),
     );
@@ -2446,19 +2500,8 @@ class _RegistrationCard extends StatelessWidget {
 
   String get _pretty => url.replaceFirst(RegExp(r'^https?://'), '');
 
-  Uri? _uri() {
-    final trimmed = url.trim();
-    if (trimmed.isEmpty) return null;
-    final withScheme = trimmed.startsWith(RegExp(r'https?://'))
-        ? trimmed
-        : 'https://$trimmed';
-    final uri = Uri.tryParse(withScheme);
-    if (uri == null || uri.host.isEmpty) return null;
-    return uri;
-  }
-
   Future<void> _open(BuildContext context) async {
-    final uri = _uri();
+    final uri = _externalUri(url);
     if (uri == null) return;
     final opened = await launchUrl(uri, mode: LaunchMode.externalApplication);
     if (!opened && context.mounted) {
@@ -2550,6 +2593,9 @@ class _RegistrationCard extends StatelessWidget {
 // Section header
 // ─────────────────────────────────────────────────────────────────────────────
 
+/// The 18px ExtraBold section heading the frames use for "About the event",
+/// "Speakers" and "Programme Schedule". Student-side only — the admin screen
+/// has its own [_AdminSecHead].
 class _SecHead extends StatelessWidget {
   final String text;
   const _SecHead(this.text);
@@ -2559,8 +2605,8 @@ class _SecHead extends StatelessWidget {
     return Text(
       text,
       style: figtree(
-        size: 16,
-        weight: FontWeight.w700,
+        size: 18,
+        weight: FontWeight.w800,
         color: ClubUpColors.text,
       ),
     );
@@ -2739,19 +2785,8 @@ class _SpeakersRow extends StatelessWidget {
     return parts.take(2).map((w) => w[0].toUpperCase()).join();
   }
 
-  Uri? _linkedinUri(String value) {
-    final trimmed = value.trim();
-    if (trimmed.isEmpty) return null;
-    final withScheme = trimmed.startsWith(RegExp(r'https?://'))
-        ? trimmed
-        : 'https://$trimmed';
-    final uri = Uri.tryParse(withScheme);
-    if (uri == null || uri.host.isEmpty) return null;
-    return uri;
-  }
-
   Future<void> _openLinkedIn(BuildContext context, EventSpeaker s) async {
-    final uri = _linkedinUri(s.linkedin ?? '');
+    final uri = _externalUri(s.linkedin ?? '');
     if (uri == null) return;
     final opened = await launchUrl(uri, mode: LaunchMode.externalApplication);
     if (!opened && context.mounted) {
@@ -2853,6 +2888,388 @@ class _SpeakersRow extends StatelessWidget {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
+// Student-side speakers, programme and registration.
+//
+// The shared [_SpeakersRow], [_ProgrammeTimeline] and [_RegistrationCard]
+// above are also mounted by [ClubEventAdminScreen], whose design has not been
+// reviewed — so the new frames get their own copies here rather than restyling
+// widgets two screens depend on. Same call the file already made for
+// [_EventTag] vs [_Tag].
+// ─────────────────────────────────────────────────────────────────────────────
+
+/// The lift under a `speaker-card`: `0 6px 9px rgba(0,0,0,0.05)` in light,
+/// deepened to `0 10px 12px rgba(0,0,0,0.25)` on the `#121212` page.
+List<BoxShadow> _eventCardShadow() => [
+  BoxShadow(
+    color: themeService.isDark
+        ? const Color(0x40000000)
+        : const Color(0x0D000000),
+    offset: Offset(0, themeService.isDark ? 10 : 6),
+    blurRadius: themeService.isDark ? 12 : 9,
+  ),
+];
+
+/// `speakers-section` 328:4 — one full-width card per speaker, stacked.
+///
+/// Replaces the old 110px-wide horizontal carousel: the frames give each
+/// speaker the whole column width, which is what makes room for the LinkedIn
+/// address to be shown in full rather than as a tappable avatar.
+class _EventSpeakerCards extends StatelessWidget {
+  final List<EventSpeaker> speakers;
+
+  const _EventSpeakerCards({required this.speakers});
+
+  Future<void> _openLinkedIn(BuildContext context, EventSpeaker s) async {
+    final uri = _externalUri(s.linkedin ?? '');
+    if (uri == null) return;
+    final opened = await launchUrl(uri, mode: LaunchMode.externalApplication);
+    if (!opened && context.mounted) {
+      ScaffoldMessenger.of(context)
+        ..hideCurrentSnackBar()
+        ..showSnackBar(
+          SnackBar(
+            content: Text(
+              AppLocalizations.of(context)!.couldNotOpenLinkedIn(s.name),
+            ),
+            behavior: SnackBarBehavior.floating,
+            shape: const RoundedRectangleBorder(
+              borderRadius: BorderRadius.all(Radius.circular(12)),
+            ),
+          ),
+        );
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        for (var i = 0; i < speakers.length; i++) ...[
+          if (i > 0) const SizedBox(height: 12),
+          _EventSpeakerCard(
+            speaker: speakers[i],
+            onOpenLink: () => _openLinkedIn(context, speakers[i]),
+          ),
+        ],
+      ],
+    );
+  }
+}
+
+class _EventSpeakerCard extends StatelessWidget {
+  final EventSpeaker speaker;
+  final VoidCallback onOpenLink;
+
+  const _EventSpeakerCard({required this.speaker, required this.onOpenLink});
+
+  @override
+  Widget build(BuildContext context) {
+    final link = speaker.linkedin?.trim() ?? '';
+    final hasLink = link.isNotEmpty;
+
+    return GestureDetector(
+      onTap: hasLink ? onOpenLink : null,
+      behavior: HitTestBehavior.opaque,
+      child: Container(
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          color: ClubUpColors.card,
+          borderRadius: const BorderRadius.all(Radius.circular(16)),
+          border: Border.all(color: ClubUpColors.border),
+          boxShadow: _eventCardShadow(),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              speaker.name,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: figtree(
+                size: 16,
+                weight: FontWeight.w800,
+                color: ClubUpColors.text,
+              ),
+            ),
+            if (speaker.role.trim().isNotEmpty) ...[
+              const SizedBox(height: 6),
+              Text(
+                speaker.role,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: figtree(
+                  size: 13,
+                  weight: FontWeight.w400,
+                  color: ClubUpColors.muted,
+                ),
+              ),
+            ],
+            if (hasLink) ...[
+              const SizedBox(height: 6),
+              // `speaker-link` 328:12 — the light frame wraps the address in a
+              // bordered chip; the dark frame leaves it as a bare row. The chip
+              // is the finished treatment, so both themes get it.
+              Align(
+                alignment: Alignment.centerLeft,
+                child: Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 10,
+                    vertical: 8,
+                  ),
+                  decoration: BoxDecoration(
+                    color: ClubUpColors.background,
+                    borderRadius: const BorderRadius.all(Radius.circular(12)),
+                    border: Border.all(color: ClubUpColors.border),
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      // Material ships no LinkedIn mark. The event wizard
+                      // settled on this glyph for the same field in the same
+                      // handoff, so the two views stay consistent.
+                      Icon(
+                        Icons.business_center_outlined,
+                        size: 14,
+                        color: ClubUpColors.muted,
+                      ),
+                      const SizedBox(width: 8),
+                      Flexible(
+                        child: Text(
+                          link,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: figtree(
+                            size: 13,
+                            weight: FontWeight.w400,
+                            color: ClubUpColors.muted,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ],
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+/// `programme-section` 328:16 — a flat list of sessions, each a dot, a title
+/// and a right-aligned clock, separated by hairlines. No vertical rail: the
+/// frames dropped the rail the admin timeline still draws.
+class _EventProgramme extends StatelessWidget {
+  final List<EventSlot> slots;
+
+  const _EventProgramme({required this.slots});
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        for (var i = 0; i < slots.length; i++)
+          _EventSessionRow(
+            slot: slots[i],
+            // `session-row` 328:19 carries the hairline, 328:27 does not — the
+            // rule sits between rows, never under the last one.
+            showDivider: i < slots.length - 1,
+          ),
+      ],
+    );
+  }
+}
+
+class _EventSessionRow extends StatelessWidget {
+  final EventSlot slot;
+  final bool showDivider;
+
+  const _EventSessionRow({required this.slot, required this.showDivider});
+
+  /// 24-hour, as the rest of the app formats event times. The frames read
+  /// `7:00 PM`, but Turkish is a 24-hour locale and the wizard that produced
+  /// these slots writes them the same way.
+  String _fmt(DateTime dt) =>
+      '${dt.hour.toString().padLeft(2, '0')}:${dt.minute.toString().padLeft(2, '0')}';
+
+  @override
+  Widget build(BuildContext context) {
+    final subtitle = slot.subtitle?.trim() ?? '';
+
+    return Container(
+      padding: const EdgeInsets.symmetric(vertical: 14),
+      decoration: BoxDecoration(
+        border: showDivider
+            ? Border(bottom: BorderSide(color: ClubUpColors.border))
+            : null,
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // `timeline-dot` — 10px, nudged down so it centres on the title's
+          // first line rather than the top of the row.
+          Padding(
+            padding: const EdgeInsets.only(top: 5),
+            child: Container(
+              width: 10,
+              height: 10,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                color: ClubUpColors.accent,
+              ),
+            ),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  slot.title,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: figtree(
+                    size: 15,
+                    weight: FontWeight.w800,
+                    color: ClubUpColors.text,
+                  ),
+                ),
+                if (subtitle.isNotEmpty) ...[
+                  const SizedBox(height: 4),
+                  Text(
+                    subtitle,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: figtree(
+                      size: 13,
+                      weight: FontWeight.w400,
+                      color: ClubUpColors.muted,
+                    ),
+                  ),
+                ],
+              ],
+            ),
+          ),
+          const SizedBox(width: 12),
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.end,
+            children: [
+              Icon(
+                Icons.schedule_rounded,
+                size: 14,
+                color: ClubUpColors.muted,
+              ),
+              const SizedBox(height: 4),
+              Text(
+                _fmt(slot.time),
+                style: figtree(
+                  size: 13,
+                  weight: FontWeight.w700,
+                  color: ClubUpColors.muted,
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// `registration-section` 328:35 — the external sign-up link, promoted from a
+/// tinted row to the page's one filled call to action.
+///
+/// Still only mounted when the event actually carries a `registrationUrl`; a
+/// button that opens nothing would be worse than no button.
+class _EventRegistrationCta extends StatelessWidget {
+  final String url;
+
+  const _EventRegistrationCta({required this.url});
+
+  Future<void> _open(BuildContext context) async {
+    final uri = _externalUri(url);
+    if (uri == null) return;
+    final opened = await launchUrl(uri, mode: LaunchMode.externalApplication);
+    if (!opened && context.mounted) {
+      ScaffoldMessenger.of(context)
+        ..hideCurrentSnackBar()
+        ..showSnackBar(
+          SnackBar(
+            content: Text(
+              AppLocalizations.of(context)!.couldNotOpenRegistrationForm,
+            ),
+            behavior: SnackBarBehavior.floating,
+            backgroundColor: ClubUpColors.accent,
+            shape: const RoundedRectangleBorder(
+              borderRadius: BorderRadius.all(Radius.circular(12)),
+            ),
+          ),
+        );
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        // Deliberately smaller than the 18px section heads — the frames label
+        // this one at 14px, letting the button itself carry the weight.
+        Text(
+          l10n.registration,
+          style: figtree(
+            size: 14,
+            weight: FontWeight.w700,
+            color: ClubUpColors.text,
+          ),
+        ),
+        const SizedBox(height: 12),
+        GestureDetector(
+          key: const ValueKey('event-registration-cta'),
+          onTap: () => _open(context),
+          behavior: HitTestBehavior.opaque,
+          child: Container(
+            height: 56,
+            alignment: Alignment.center,
+            decoration: BoxDecoration(
+              color: ClubUpColors.accent,
+              borderRadius: const BorderRadius.all(Radius.circular(16)),
+              boxShadow: [
+                BoxShadow(
+                  color: ClubUpColors.accent.withValues(alpha: 0.2),
+                  offset: const Offset(0, 10),
+                  blurRadius: 12,
+                ),
+              ],
+            ),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const Icon(Icons.link_rounded, size: 16, color: Colors.white),
+                const SizedBox(width: 10),
+                Text(
+                  l10n.reserveMySpot,
+                  style: figtree(
+                    size: 15,
+                    weight: FontWeight.w800,
+                    color: Colors.white,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
 // Event social sections — attendees and friend invitations
 // ─────────────────────────────────────────────────────────────────────────────
 
@@ -2883,53 +3300,65 @@ class _AttendingCard extends StatelessWidget {
     final l10n = AppLocalizations.of(context)!;
     if (count == 0 && followedUserIds.isEmpty) return const SizedBox.shrink();
 
+    final hasFaces = followedUserIds.isNotEmpty;
+
     return GestureDetector(
       key: const ValueKey('event-attending-card'),
       onTap: onTap,
       behavior: HitTestBehavior.opaque,
       child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
-          if (followedUserIds.isNotEmpty) ...[
-            _DetailAvatarStack(userIds: followedUserIds),
-            const SizedBox(width: 10),
-            Flexible(
-              child: Text(
-                followedUserIds.length == 1
-                    ? S.oneFriendGoingLabel
-                    : S.friendsGoingLabel,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: figtree(
-                  size: 13,
-                  weight: FontWeight.w700,
-                  // Primary text, not the accent the frame draws: white on the
-                  // dark card, and still legible on the light one, where a
-                  // literal white would vanish.
-                  color: ClubUpColors.text,
-                ),
+          if (hasFaces) _DetailAvatarStack(userIds: followedUserIds),
+          // `going-count` 294:12 — the label moved off the bare row and into a
+          // bordered chip pinned to the trailing edge.
+          Flexible(
+            child: Container(
+              padding: const EdgeInsets.symmetric(
+                horizontal: 12,
+                vertical: 8,
+              ),
+              decoration: BoxDecoration(
+                color: ClubUpColors.card,
+                borderRadius: BorderRadius.circular(16),
+                border: Border.all(color: ClubUpColors.border),
+              ),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Flexible(
+                    child: Text(
+                      hasFaces
+                          ? (followedUserIds.length == 1
+                                ? S.oneFriendGoingLabel
+                                : S.friendsGoingLabel)
+                          : l10n.goingCount(count),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: figtree(
+                        size: 13,
+                        weight: hasFaces ? FontWeight.w700 : FontWeight.w600,
+                        // Primary text, not the accent the frame draws: white
+                        // on the dark card, and still legible on the light
+                        // one, where a literal white would vanish.
+                        color: hasFaces
+                            ? ClubUpColors.text
+                            : ClubUpColors.muted,
+                      ),
+                    ),
+                  ),
+                  if (onTap != null) ...[
+                    const SizedBox(width: 8),
+                    Icon(
+                      Icons.chevron_right_rounded,
+                      size: 14,
+                      color: ClubUpColors.muted,
+                    ),
+                  ],
+                ],
               ),
             ),
-          ] else
-            Flexible(
-              child: Text(
-                l10n.goingCount(count),
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: figtree(
-                  size: 13,
-                  weight: FontWeight.w600,
-                  color: ClubUpColors.muted,
-                ),
-              ),
-            ),
-          if (onTap != null) ...[
-            const SizedBox(width: 4),
-            Icon(
-              Icons.chevron_right_rounded,
-              size: 14,
-              color: ClubUpColors.muted,
-            ),
-          ],
+          ),
         ],
       ),
     );
@@ -2952,25 +3381,30 @@ String _attendeeDisplayName(String userId) {
   return userState.displayNameFor(userId, person?.name ?? userId);
 }
 
-/// `avatar-stack` on the detail screen — 24px discs, each pulled 8px over the
+/// `attendee-avatars` 294:6 — up to five 32px discs, each pulled 10px over the
 /// one before it.
 class _DetailAvatarStack extends StatelessWidget {
   final List<String> userIds;
+
+  /// Disc diameter and the step between two neighbours; the 10px difference is
+  /// the overlap the frame draws with `mr-[-10px]`.
+  static const double _size = 32;
+  static const double _step = 22;
 
   const _DetailAvatarStack({required this.userIds});
 
   @override
   Widget build(BuildContext context) {
-    final shown = userIds.take(3).toList();
+    final shown = userIds.take(5).toList();
     if (shown.isEmpty) return const SizedBox.shrink();
     return SizedBox(
-      height: 24,
-      width: 24 + (shown.length - 1) * 16,
+      height: _size,
+      width: _size + (shown.length - 1) * _step,
       child: Stack(
         children: [
           for (var i = 0; i < shown.length; i++)
             Positioned(
-              left: i * 16,
+              left: i * _step,
               child: Container(
                 decoration: BoxDecoration(
                   shape: BoxShape.circle,
@@ -2979,8 +3413,8 @@ class _DetailAvatarStack extends StatelessWidget {
                 child: UserAvatar(
                   userId: shown[i],
                   name: _attendeeDisplayName(shown[i]),
-                  size: 24,
-                  fontSize: 10,
+                  size: _size,
+                  fontSize: 13,
                 ),
               ),
             ),
@@ -3580,44 +4014,6 @@ class _SecondaryActionButton extends StatelessWidget {
             ),
           ],
         ),
-      ),
-    );
-  }
-}
-
-class _PulseDot extends StatefulWidget {
-  final Color color;
-  const _PulseDot({required this.color});
-
-  @override
-  State<_PulseDot> createState() => _PulseDotState();
-}
-
-class _PulseDotState extends State<_PulseDot>
-    with SingleTickerProviderStateMixin {
-  late final AnimationController _ctrl = AnimationController(
-    vsync: this,
-    duration: const Duration(milliseconds: 1100),
-  )..repeat(reverse: true);
-  late final Animation<double> _anim = Tween<double>(
-    begin: 0.35,
-    end: 1.0,
-  ).animate(CurvedAnimation(parent: _ctrl, curve: Curves.easeInOut));
-
-  @override
-  void dispose() {
-    _ctrl.dispose();
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return FadeTransition(
-      opacity: _anim,
-      child: Container(
-        width: 6,
-        height: 6,
-        decoration: BoxDecoration(color: widget.color, shape: BoxShape.circle),
       ),
     );
   }

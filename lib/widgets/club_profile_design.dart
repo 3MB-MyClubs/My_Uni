@@ -807,7 +807,7 @@ class ClubProfileEventCard extends StatelessWidget {
     required this.timeLabel,
     required this.location,
     this.statusLabel,
-    this.audienceBadge,
+    this.audienceMark,
     this.actionLabel,
     this.onAction,
     this.onTap,
@@ -823,10 +823,11 @@ class ClubProfileEventCard extends StatelessWidget {
   /// HAPPENING NOW / PAST, which the frame has no cell for but the app does.
   final String? statusLabel;
 
-  /// The `ContentAudiencePill` for a restricted event, supplied by the screen
+  /// The `ContentAudienceIcon` for a restricted event, supplied by the screen
   /// so this widget keeps knowing nothing about the audience model — the same
-  /// division [menu] observes on the post card. Null for a public event.
-  final Widget? audienceBadge;
+  /// division [menu] observes on the post card. Null for a public event. It
+  /// rides the date chip's line, which is where every other card puts it.
+  final Widget? audienceMark;
 
   final String? actionLabel;
   final VoidCallback? onAction;
@@ -885,7 +886,7 @@ class ClubProfileEventCard extends StatelessWidget {
                     ),
                     if (statusLabel != null)
                       ClubProfileChip(label: statusLabel!),
-                    ?audienceBadge,
+                    ?audienceMark,
                   ],
                 ),
                 const SizedBox(height: 7),

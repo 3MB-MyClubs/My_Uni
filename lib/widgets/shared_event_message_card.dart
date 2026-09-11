@@ -180,23 +180,26 @@ class _SharedEventMessageCardState extends State<SharedEventMessageCard> {
                       cacheWidth: 500,
                       cacheHeight: 224,
                     ),
+                    // See the note on the shared post card: a forwarded event
+                    // is exactly where its audience is least obvious. The mark
+                    // rides the date the way it does on every other card, and
+                    // takes the over-a-photo variant so it survives the cover.
                     Positioned(
                       left: 10,
                       bottom: 9,
-                      child: DynamicContrastText(
-                        '$date · $time',
-                        fontSize: 10.5,
-                        fontWeight: FontWeight.w700,
-                      ),
-                    ),
-                    // See the note on the shared post card: a forwarded event
-                    // is exactly where its audience is least obvious.
-                    Positioned(
-                      right: 9,
-                      top: 8,
-                      child: ContentAudiencePill.onMedia(
-                        key: ValueKey('content-audience-pill-${event.id}'),
-                        audience: audienceForEvent(event),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          DynamicContrastText(
+                            '$date · $time',
+                            fontSize: 10.5,
+                            fontWeight: FontWeight.w700,
+                          ),
+                          ContentAudienceIcon.onMedia(
+                            key: ValueKey('content-audience-icon-${event.id}'),
+                            audience: audienceForEvent(event),
+                          ),
+                        ],
                       ),
                     ),
                   ],

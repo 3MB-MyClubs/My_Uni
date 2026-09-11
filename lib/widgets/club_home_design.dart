@@ -32,7 +32,6 @@ import 'expandable_post_caption.dart';
 import 'home_comments_sheet.dart';
 import 'home_share_sheet.dart';
 import 'poll_card.dart';
-import '../models/content_audience.dart';
 import '../services/content_visibility.dart';
 import 'content_audience_sheet.dart';
 
@@ -974,15 +973,6 @@ class _ClubHomeFeedPostCardState extends State<ClubHomeFeedPostCard>
                   _announcementChip(),
                   const SizedBox(height: 12),
                 ],
-                if (audienceForPost(widget.post) !=
-                    ContentAudience.everyone) ...[
-                  ContentAudiencePill(
-                    key: ValueKey('content-audience-pill-${widget.post.id}'),
-                    audience: audienceForPost(widget.post),
-                    accent: ClubHomeColors.accent,
-                  ),
-                  const SizedBox(height: 12),
-                ],
                 if (body.isNotEmpty)
                   ExpandablePostCaption(
                     key: ValueKey('club-home-post-caption-${widget.post.id}'),
@@ -1093,14 +1083,25 @@ class _ClubHomeFeedPostCardState extends State<ClubHomeFeedPostCard>
                 ),
               ),
               const SizedBox(height: 1),
-              Text(
-                _timeAgo(widget.post.createdAt),
-                maxLines: 1,
-                style: figtree(
-                  size: 9,
-                  weight: FontWeight.w500,
-                  color: ClubHomeColors.muted,
-                ),
+              Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(
+                    _timeAgo(widget.post.createdAt),
+                    maxLines: 1,
+                    style: figtree(
+                      size: 9,
+                      weight: FontWeight.w500,
+                      color: ClubHomeColors.muted,
+                    ),
+                  ),
+                  ContentAudienceIcon(
+                    key: ValueKey('content-audience-icon-${widget.post.id}'),
+                    audience: audienceForPost(widget.post),
+                    color: ClubHomeColors.accent,
+                    size: 12,
+                  ),
+                ],
               ),
             ],
           ),

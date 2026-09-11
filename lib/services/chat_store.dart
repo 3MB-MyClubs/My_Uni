@@ -4078,7 +4078,12 @@ class ChatStore extends ChangeNotifier {
     return true;
   }
 
-  /// Adds or removes [emoji] for [userId] on one message.
+  /// Sets, moves or clears [userId]'s reaction on one message.
+  ///
+  /// One person holds **one** face per message: picking a different emoji moves
+  /// your reaction rather than adding a second one, and picking the one you
+  /// already hold takes it back. That is what keeps a chip count a headcount,
+  /// and it is why the chip row can stack.
   bool toggleReaction({
     required String messageId,
     required String userId,
@@ -4092,9 +4097,19 @@ class ChatStore extends ChangeNotifier {
       for (final entry in current.reactions.entries)
         entry.key: List<String>.from(entry.value),
     };
-    final users = reactions.putIfAbsent(emoji, () => <String>[]);
-    if (!users.remove(userId)) users.add(userId);
-    if (users.isEmpty) reactions.remove(emoji);
+    final held = reactions.entries
+        .where((entry) => entry.value.contains(userId))
+        .map((entry) => entry.key)
+        .toList();
+    // Collected first: dropping keys while walking `entries` would mutate the
+    // map mid-iteration.
+    for (final face in held) {
+      final users = reactions[face]!..remove(userId);
+      if (users.isEmpty) reactions.remove(face);
+    }
+    if (!held.contains(emoji)) {
+      reactions.putIfAbsent(emoji, () => <String>[]).add(userId);
+    }
     return _replaceMessage(
       messageId,
       (message) => message.copyWith(reactions: reactions),

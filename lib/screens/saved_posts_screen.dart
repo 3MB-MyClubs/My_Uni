@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import '../l10n/app_localizations.dart';
 import '../models/club.dart';
-import '../models/content_audience.dart';
 import '../models/event.dart';
 import '../models/news_post.dart';
 import '../services/app_colors.dart';
@@ -353,6 +352,12 @@ class _SavedPostRow extends StatelessWidget {
                           color: AppColors.secondaryText,
                         ),
                       ),
+                      ContentAudienceIcon(
+                        key: ValueKey('content-audience-icon-${post.id}'),
+                        audience: audienceForPost(post),
+                        color: color,
+                        size: 13,
+                      ),
                     ],
                   ),
                   const SizedBox(height: 4),
@@ -366,14 +371,6 @@ class _SavedPostRow extends StatelessWidget {
                       color: AppColors.secondaryText,
                     ),
                   ),
-                  if (audienceForPost(post) != ContentAudience.everyone) ...[
-                    const SizedBox(height: 6),
-                    ContentAudiencePill(
-                      key: ValueKey('content-audience-pill-${post.id}'),
-                      audience: audienceForPost(post),
-                      accent: color,
-                    ),
-                  ],
                 ],
               ),
             ),
@@ -467,24 +464,29 @@ class _SavedEventRow extends StatelessWidget {
                     ),
                   ),
                   const SizedBox(height: 4),
-                  Text(
-                    '${club?.name ?? AppLocalizations.of(context)!.campusEventFallback} · $time · ${event.location}',
-                    maxLines: 2,
-                    overflow: TextOverflow.ellipsis,
-                    style: TextStyle(
-                      fontSize: 13,
-                      height: 1.35,
-                      color: AppColors.secondaryText,
-                    ),
+                  Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Flexible(
+                        child: Text(
+                          '${club?.name ?? AppLocalizations.of(context)!.campusEventFallback} · $time · ${event.location}',
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis,
+                          style: TextStyle(
+                            fontSize: 13,
+                            height: 1.35,
+                            color: AppColors.secondaryText,
+                          ),
+                        ),
+                      ),
+                      ContentAudienceIcon(
+                        key: ValueKey('content-audience-icon-${event.id}'),
+                        audience: audienceForEvent(event),
+                        color: color,
+                        size: 13,
+                      ),
+                    ],
                   ),
-                  if (audienceForEvent(event) != ContentAudience.everyone) ...[
-                    const SizedBox(height: 6),
-                    ContentAudiencePill(
-                      key: ValueKey('content-audience-pill-${event.id}'),
-                      audience: audienceForEvent(event),
-                      accent: color,
-                    ),
-                  ],
                 ],
               ),
             ),

@@ -28,7 +28,8 @@ class S {
   static String get clubFeed => _t('CLUB FEED', 'KULÜp AKIŞI');
   static String get following => _t('Following', 'Takip');
   static String get all => _t('All', 'Tümü');
-  static String get forYou => _t('For You', 'Senin İçin');
+  // Instagram's feed label uses sentence case rather than title case.
+  static String get forYou => _t('For you', 'Senin için');
   static String get latest => _t('Latest', 'Son Gönderiler');
   static String get nothingHere => _t('Nothing here yet', 'Henüz bir şey yok');
   static String get followClubs => _t(
@@ -443,27 +444,6 @@ class S {
     'İsim, fotoğraf, kategoriler, yönetim kurulu — hepsini ayarlardan '
         'yönet.',
   );
-
-  // ── Onboarding — starter checklist
-  static String get checklistTitle => _t('Get started', 'Başlarken');
-  static String get checklistSubtitle => _t(
-    'Three small steps to make ClubUp yours',
-    "ClubUp'ı sana ait kılacak üç küçük adım",
-  );
-  static String get checklistFollowClub =>
-      _t('Follow a club you like', 'Beğendiğin bir kulübü takip et');
-  static String get checklistFollowClubAction =>
-      _t('Explore clubs', 'Kulüpleri keşfet');
-  static String get checklistRsvpEvent =>
-      _t('RSVP to an event', 'Bir etkinliğe LCV ver');
-  static String get checklistRsvpEventAction =>
-      _t('See events', 'Etkinliklere bak');
-  static String get checklistSayHi =>
-      _t('Say hi to someone', 'Birine selam ver');
-  static String get checklistSayHiAction => _t('Open chats', 'Sohbetleri aç');
-  static String get checklistDismiss => _t('Hide', 'Gizle');
-  static String get checklistAllDone =>
-      _t("You're all set! 🎉", 'Hepsi tamam! 🎉');
 
   // ── Community safety & moderation
   static String get safetyHero => _t(
@@ -1127,6 +1107,9 @@ class S {
   static String get copyLinkAction => _t('Copy Link', 'Bağlantıyı kopyala');
   static String get noShareMatches =>
       _t('No chats match that name.', 'Bu ada uyan sohbet yok.');
+  static String get savePostAction => _t('Save post', 'Gönderiyi kaydet');
+  static String get unsavePostAction =>
+      _t('Remove from saved', 'Kaydedilenlerden çıkar');
 
   // ── PROFILE area (ClubUp-Desings handoff) ──────────────────────────────────
   /// `mutual-clubs` section header on `profile-menu`.
@@ -1613,16 +1596,26 @@ class S {
         ContentAudience.board => audienceBoardHint,
       };
 
-  /// The badge a restricted post or event carries on its card. Empty for
-  /// [ContentAudience.everyone] — public content gets no badge at all.
-  static String audienceTierPill(ContentAudience audience) =>
+  /// What the bubble says when a reader taps the audience mark on a card.
+  ///
+  /// Full sentences rather than the old badge's clipped "Followers only": the
+  /// bubble is asked for, so it can afford the words, and a reader who taps a
+  /// padlock is asking exactly this question. Empty for
+  /// [ContentAudience.everyone] — public content carries no mark at all.
+  ///
+  /// "Followers", not "members": that is what the picker calls this tier and
+  /// what a student does to a club in this app.
+  static String audienceTierBubble(ContentAudience audience) =>
       switch (audience) {
         ContentAudience.everyone => '',
         ContentAudience.followers => _t(
-          'Followers only',
-          'Yalnızca takipçiler',
+          'Only followers of this club',
+          'Yalnızca kulüp takipçileri',
         ),
-        ContentAudience.board => _t('Board only', 'Yalnızca yönetim'),
+        ContentAudience.board => _t(
+          'Only board members',
+          'Yalnızca yönetim kurulu',
+        ),
       };
 
   static String get audienceChangeAction =>

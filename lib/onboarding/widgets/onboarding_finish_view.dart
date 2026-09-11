@@ -10,10 +10,9 @@ import '../../widgets/tutorial_design.dart';
 /// the accent and hairlined in it, and its footnote — the replay instructions —
 /// is accent ink rather than neutral.
 ///
-/// The frame has exactly two controls. The starter-checklist rows the previous
-/// finish screen carried are gone from the design; the checklist itself is
-/// untouched and still appears on Profile, which is where
-/// [StarterChecklistCard] renders it.
+/// The frame has exactly two controls: replay the tour, or go use the app.
+/// The starter-checklist rows an earlier finish screen carried are gone from
+/// the design, and so is the checklist they led to.
 class OnboardingFinishView extends StatelessWidget {
   /// Restarts the tour from step 01.
   final VoidCallback onReplay;

@@ -65,7 +65,10 @@ void main() {
   testWidgets('all three tiers render with their explanations', (tester) async {
     await openSheet(tester);
 
-    expect(find.byKey(const ValueKey('content-audience-sheet')), findsOneWidget);
+    expect(
+      find.byKey(const ValueKey('content-audience-sheet')),
+      findsOneWidget,
+    );
     expect(find.text(S.audienceSheetTitle), findsOneWidget);
     for (final audience in ContentAudience.values) {
       expect(
@@ -161,24 +164,39 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
-  testWidgets('the pill renders only for restricted tiers', (tester) async {
+  Future<void> pumpMark(
+    WidgetTester tester,
+    Widget mark, {
+    Alignment alignment = Alignment.center,
+  }) async {
     await tester.pumpWidget(
       MaterialApp(
-        locale: const Locale('en'),
+        locale: Locale(localeService.languageCode),
         localizationsDelegates: AppLocalizations.localizationsDelegates,
         supportedLocales: AppLocalizations.supportedLocales,
-        home: const Scaffold(
+        home: Scaffold(
+          body: Align(alignment: alignment, child: mark),
+        ),
+      ),
+    );
+    await tester.pump();
+  }
+
+  testWidgets('the mark renders only for restricted tiers', (tester) async {
+    await tester.pumpWidget(
+      const MaterialApp(
+        home: Scaffold(
           body: Column(
             children: [
-              ContentAudiencePill(
+              ContentAudienceIcon(
                 audience: ContentAudience.everyone,
-                accent: Color(0xFF800020),
+                color: Color(0xFF800020),
               ),
-              ContentAudiencePill(
+              ContentAudienceIcon(
                 audience: ContentAudience.board,
-                accent: Color(0xFF800020),
+                color: Color(0xFF800020),
               ),
-              ContentAudiencePill.onMedia(audience: ContentAudience.followers),
+              ContentAudienceIcon.onMedia(audience: ContentAudience.followers),
             ],
           ),
         ),
@@ -186,14 +204,12 @@ void main() {
     );
     await tester.pump();
 
-    expect(find.text(S.audienceTierPill(ContentAudience.board)), findsOneWidget);
+    // Public content carries no mark at all: two restricted glyphs are on
+    // screen and three were built.
     expect(
-      find.text(S.audienceTierPill(ContentAudience.followers)),
+      find.byIcon(audienceTierIcon(ContentAudience.board)),
       findsOneWidget,
     );
-    // Public content carries no badge at all: two restricted pills are on
-    // screen and three were built.
-    expect(find.byIcon(audienceTierIcon(ContentAudience.board)), findsOneWidget);
     expect(
       find.byIcon(audienceTierIcon(ContentAudience.followers)),
       findsOneWidget,
@@ -206,8 +222,9 @@ void main() {
   });
 
   testWidgets('each restricted tier gets its own glyph', (tester) async {
-    // The badge is read at 11-13px, often before its label. A padlock and a
-    // pair of people are distinguishable at that size; two copies of the same
+    // The mark is now read at 12-14px with no label beside it at all, so the
+    // glyph carries the whole distinction until someone taps it. A padlock and
+    // a pair of people are distinguishable at that size; two copies of the same
     // eye are not.
     expect(
       audienceTierIcon(ContentAudience.board),
@@ -217,40 +234,243 @@ void main() {
     expect(audienceTierIcon(ContentAudience.followers), Icons.group_outlined);
   });
 
+  testWidgets('tapping the mark pops a bubble naming the tier', (tester) async {
+    await pumpMark(
+      tester,
+      const ContentAudienceIcon(
+        audience: ContentAudience.board,
+        color: Color(0xFF800020),
+      ),
+    );
+
+    expect(
+      find.text(S.audienceTierBubble(ContentAudience.board)),
+      findsNothing,
+    );
+
+    await tester.tap(find.byType(ContentAudienceIcon));
+    await tester.pumpAndSettle();
+
+    expect(
+      find.text(S.audienceTierBubble(ContentAudience.board)),
+      findsOneWidget,
+    );
+    // It is an overlay, so it escapes the card's clip rather than widening it.
+    expect(
+      find.byKey(const ValueKey('content-audience-bubble')),
+      findsOneWidget,
+    );
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('the followers bubble names followers, not members', (
+    tester,
+  ) async {
+    // "Followers" is what the picker calls this tier and what a student does
+    // to a club here; "members" would be a fourth word for the same thing.
+    expect(
+      S.audienceTierBubble(ContentAudience.followers),
+      'Only followers of this club',
+    );
+    expect(S.audienceTierBubble(ContentAudience.board), 'Only board members');
+    expect(S.audienceTierBubble(ContentAudience.everyone), '');
+
+    await localeService.setLanguage('tr');
+    expect(
+      S.audienceTierBubble(ContentAudience.followers),
+      'Yalnızca kulüp takipçileri',
+    );
+    expect(
+      S.audienceTierBubble(ContentAudience.board),
+      'Yalnızca yönetim kurulu',
+    );
+  });
+
+  testWidgets('the next tap closes the bubble', (tester) async {
+    await pumpMark(
+      tester,
+      const ContentAudienceIcon(
+        audience: ContentAudience.followers,
+        color: Color(0xFF800020),
+      ),
+    );
+    await tester.tap(find.byType(ContentAudienceIcon));
+    await tester.pumpAndSettle();
+    expect(
+      find.text(S.audienceTierBubble(ContentAudience.followers)),
+      findsOneWidget,
+    );
+
+    // The barrier is opaque, so this tap dismisses and does not also reach the
+    // card the mark is drawn on.
+    await tester.tapAt(const Offset(30, 30));
+    await tester.pumpAndSettle();
+
+    expect(
+      find.text(S.audienceTierBubble(ContentAudience.followers)),
+      findsNothing,
+    );
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('the bubble fades on its own if it is left alone', (
+    tester,
+  ) async {
+    await pumpMark(
+      tester,
+      const ContentAudienceIcon(
+        audience: ContentAudience.board,
+        color: Color(0xFF800020),
+      ),
+    );
+    await tester.tap(find.byType(ContentAudienceIcon));
+    await tester.pumpAndSettle();
+    expect(
+      find.text(S.audienceTierBubble(ContentAudience.board)),
+      findsOneWidget,
+    );
+
+    await tester.pump(const Duration(seconds: 4));
+    await tester.pumpAndSettle();
+
+    expect(
+      find.text(S.audienceTierBubble(ContentAudience.board)),
+      findsNothing,
+    );
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('a mark near the top of the screen hangs its bubble below', (
+    tester,
+  ) async {
+    // The event detail screen puts the mark beside a time badge that can sit
+    // right under the status bar; a bubble drawn above it would be off screen.
+    await pumpMark(
+      tester,
+      const ContentAudienceIcon(
+        audience: ContentAudience.board,
+        color: Color(0xFF800020),
+      ),
+      alignment: Alignment.topCenter,
+    );
+    await tester.tap(find.byType(ContentAudienceIcon));
+    await tester.pumpAndSettle();
+
+    final mark = tester.getRect(find.byType(ContentAudienceIcon));
+    final bubble = tester.getRect(
+      find.byKey(const ValueKey('content-audience-bubble')),
+    );
+    expect(bubble.top, greaterThanOrEqualTo(mark.bottom));
+    expect(bubble.top, lessThan(mark.bottom + 24));
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('the bubble stays on screen at either edge', (tester) async {
+    for (final alignment in [Alignment.centerLeft, Alignment.centerRight]) {
+      await pumpMark(
+        tester,
+        const ContentAudienceIcon(
+          audience: ContentAudience.followers,
+          color: Color(0xFF800020),
+        ),
+        alignment: alignment,
+      );
+      await tester.tap(find.byType(ContentAudienceIcon));
+      await tester.pumpAndSettle();
+
+      final bubble = tester.getRect(
+        find.byKey(const ValueKey('content-audience-bubble')),
+      );
+      expect(bubble.left, greaterThanOrEqualTo(0));
+      expect(bubble.right, lessThanOrEqualTo(tester.view.physicalSize.width));
+
+      await tester.tapAt(const Offset(5, 5));
+      await tester.pumpAndSettle();
+    }
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('the bubble grows out of the glyph, not beside it', (
+    tester,
+  ) async {
+    // The tail is the only thing that says which mark the words belong to, so
+    // it has to land on the glyph itself at every side bucket — including the
+    // two near-edge ones, which slide the whole bubble over to put it there.
+    final tailFinder = find.byWidgetPredicate(
+      // The tail is the only 12x6 CustomPaint in the tree.
+      (widget) => widget is CustomPaint && widget.size == const Size(12, 6),
+    );
+
+    for (final alignment in [
+      Alignment.centerLeft,
+      Alignment.center,
+      Alignment.centerRight,
+    ]) {
+      await pumpMark(
+        tester,
+        const ContentAudienceIcon(
+          audience: ContentAudience.followers,
+          color: Color(0xFF800020),
+        ),
+        alignment: alignment,
+      );
+      await tester.tap(find.byType(ContentAudienceIcon));
+      await tester.pumpAndSettle();
+
+      final mark = tester.getRect(find.byType(ContentAudienceIcon));
+      final tail = tester.getRect(tailFinder);
+      final bubble = tester.getRect(
+        find.byKey(const ValueKey('content-audience-bubble')),
+      );
+
+      expect(
+        (tail.center.dx - mark.center.dx).abs(),
+        lessThan(1),
+        reason: 'the tail should point at the glyph at $alignment',
+      );
+      // And it reaches it: the tip meets the glyph rather than hanging above.
+      expect(
+        (tail.bottom - mark.top).abs(),
+        lessThan(4),
+        reason: 'the tail should touch the glyph at $alignment',
+      );
+      // Pinning the tail must not push the bubble off the screen edge.
+      expect(bubble.left, greaterThanOrEqualTo(0));
+      expect(
+        bubble.right,
+        lessThanOrEqualTo(tester.getSize(find.byType(MaterialApp)).width),
+      );
+
+      await tester.tapAt(const Offset(5, 5));
+      await tester.pumpAndSettle();
+    }
+    expect(tester.takeException(), isNull);
+  });
+
   testWidgets('the media variant brings its own contrast', (tester) async {
     // Over a cover photo the club accent is unusable — a 10% wash of anything
     // disappears, and the accent itself may match the photo. The variant that
-    // sits on media therefore ignores the accent entirely.
-    await tester.pumpWidget(
-      const MaterialApp(
-        locale: Locale('en'),
-        localizationsDelegates: AppLocalizations.localizationsDelegates,
-        supportedLocales: AppLocalizations.supportedLocales,
-        home: Scaffold(
-          body: ContentAudiencePill.onMedia(audience: ContentAudience.board),
-        ),
-      ),
+    // sits on media therefore ignores the accent entirely and brings a disc.
+    await pumpMark(
+      tester,
+      const ContentAudienceIcon.onMedia(audience: ContentAudience.board),
     );
-    await tester.pump();
 
     final icon = tester.widget<Icon>(
       find.byIcon(audienceTierIcon(ContentAudience.board)),
     );
     expect(icon.color, Colors.white);
 
-    final label = tester.widget<Text>(
-      find.text(S.audienceTierPill(ContentAudience.board)),
+    final disc = tester.widget<Container>(
+      find
+          .ancestor(
+            of: find.byIcon(audienceTierIcon(ContentAudience.board)),
+            matching: find.byType(Container),
+          )
+          .first,
     );
-    expect(label.style?.color, Colors.white);
-
-    final box = tester.widget<Container>(
-      find.ancestor(
-        of: find.byIcon(audienceTierIcon(ContentAudience.board)),
-        matching: find.byType(Container),
-      ),
-    );
-    final fill = (box.decoration as BoxDecoration).color!;
-    // A real scrim, not a 10% tint, or white text on a photo is unreadable.
+    final fill = (disc.decoration as BoxDecoration).color!;
+    // A real scrim, not a 10% tint, or a white glyph on a photo is unreadable.
     expect(fill.a, greaterThan(0.4));
     expect(tester.takeException(), isNull);
   });

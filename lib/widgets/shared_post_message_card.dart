@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 
-import '../models/content_audience.dart';
 import '../models/news_post.dart';
 import '../screens/create_post_screen.dart' show buildPostBanner;
 import '../screens/post_detail_screen.dart';
@@ -142,6 +141,17 @@ class SharedPostMessageCard extends StatelessWidget {
                             ),
                           ),
                         ),
+                        // A restricted post keeps its mark when it is
+                        // forwarded into a conversation — that is where the
+                        // recipient is least likely to know where it came
+                        // from. This card prints no timestamp, so the mark
+                        // ends the byline instead.
+                        ContentAudienceIcon(
+                          key: ValueKey('content-audience-icon-${post.id}'),
+                          audience: audienceForPost(post),
+                          color: onDarkBackground ? Colors.white : color,
+                          size: 13,
+                        ),
                       ],
                     ),
                     if (post.content.trim().isNotEmpty) ...[
@@ -155,17 +165,6 @@ class SharedPostMessageCard extends StatelessWidget {
                           height: 1.3,
                           fontSize: 12,
                         ),
-                      ),
-                    ],
-                    // A restricted post keeps its badge when it is forwarded
-                    // into a conversation — that is where the recipient is
-                    // least likely to know where it came from.
-                    if (audienceForPost(post) != ContentAudience.everyone) ...[
-                      const SizedBox(height: 8),
-                      ContentAudiencePill(
-                        key: ValueKey('content-audience-pill-${post.id}'),
-                        audience: audienceForPost(post),
-                        accent: onDarkBackground ? Colors.white : color,
                       ),
                     ],
                   ],

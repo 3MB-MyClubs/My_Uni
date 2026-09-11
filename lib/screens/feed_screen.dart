@@ -37,7 +37,6 @@ import '../widgets/dynamic_contrast_text.dart';
 import '../widgets/user_follow_button.dart';
 import '../theme/app_semantic_colors.dart';
 import '../models/share.dart';
-import '../models/content_audience.dart';
 import '../models/news_post.dart';
 import '../models/event.dart';
 import '../models/user.dart';
@@ -2600,13 +2599,25 @@ class _TrendingEventCard extends StatelessWidget {
                                   color: color,
                                 ),
                                 const SizedBox(width: 4),
-                                Text(
-                                  timeLabel,
-                                  style: TextStyle(
-                                    fontSize: 12,
-                                    color: color,
-                                    fontWeight: FontWeight.w600,
+                                Flexible(
+                                  child: Text(
+                                    timeLabel,
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                    style: TextStyle(
+                                      fontSize: 12,
+                                      color: color,
+                                      fontWeight: FontWeight.w600,
+                                    ),
                                   ),
+                                ),
+                                ContentAudienceIcon(
+                                  key: ValueKey(
+                                    'content-audience-icon-${event.id}',
+                                  ),
+                                  audience: audienceForEvent(event),
+                                  color: color,
+                                  size: 13,
                                 ),
                               ],
                             ),
@@ -2633,14 +2644,6 @@ class _TrendingEventCard extends StatelessWidget {
                           ),
                         ),
                       ],
-                    ),
-                  ],
-                  if (audienceForEvent(event) != ContentAudience.everyone) ...[
-                    const SizedBox(height: 10),
-                    ContentAudiencePill(
-                      key: ValueKey('content-audience-pill-${event.id}'),
-                      audience: audienceForEvent(event),
-                      accent: color,
                     ),
                   ],
                   const SizedBox(height: 10),
@@ -3897,12 +3900,25 @@ class _PostCardState extends State<_PostCard>
                       ),
                     ),
                     const SizedBox(height: 1),
-                    Text(
-                      _timeAgo(context, widget.post.createdAt),
-                      style: TextStyle(
-                        fontSize: 12,
-                        color: AppColors.secondaryText,
-                      ),
+                    Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Text(
+                          _timeAgo(context, widget.post.createdAt),
+                          style: TextStyle(
+                            fontSize: 12,
+                            color: AppColors.secondaryText,
+                          ),
+                        ),
+                        ContentAudienceIcon(
+                          key: ValueKey(
+                            'content-audience-icon-${widget.post.id}',
+                          ),
+                          audience: audienceForPost(widget.post),
+                          color: clubColor,
+                          size: 13,
+                        ),
+                      ],
                     ),
                   ],
                 ),
@@ -3923,18 +3939,6 @@ class _PostCardState extends State<_PostCard>
               ),
             ],
           ),
-          // ── Audience badge — only for restricted posts ──
-          if (audienceForPost(widget.post) != ContentAudience.everyone) ...[
-            const SizedBox(height: 8),
-            Align(
-              alignment: Alignment.centerLeft,
-              child: ContentAudiencePill(
-                key: ValueKey('content-audience-pill-${widget.post.id}'),
-                audience: audienceForPost(widget.post),
-                accent: clubColor,
-              ),
-            ),
-          ],
           // ── Announcement banner ──
           if (widget.post.isAnnouncement) ...[
             const SizedBox(height: 8),
@@ -4350,17 +4354,6 @@ class _EventCardState extends State<_EventCard> {
                     cacheWidth: 700,
                     cacheHeight: 320,
                   ),
-                  // The badge goes over the banner rather than into the
-                  // header row: this card's header already carries the club
-                  // name, the days-away label and a follow button.
-                  Positioned(
-                    left: 16,
-                    top: 12,
-                    child: ContentAudiencePill.onMedia(
-                      key: ValueKey('content-audience-pill-${widget.event.id}'),
-                      audience: audienceForEvent(widget.event),
-                    ),
-                  ),
                   // Big date in background
                   Positioned(
                     right: 16,
@@ -4382,10 +4375,24 @@ class _EventCardState extends State<_EventCard> {
                       crossAxisAlignment: CrossAxisAlignment.start,
                       mainAxisAlignment: MainAxisAlignment.end,
                       children: [
-                        DynamicContrastText(
-                          '${_monthAbbr(dt.month)} ${dt.day}  ·  ${_fmt12(dt)}',
-                          fontSize: 12,
-                          fontWeight: FontWeight.w600,
+                        // The mark rides the date line over the banner —
+                        // this card's header row is already carrying the club
+                        // name, the days-away label and a follow button.
+                        Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            DynamicContrastText(
+                              '${_monthAbbr(dt.month)} ${dt.day}  ·  ${_fmt12(dt)}',
+                              fontSize: 12,
+                              fontWeight: FontWeight.w600,
+                            ),
+                            ContentAudienceIcon.onMedia(
+                              key: ValueKey(
+                                'content-audience-icon-${widget.event.id}',
+                              ),
+                              audience: audienceForEvent(widget.event),
+                            ),
+                          ],
                         ),
                         const SizedBox(height: 8),
                         DynamicContrastText(
@@ -4700,24 +4707,26 @@ class _EventRailCardState extends State<_EventRailCard> {
                     cacheWidth: 440,
                     cacheHeight: 220,
                   ),
+                  // The text area below is a fixed 70px holding a title and a
+                  // location line, so the date and its mark stay on the cover.
                   Positioned(
                     left: 9,
                     top: 8,
-                    child: DynamicContrastText(
-                      dateTimeLabel,
-                      fontSize: 10.5,
-                      fontWeight: FontWeight.w800,
-                      letterSpacing: -0.1,
-                    ),
-                  ),
-                  // The text area below is a fixed 70px holding a title and a
-                  // location line, so the badge goes on the cover instead.
-                  Positioned(
-                    right: 9,
-                    top: 8,
-                    child: ContentAudiencePill.onMedia(
-                      key: ValueKey('content-audience-pill-${ev.id}'),
-                      audience: audienceForEvent(ev),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        DynamicContrastText(
+                          dateTimeLabel,
+                          fontSize: 10.5,
+                          fontWeight: FontWeight.w800,
+                          letterSpacing: -0.1,
+                        ),
+                        ContentAudienceIcon.onMedia(
+                          key: ValueKey('content-audience-icon-${ev.id}'),
+                          audience: audienceForEvent(ev),
+                          size: 11,
+                        ),
+                      ],
                     ),
                   ),
                 ],

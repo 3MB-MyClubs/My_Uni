@@ -119,6 +119,32 @@ void main() {
     expect(feedScope, findsOneWidget);
     final headerRect = tester.getRect(find.byType(HomeFeedHeader));
     expect(tester.getCenter(feedScope).dx, closeTo(headerRect.center.dx, 0.5));
+
+    // The chevron is the only thing saying this label switches feeds rather
+    // than titling the page, so it is worth pinning: immediately right of the
+    // label, on its centre line, and the pair still centred in the header
+    // (the assertion above) rather than the label alone.
+    final scopeLabel = find.descendant(
+      of: feedScope,
+      matching: find.text(S.forYou),
+    );
+    final chevron = find.descendant(
+      of: feedScope,
+      matching: find.byKey(const ValueKey('home-feed-scope-chevron')),
+    );
+    expect(chevron, findsOneWidget);
+    expect(
+      tester.getRect(chevron).left,
+      greaterThanOrEqualTo(tester.getRect(scopeLabel).right - 1),
+    );
+    expect(
+      tester.getCenter(chevron).dy,
+      closeTo(tester.getCenter(scopeLabel).dy, 1),
+    );
+    expect(
+      tester.widget<Icon>(chevron).color,
+      tester.widget<Text>(scopeLabel).style?.color,
+    );
     expect(
       find.byKey(const ValueKey('home-notifications-bell')),
       findsOneWidget,
@@ -203,6 +229,10 @@ void main() {
 
     expect(forYouLabel().style?.color, const Color(0xFF18181B));
     expect(forYouLabel().style?.color, ClubUpColors.text);
+    expect(forYouLabel().data, S.forYou);
+    expect(forYouLabel().style?.fontSize, 24);
+    expect(forYouLabel().style?.fontWeight, FontWeight.w700);
+    expect(forYouLabel().style?.fontFamily, kClubUpFontFamily);
 
     await themeService.setDark(true, persistToAccount: false);
     await tester.pump();

@@ -2,7 +2,6 @@ import 'dart:io';
 
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
-import '../models/content_audience.dart';
 import '../models/news_post.dart';
 import '../services/app_colors.dart';
 import '../l10n/app_localizations.dart';
@@ -305,30 +304,33 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
                                       color: AppColors.text,
                                     ),
                                   ),
-                                  Text(
-                                    _timeAgo(widget.post.createdAt),
-                                    style: TextStyle(
-                                      fontSize: 12,
-                                      color: AppColors.secondaryText,
-                                    ),
+                                  Row(
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                      Text(
+                                        _timeAgo(widget.post.createdAt),
+                                        style: TextStyle(
+                                          fontSize: 12,
+                                          color: AppColors.secondaryText,
+                                        ),
+                                      ),
+                                      // Restricted content says so on its own
+                                      // page too, in the same spot the card
+                                      // that led here put it.
+                                      ContentAudienceIcon(
+                                        key: ValueKey(
+                                          'content-audience-icon-${widget.post.id}',
+                                        ),
+                                        audience: audience,
+                                        color: widget.clubColor,
+                                      ),
+                                    ],
                                   ),
                                 ],
                               ),
                             ),
                           ],
                         ),
-                        // Restricted content says so on its own page too, not
-                        // only on the card that led here.
-                        if (audience != ContentAudience.everyone) ...[
-                          const SizedBox(height: 10),
-                          ContentAudiencePill(
-                            key: ValueKey(
-                              'content-audience-pill-${widget.post.id}',
-                            ),
-                            audience: audience,
-                            accent: widget.clubColor,
-                          ),
-                        ],
                       ],
                     ),
                   ),

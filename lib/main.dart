@@ -46,7 +46,6 @@ import 'services/account_preferences_service.dart';
 import 'services/calendar_sync_service.dart';
 import 'services/supabase_config.dart';
 import 'onboarding/onboarding_service.dart';
-import 'onboarding/starter_checklist_service.dart';
 import 'debug/device_preview.dart';
 import 'services/event_cleanup_service.dart';
 import 'services/moderation_service.dart';
@@ -242,7 +241,6 @@ void _startDeferredLocalBootstrap() {
         guarded(personalizationService.initialize()),
         guarded(calendarSyncService.initialize()),
         guarded(onboardingService.initialize()),
-        guarded(starterChecklistService.initialize()),
         guarded(adminModerationService.initialize()),
       ]).then((results) {
         _deferredLocalDataReady = results.every((ready) => ready);

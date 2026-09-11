@@ -3,6 +3,7 @@ import 'dart:io';
 
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:image_picker/image_picker.dart';
 
 import '../l10n/app_localizations.dart';
@@ -30,7 +31,10 @@ import '../services/media_delivery_service.dart';
 import '../services/theme_service.dart';
 import '../services/user_profile_link.dart';
 import '../services/user_state.dart';
+import '../widgets/brief_toast.dart';
 import '../widgets/chat_campus_backdrop.dart';
+import '../widgets/chat_reaction_menu.dart';
+import '../widgets/chat_reaction_strip.dart';
 import '../widgets/chats_design.dart';
 import '../widgets/club_chat_design.dart';
 import '../widgets/clubup_design.dart';
@@ -87,6 +91,10 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
   final Map<String, double> _photoAspectRatios = {};
   ClubCommunityInfoController? _communityInfo;
   final Set<String> _animatingSentMessageIds = {};
+
+  /// Faces already drawn on each message, so a reaction that *arrives* pops
+  /// onto the bubble while the ones that were always there do not.
+  final Map<String, Set<String>> _seenReactions = {};
   ChatMessage? _replyingTo;
 
   // In-thread message search — `search-results` 110:84. Client-side over the
@@ -751,99 +759,131 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
                 top: Radius.circular(22),
               ),
             ),
-            child: SingleChildScrollView(
-              padding: const EdgeInsets.fromLTRB(16, 12, 16, 24),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  Align(
-                    child: Container(
-                      width: 38,
-                      height: 4,
-                      decoration: BoxDecoration(
-                        color: AppColors.divider,
-                        borderRadius: BorderRadius.circular(2),
+            // Every row in here is a `ListTile`, and the sheet's own
+            // `BoxDecoration` sits between them and the page's `Material` —
+            // which the framework asserts about, because their ink would paint
+            // underneath it. A transparent `Material` inside the decoration is
+            // the documented fix, and it covers the receipt rows too. The
+            // sibling reaction sheet solves this per row instead.
+            child: Material(
+              type: MaterialType.transparency,
+              child: SingleChildScrollView(
+                padding: const EdgeInsets.fromLTRB(16, 12, 16, 24),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    Align(
+                      child: Container(
+                        width: 38,
+                        height: 4,
+                        decoration: BoxDecoration(
+                          color: AppColors.divider,
+                          borderRadius: BorderRadius.circular(2),
+                        ),
                       ),
                     ),
-                  ),
-                  const SizedBox(height: 18),
-                  Text(
-                    S.messageInfo,
-                    style: TextStyle(
-                      color: AppColors.text,
-                      fontSize: 20,
-                      fontWeight: FontWeight.w800,
-                      letterSpacing: -0.4,
-                    ),
-                  ),
-                  const SizedBox(height: 14),
-                  if (_isDirect) ...[
-                    _directReceiptRow(
-                      icon: Icons.done_all_rounded,
-                      label: S.deliveredAt(
-                        _receiptTimestamp(message.deliveredAt),
+                    const SizedBox(height: 18),
+                    Text(
+                      S.messageInfo,
+                      style: TextStyle(
+                        color: AppColors.text,
+                        fontSize: 20,
+                        fontWeight: FontWeight.w800,
+                        letterSpacing: -0.4,
                       ),
-                      color: AppColors.secondaryText,
-                    ),
-                    if (message.seenAt case final seenAt?)
-                      _directReceiptRow(
-                        icon: Icons.done_all_rounded,
-                        label: S.readAt(_receiptTimestamp(seenAt)),
-                        color: AppColors.primaryRed,
-                      ),
-                  ] else if (_isGroup) ...[
-                    _receiptSection(
-                      title: S.readBy,
-                      receipts: readReceipts,
-                      timestampFor: (receipt) => receipt.seenAt!,
                     ),
                     const SizedBox(height: 14),
-                    _receiptSection(
-                      title: S.deliveredTo,
-                      receipts: deliveredReceipts,
-                      timestampFor: (receipt) => receipt.deliveredAt!,
-                    ),
-                  ],
-                  Divider(height: 28, color: AppColors.divider),
-                  if (chatStore.canWriteThread(widget.threadId, _myId))
+                    if (_isDirect) ...[
+                      _directReceiptRow(
+                        icon: Icons.done_all_rounded,
+                        label: S.deliveredAt(
+                          _receiptTimestamp(message.deliveredAt),
+                        ),
+                        color: AppColors.secondaryText,
+                      ),
+                      if (message.seenAt case final seenAt?)
+                        _directReceiptRow(
+                          icon: Icons.done_all_rounded,
+                          label: S.readAt(_receiptTimestamp(seenAt)),
+                          color: AppColors.primaryRed,
+                        ),
+                    ] else if (_isGroup) ...[
+                      _receiptSection(
+                        title: S.readBy,
+                        receipts: readReceipts,
+                        timestampFor: (receipt) => receipt.seenAt!,
+                      ),
+                      const SizedBox(height: 14),
+                      _receiptSection(
+                        title: S.deliveredTo,
+                        receipts: deliveredReceipts,
+                        timestampFor: (receipt) => receipt.deliveredAt!,
+                      ),
+                    ],
+                    Divider(height: 28, color: AppColors.divider),
+                    if (chatStore.canWriteThread(widget.threadId, _myId))
+                      ListTile(
+                        contentPadding: EdgeInsets.zero,
+                        leading: Icon(
+                          Icons.reply_rounded,
+                          color: AppColors.primaryRed,
+                        ),
+                        title: Text(
+                          S.reply,
+                          style: TextStyle(
+                            color: AppColors.text,
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
+                        onTap: () {
+                          Navigator.pop(sheetContext);
+                          _beginReply(message);
+                        },
+                      ),
+                    // Long-pressing your own message lands here rather than on
+                    // the reaction sheet, so Copy has to exist on both or half
+                    // the thread would not offer it.
+                    if (_copyableMessageText(message) case final text?)
+                      ListTile(
+                        key: ValueKey('chat-copy-message-${message.id}'),
+                        contentPadding: EdgeInsets.zero,
+                        leading: Icon(
+                          Icons.copy_rounded,
+                          color: AppColors.primaryRed,
+                        ),
+                        title: Text(
+                          S.copyText,
+                          style: TextStyle(
+                            color: AppColors.text,
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
+                        onTap: () {
+                          Navigator.pop(sheetContext);
+                          _copyMessageText(text);
+                        },
+                      ),
                     ListTile(
                       contentPadding: EdgeInsets.zero,
                       leading: Icon(
-                        Icons.reply_rounded,
+                        Icons.delete_outline_rounded,
                         color: AppColors.primaryRed,
                       ),
                       title: Text(
-                        S.reply,
+                        S.deleteMessage,
                         style: TextStyle(
-                          color: AppColors.text,
+                          color: AppColors.primaryRed,
                           fontWeight: FontWeight.w700,
                         ),
                       ),
                       onTap: () {
                         Navigator.pop(sheetContext);
-                        _beginReply(message);
+                        unawaited(_confirmDeleteMessage(message));
                       },
                     ),
-                  ListTile(
-                    contentPadding: EdgeInsets.zero,
-                    leading: Icon(
-                      Icons.delete_outline_rounded,
-                      color: AppColors.primaryRed,
-                    ),
-                    title: Text(
-                      S.deleteMessage,
-                      style: TextStyle(
-                        color: AppColors.primaryRed,
-                        fontWeight: FontWeight.w700,
-                      ),
-                    ),
-                    onTap: () {
-                      Navigator.pop(sheetContext);
-                      unawaited(_confirmDeleteMessage(message));
-                    },
-                  ),
-                ],
+                  ],
+                ),
               ),
             ),
           );
@@ -936,121 +976,108 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
     );
   }
 
-  void _openMessageLongPress(ChatMessage message) {
+  /// The text a reader can actually see in [message]'s bubble, or null when
+  /// there is none to copy.
+  ///
+  /// Mirrors the bubble's own `hasText` rule (`_designChatBubble`): a message
+  /// whose whole body is an event link or a standalone profile link renders as
+  /// a card, not as words, so "Copy text" on it would hand over a raw deep
+  /// link — the opposite of what the reader pointed at.
+  String? _copyableMessageText(ChatMessage message) {
+    final text = message.content.trim();
+    if (text.isEmpty) return null;
+    if (message.linkedEventId != null) return null;
+    final links = UserProfileLink.matchesIn(message.content);
+    if (links.isNotEmpty &&
+        UserProfileLink.isStandalone(message.content, links.first)) {
+      return null;
+    }
+    return text;
+  }
+
+  void _copyMessageText(String text) {
+    unawaited(Clipboard.setData(ClipboardData(text: text)));
+    if (!mounted) return;
+    // A brief bubble, not a `SnackBar`: the confirmation is not news, and a
+    // four-second bar over the composer outlives its usefulness by far.
+    showBriefToast(context, S.copied);
+  }
+
+  void _openMessageLongPress(ChatMessage message, {BuildContext? anchor}) {
     if (chatStore.isMessageOwner(message, _myId) && (_isDirect || _isGroup)) {
       _openMessageInfo(message);
       return;
     }
-    _openReactionPicker(message);
+    _openReactionPicker(message, anchor: anchor);
   }
 
-  void _openReactionPicker(ChatMessage message) {
-    showModalBottomSheet<void>(
-      context: context,
-      backgroundColor: Colors.transparent,
-      builder: (sheetContext) => Container(
-        key: const ValueKey('chat-reaction-sheet'),
-        padding: const EdgeInsets.fromLTRB(16, 12, 16, 26),
-        decoration: BoxDecoration(
-          color: AppColors.card,
-          borderRadius: const BorderRadius.vertical(top: Radius.circular(22)),
+  /// The pressed bubble's rect on screen, so the reaction menu can hang off it
+  /// rather than climbing out of the bottom of the window.
+  ///
+  /// [anchor] is the context of the bubble's own gesture detector. A context
+  /// whose render object has gone (the list recycled the row between the press
+  /// and this call) falls back to the middle of the thread.
+  Rect _bubbleRect(BuildContext? anchor) {
+    final box = anchor?.findRenderObject();
+    if (box is RenderBox && box.hasSize && box.attached) {
+      return box.localToGlobal(Offset.zero) & box.size;
+    }
+    final size = MediaQuery.sizeOf(context);
+    return Rect.fromCenter(
+      center: Offset(size.width / 2, size.height / 2),
+      width: 1,
+      height: 1,
+    );
+  }
+
+  void _openReactionPicker(ChatMessage message, {BuildContext? anchor}) {
+    final mine = chatStore.isMessageOwner(message, _myId);
+    unawaited(
+      showChatReactionMenu(
+        context,
+        anchor: _bubbleRect(anchor),
+        alignEnd: mine,
+        emojis: _quickReactions,
+        selected: {
+          for (final entry in message.reactions.entries)
+            if (entry.value.contains(_myId)) entry.key,
+        },
+        onEmoji: (emoji) => chatStore.toggleReaction(
+          messageId: message.id,
+          userId: _myId,
+          emoji: emoji,
         ),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Container(
-              width: 38,
-              height: 4,
-              decoration: BoxDecoration(
-                color: AppColors.divider,
-                borderRadius: BorderRadius.circular(2),
-              ),
+        // The emoji pill carries the key the reaction flow has always been
+        // found by, from back when this was a bottom sheet.
+        pillKey: const ValueKey('chat-reaction-sheet'),
+        actions: [
+          if (chatStore.canWriteThread(widget.threadId, _myId))
+            ChatsMenuAction(
+              rowKey: ValueKey('chat-reply-message-${message.id}'),
+              icon: Icons.reply_rounded,
+              label: S.reply,
+              onTap: () => _beginReply(message),
             ),
-            const SizedBox(height: 18),
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                for (final emoji in _quickReactions)
-                  GestureDetector(
-                    key: ValueKey('chat-reaction-option-$emoji'),
-                    onTap: () {
-                      chatStore.toggleReaction(
-                        messageId: message.id,
-                        userId: _myId,
-                        emoji: emoji,
-                      );
-                      Navigator.pop(sheetContext);
-                    },
-                    child: Container(
-                      width: 44,
-                      height: 44,
-                      alignment: Alignment.center,
-                      decoration: BoxDecoration(
-                        color:
-                            (message.reactions[emoji] ?? const []).contains(
-                              _myId,
-                            )
-                            ? AppColors.lightRed
-                            : AppColors.surfaceAlt,
-                        shape: BoxShape.circle,
-                        border: Border.all(color: AppColors.glassEdge),
-                      ),
-                      child: Text(emoji, style: const TextStyle(fontSize: 20)),
-                    ),
-                  ),
-              ],
+          // Copying is not the author's privilege — anyone who can read the
+          // message can already retype it — so this row is outside the owner
+          // check that follows.
+          if (_copyableMessageText(message) case final text?)
+            ChatsMenuAction(
+              rowKey: ValueKey('chat-copy-message-${message.id}'),
+              icon: Icons.copy_rounded,
+              label: S.copyText,
+              onTap: () => _copyMessageText(text),
             ),
-            const SizedBox(height: 8),
-            Divider(color: AppColors.divider),
-            if (chatStore.canWriteThread(widget.threadId, _myId))
-              Material(
-                color: Colors.transparent,
-                child: ListTile(
-                  key: ValueKey('chat-reply-message-${message.id}'),
-                  contentPadding: EdgeInsets.zero,
-                  leading: Icon(
-                    Icons.reply_rounded,
-                    color: AppColors.primaryRed,
-                  ),
-                  title: Text(
-                    S.reply,
-                    style: TextStyle(
-                      color: AppColors.text,
-                      fontWeight: FontWeight.w700,
-                    ),
-                  ),
-                  onTap: () {
-                    Navigator.pop(sheetContext);
-                    _beginReply(message);
-                  },
-                ),
-              ),
-            if (chatStore.isMessageOwner(message, _myId)) ...[
-              Material(
-                color: Colors.transparent,
-                child: ListTile(
-                  key: ValueKey('chat-delete-message-${message.id}'),
-                  contentPadding: EdgeInsets.zero,
-                  leading: Icon(
-                    Icons.delete_outline_rounded,
-                    color: AppColors.primaryRed,
-                  ),
-                  title: Text(
-                    S.deleteMessage,
-                    style: TextStyle(
-                      color: AppColors.primaryRed,
-                      fontWeight: FontWeight.w700,
-                    ),
-                  ),
-                  onTap: () {
-                    Navigator.pop(sheetContext);
-                    unawaited(_confirmDeleteMessage(message));
-                  },
-                ),
-              ),
-            ],
-          ],
-        ),
+          if (mine)
+            ChatsMenuAction(
+              rowKey: ValueKey('chat-delete-message-${message.id}'),
+              icon: Icons.delete_outline_rounded,
+              label: S.deleteMessage,
+              destructive: true,
+              dividerAbove: true,
+              onTap: () => unawaited(_confirmDeleteMessage(message)),
+            ),
+        ],
       ),
     );
   }
@@ -1824,18 +1851,31 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
           key: ValueKey('chat-swipe-reply-${m.id}'),
           enabled: chatStore.canWriteThread(widget.threadId, _myId),
           onReply: () => _beginReply(m),
-          child: GestureDetector(
-            key: ValueKey('chat-message-${m.id}'),
-            behavior: HitTestBehavior.opaque,
-            onLongPress: () => _openMessageLongPress(m),
-            child: bubble,
+          // The `Builder` is what lets the reaction menu find this bubble on
+          // screen: its context resolves to the bubble's own render box.
+          child: Builder(
+            builder: (bubbleContext) => GestureDetector(
+              key: ValueKey('chat-message-${m.id}'),
+              behavior: HitTestBehavior.opaque,
+              onLongPress: () =>
+                  _openMessageLongPress(m, anchor: bubbleContext),
+              child: bubble,
+            ),
           ),
         ),
-        if (m.reactions.isNotEmpty)
-          Padding(
-            padding: const EdgeInsets.only(top: 4),
-            child: _designReactionChips(m, alignEnd: mine),
-          ),
+        // The row grows into the chips instead of jumping a line taller the
+        // instant a reaction lands.
+        AnimatedSize(
+          duration: const Duration(milliseconds: 200),
+          curve: Curves.easeOutCubic,
+          alignment: mine ? Alignment.centerRight : Alignment.centerLeft,
+          child: m.reactions.isEmpty
+              ? const SizedBox.shrink()
+              : Padding(
+                  padding: const EdgeInsets.only(top: 4),
+                  child: _designReactionChips(m, alignEnd: mine),
+                ),
+        ),
       ],
     );
 
@@ -1976,44 +2016,42 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
   }
 
   Widget _designReactionChips(ChatMessage m, {required bool alignEnd}) {
-    final entries = m.reactions.entries.toList()
-      ..sort((a, b) => b.value.length.compareTo(a.value.length));
-    return Wrap(
-      spacing: 5,
-      alignment: alignEnd ? WrapAlignment.end : WrapAlignment.start,
-      children: [
-        for (final entry in entries)
-          GestureDetector(
-            key: ValueKey('chat-reaction-${m.id}-${entry.key}'),
-            onTap: () => chatStore.toggleReaction(
-              messageId: m.id,
-              userId: _myId,
-              emoji: entry.key,
-            ),
-            child: Container(
-              padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
-              decoration: BoxDecoration(
-                color: ChatsColors.card,
-                borderRadius: BorderRadius.circular(999),
-                border: Border.all(
-                  color: entry.value.contains(_myId)
-                      ? ChatsColors.accent
-                      : ChatsColors.border,
-                ),
-              ),
-              child: Text(
-                entry.value.length > 1
-                    ? '${entry.key} ${entry.value.length}'
-                    : entry.key,
-                style: figtree(
-                  size: 12,
-                  weight: FontWeight.w600,
-                  color: ChatsColors.muted,
-                ),
-              ),
-            ),
-          ),
-      ],
+    // Which faces this row carried last time it was drawn. A row being built
+    // for the first time — a thread opening, a bubble scrolling back into
+    // view — has no entry, and nothing pops.
+    final faces = m.reactions.keys.toSet();
+    final seen = _seenReactions[m.id];
+    _seenReactions[m.id] = faces;
+    final dark = themeService.isDark;
+    return ChatReactionStrip(
+      // Keyed on the message so a bubble keeps its own opened/stacked state
+      // across the rebuild every new reaction triggers.
+      key: ValueKey('chat-reactions-${m.id}'),
+      messageId: m.id,
+      reactions: m.reactions,
+      myId: _myId,
+      alignEnd: alignEnd,
+      newEmojis: seen == null ? const <String>{} : faces.difference(seen),
+      style: ChatReactionStyle(
+        // Your own reaction is a soft wash, not an outlined chip: a burgundy
+        // ring around an emoji reads as a warning, and the frame is the
+        // loudest thing in a quiet thread.
+        mineFill: dark
+            ? const Color(0xFFE8A1A6).withValues(alpha: 0.18)
+            : ChatsColors.accent.withValues(alpha: 0.10),
+        otherFill: ChatsColors.card,
+        border: ChatsColors.border,
+        label: figtree(
+          size: 12,
+          weight: FontWeight.w600,
+          color: ChatsColors.muted,
+        ),
+      ),
+      onToggle: (emoji) => chatStore.toggleReaction(
+        messageId: m.id,
+        userId: _myId,
+        emoji: emoji,
+      ),
     );
   }
 
@@ -3064,11 +3102,14 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
                   key: ValueKey('chat-swipe-reply-${m.id}'),
                   enabled: chatStore.canWriteThread(widget.threadId, _myId),
                   onReply: () => _beginReply(m),
-                  child: GestureDetector(
-                    key: ValueKey('chat-message-${m.id}'),
-                    behavior: HitTestBehavior.opaque,
-                    onLongPress: () => _openMessageLongPress(m),
-                    child: bubble,
+                  child: Builder(
+                    builder: (bubbleContext) => GestureDetector(
+                      key: ValueKey('chat-message-${m.id}'),
+                      behavior: HitTestBehavior.opaque,
+                      onLongPress: () =>
+                          _openMessageLongPress(m, anchor: bubbleContext),
+                      child: bubble,
+                    ),
                   ),
                 ),
                 if (m.reactions.isNotEmpty) _reactionChips(m, alignEnd: mine),
@@ -3178,52 +3219,33 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
 
   /// Tapping a chip toggles your own reaction; long-pressing the bubble opens
   /// the picker.
-  Widget _reactionChips(ChatMessage m, {required bool alignEnd}) {
-    final entries = m.reactions.entries.toList()
-      ..sort((a, b) => b.value.length.compareTo(a.value.length));
-    return Transform.translate(
-      offset: const Offset(0, -6),
-      child: Wrap(
-        spacing: 5,
-        alignment: alignEnd ? WrapAlignment.end : WrapAlignment.start,
-        children: [
-          for (final entry in entries)
-            GestureDetector(
-              key: ValueKey('chat-reaction-${m.id}-${entry.key}'),
-              onTap: () => chatStore.toggleReaction(
-                messageId: m.id,
-                userId: _myId,
-                emoji: entry.key,
-              ),
-              child: Container(
-                padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
-                decoration: BoxDecoration(
-                  color: entry.value.contains(_myId)
-                      ? AppColors.lightRed
-                      : AppColors.card,
-                  borderRadius: BorderRadius.circular(999),
-                  border: Border.all(
-                    color: entry.value.contains(_myId)
-                        ? AppColors.primaryRed
-                        : AppColors.glassEdge,
-                  ),
-                ),
-                child: Text(
-                  entry.value.length > 1
-                      ? '${entry.key} ${entry.value.length}'
-                      : entry.key,
-                  style: TextStyle(
-                    fontSize: 12,
-                    fontWeight: FontWeight.w700,
-                    color: AppColors.secondaryText,
-                  ),
-                ),
-              ),
+  Widget _reactionChips(ChatMessage m, {required bool alignEnd}) =>
+      Transform.translate(
+        offset: const Offset(0, -6),
+        child: ChatReactionStrip(
+          key: ValueKey('chat-reactions-${m.id}'),
+          messageId: m.id,
+          reactions: m.reactions,
+          myId: _myId,
+          alignEnd: alignEnd,
+          style: ChatReactionStyle(
+            mineFill: AppColors.lightRed,
+            mineBorder: AppColors.primaryRed,
+            otherFill: AppColors.card,
+            border: AppColors.glassEdge,
+            label: TextStyle(
+              fontSize: 12,
+              fontWeight: FontWeight.w700,
+              color: AppColors.secondaryText,
             ),
-        ],
-      ),
-    );
-  }
+          ),
+          onToggle: (emoji) => chatStore.toggleReaction(
+            messageId: m.id,
+            userId: _myId,
+            emoji: emoji,
+          ),
+        ),
+      );
 
   /// WhatsApp-style message metadata: a quiet footer inside regular bubbles
   /// and a dark, translucent badge over the bottom-right corner of photos.

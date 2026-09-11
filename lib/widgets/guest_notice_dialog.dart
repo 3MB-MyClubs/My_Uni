@@ -23,7 +23,26 @@ Future<void> showGuestNoticeDialog(BuildContext context) {
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.all(Radius.circular(16)),
       ),
-      icon: Icon(Icons.science_outlined, size: 32, color: AppColors.primaryRed),
+      // `Demo Tutorial` 675:94: a 48px disc holding the 24px sparkles glyph,
+      // parked in the dialog's left gutter rather than centred. The frame's
+      // indigo tint is a template leftover — the disc takes the app's burgundy.
+      icon: Align(
+        alignment: AlignmentDirectional.centerStart,
+        child: Container(
+          width: 48,
+          height: 48,
+          alignment: Alignment.center,
+          decoration: BoxDecoration(
+            color: AppColors.primaryRed.withValues(alpha: 0.10),
+            shape: BoxShape.circle,
+          ),
+          child: Icon(
+            Icons.auto_awesome_outlined,
+            size: 24,
+            color: AppColors.primaryRed,
+          ),
+        ),
+      ),
       title: Text(
         S.guestNoticeTitle,
         textAlign: TextAlign.center,

@@ -38,9 +38,14 @@ import 'package:flutter_application_1/widgets/shared_post_message_card.dart';
 /// session reaches), on a card with no call sites at all, and on the event hero.
 /// Every card a student or a club president actually scrolls past drew nothing.
 ///
-/// So these tests are deliberately about *placement*, not about the pill: they
-/// assert the badge is mounted on each live surface, keyed by content id, and
-/// that public content still gets nothing.
+/// So these tests are deliberately about *placement*, not about the mark: they
+/// assert the mark is drawn on each live surface, keyed by content id, and that
+/// public content still gets nothing.
+///
+/// The mark is a glyph beside the timestamp (posts) or the date (events) that
+/// pops a bubble when tapped, so these look for the *glyph* rather than the
+/// keyed widget: the widget is mounted unconditionally and draws nothing for
+/// [ContentAudience.everyone].
 void main() {
   late Directory tempDir;
   late List<User> originalUsers;
@@ -69,8 +74,10 @@ void main() {
     audience: audience,
   );
 
-  Finder pillFor(String contentId) =>
-      find.byKey(ValueKey('content-audience-pill-$contentId'));
+  Finder markFor(String contentId) => find.descendant(
+    of: find.byKey(ValueKey('content-audience-icon-$contentId')),
+    matching: find.byType(Icon),
+  );
 
   setUpAll(() async {
     tempDir = await Directory.systemTemp.createTemp('audience_badge_');
@@ -185,21 +192,28 @@ void main() {
       await pump(tester, HomeFeedPostCard(post: post, onChanged: () {}));
 
       expect(
-        pillFor(post.id),
+        markFor(post.id),
         audience == ContentAudience.everyone ? findsNothing : findsOneWidget,
         reason: 'home card, ${audience.wireValue}',
       );
       if (audience != ContentAudience.everyone) {
-        expect(find.text(S.audienceTierPill(audience)), findsOneWidget);
+        // Each tier keeps its own glyph, which is all the mark says until it
+        // is tapped.
+        expect(
+          find.byIcon(audienceTierIcon(audience)),
+          findsOneWidget,
+          reason: 'glyph, ${audience.wireValue}',
+        );
       }
     }
   });
 
-  testWidgets('an announcement keeps its own chip alongside the badge', (
+  testWidgets('an announcement keeps its own chip alongside the mark', (
     tester,
   ) async {
-    // The two chips share one line. A club that marks a post as both an
-    // announcement and board-only must still see both.
+    // They no longer share a line — the mark moved up to the byline and the
+    // announcement chip kept the caption's line — so a post that is both must
+    // still show both.
     final post = NewsPost(
       id: 'badge-post-announcement',
       clubId: clubId,
@@ -212,7 +226,7 @@ void main() {
     await pump(tester, HomeFeedPostCard(post: post, onChanged: () {}));
 
     expect(find.text(S.announcementLabel), findsOneWidget);
-    expect(pillFor(post.id), findsOneWidget);
+    expect(markFor(post.id), findsOneWidget);
   });
 
   testWidgets('the post page badges a restricted post', (tester) async {
@@ -221,7 +235,7 @@ void main() {
       tester,
       PostDetailScreen(post: post, clubColor: const Color(0xFF800020)),
     );
-    expect(pillFor(post.id), findsOneWidget);
+    expect(markFor(post.id), findsOneWidget);
 
     await pump(
       tester,
@@ -230,7 +244,7 @@ void main() {
         clubColor: const Color(0xFF800020),
       ),
     );
-    expect(pillFor('badge-post-everyone'), findsNothing);
+    expect(markFor('badge-post-everyone'), findsNothing);
   });
 
   testWidgets('a post forwarded into a chat keeps its badge', (tester) async {
@@ -238,10 +252,10 @@ void main() {
       tester,
       SharedPostMessageCard(postId: 'badge-post-followers'),
     );
-    expect(pillFor('badge-post-followers'), findsOneWidget);
+    expect(markFor('badge-post-followers'), findsOneWidget);
 
     await pump(tester, SharedPostMessageCard(postId: 'badge-post-everyone'));
-    expect(pillFor('badge-post-everyone'), findsNothing);
+    expect(markFor('badge-post-everyone'), findsNothing);
   });
 
   // ── Events ───────────────────────────────────────────────────────────────
@@ -253,16 +267,16 @@ void main() {
     await pump(tester, const ThisWeekScreen());
     await tester.pump(const Duration(milliseconds: 600));
 
-    expect(pillFor('badge-event-board'), findsOneWidget);
-    expect(pillFor('badge-event-followers'), findsOneWidget);
-    expect(pillFor('badge-event-everyone'), findsNothing);
+    expect(markFor('badge-event-board'), findsOneWidget);
+    expect(markFor('badge-event-followers'), findsOneWidget);
+    expect(markFor('badge-event-everyone'), findsNothing);
   });
 
   testWidgets("the club profile's event row badges a restricted event", (
     tester,
   ) async {
-    // The card takes the badge as a slot, so the assertion that matters is
-    // that a supplied badge is actually mounted rather than dropped.
+    // The card takes the mark as a slot, so the assertion that matters is
+    // that a supplied mark is actually mounted rather than dropped.
     await pump(
       tester,
       ClubProfileEventCard(
@@ -272,15 +286,15 @@ void main() {
         timeLabel: '19:00',
         location: 'Student Center',
         statusLabel: 'PAST',
-        audienceBadge: const ContentAudiencePill(
-          key: ValueKey('content-audience-pill-badge-event-board'),
+        audienceMark: const ContentAudienceIcon(
+          key: ValueKey('content-audience-icon-badge-event-board'),
           audience: ContentAudience.board,
-          accent: Color(0xFF800020),
+          color: Color(0xFF800020),
         ),
       ),
     );
 
-    expect(pillFor('badge-event-board'), findsOneWidget);
+    expect(markFor('badge-event-board'), findsOneWidget);
     // The status chip shares that line and must survive the badge.
     expect(find.text('PAST'), findsOneWidget);
   });
@@ -295,7 +309,7 @@ void main() {
         clubName: 'Debate Society',
       ),
     );
-    expect(pillFor('badge-event-board'), findsOneWidget);
+    expect(markFor('badge-event-board'), findsOneWidget);
   });
 
   testWidgets('an event forwarded into a chat keeps its badge', (tester) async {
@@ -306,7 +320,7 @@ void main() {
         resolveEvent: (id) async => null,
       ),
     );
-    expect(pillFor('badge-event-board'), findsOneWidget);
+    expect(markFor('badge-event-board'), findsOneWidget);
   });
 
   // ── Saved items ──────────────────────────────────────────────────────────
@@ -324,20 +338,43 @@ void main() {
     await pump(tester, const SavedPostsScreen());
     await tester.pump(const Duration(milliseconds: 600));
 
-    expect(pillFor('badge-post-board'), findsOneWidget);
-    expect(pillFor('badge-post-everyone'), findsNothing);
+    expect(markFor('badge-post-board'), findsOneWidget);
+    expect(markFor('badge-post-everyone'), findsNothing);
+  });
+
+  testWidgets('tapping the mark on a card explains the tier', (tester) async {
+    // The whole point of trading the text badge for a glyph: the words are
+    // still one tap away, and that tap must not open the post underneath.
+    var opened = false;
+    final post = postFor(ContentAudience.board);
+    await pump(
+      tester,
+      HomeFeedPostCard(
+        post: post,
+        onChanged: () {},
+        onTap: () => opened = true,
+      ),
+    );
+
+    await tester.tap(markFor(post.id));
+    await tester.pumpAndSettle();
+
+    expect(find.text(S.audienceTierBubble(ContentAudience.board)), findsOneWidget);
+    expect(opened, isFalse, reason: 'the mark swallows its own tap');
   });
 
   // ── Copy ─────────────────────────────────────────────────────────────────
 
-  testWidgets('the badge speaks Turkish with the app', (tester) async {
+  testWidgets('the bubble speaks Turkish with the app', (tester) async {
     await localeService.setLanguage('tr');
     addTearDown(() => localeService.setLanguage('en'));
 
     final post = postFor(ContentAudience.board);
     await pump(tester, HomeFeedPostCard(post: post, onChanged: () {}));
+    await tester.tap(markFor(post.id));
+    await tester.pumpAndSettle();
 
-    expect(find.text('Yalnızca yönetim'), findsOneWidget);
-    expect(find.text('Board only'), findsNothing);
+    expect(find.text('Yalnızca yönetim kurulu'), findsOneWidget);
+    expect(find.text('Only board members'), findsNothing);
   });
 }

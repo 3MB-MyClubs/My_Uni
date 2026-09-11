@@ -2030,13 +2030,13 @@ class _EventCardV2 extends StatelessWidget {
           : null,
       // The club's own events list is where a board member checks who a
       // restricted event actually went out to.
-      audienceBadge: audienceForEvent(typed) == ContentAudience.everyone
+      audienceMark: audienceForEvent(typed) == ContentAudience.everyone
           ? null
-          : ContentAudiencePill(
-              key: ValueKey('content-audience-pill-${typed.id}'),
+          : ContentAudienceIcon(
+              key: ValueKey('content-audience-icon-${typed.id}'),
               audience: audienceForEvent(typed),
-              accent: ClubProfileColors.accent,
-              foreground: ClubProfileColors.accentText,
+              color: ClubProfileColors.accentText,
+              size: 13,
             ),
       // A club cannot RSVP its own event, so its label reads View / Recap.
       // A student's reads what the frame drew — the same three-way label the
