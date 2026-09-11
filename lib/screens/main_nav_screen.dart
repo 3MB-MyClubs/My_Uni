@@ -23,7 +23,6 @@ import '../onboarding/onboarding_anchors.dart';
 import '../onboarding/onboarding_flow.dart';
 import '../onboarding/onboarding_service.dart';
 import '../onboarding/onboarding_steps.dart';
-import '../onboarding/starter_checklist_service.dart';
 import '../widgets/lazy_indexed_stack.dart';
 import '../widgets/app_pressable.dart';
 import '../widgets/account_switcher_sheet.dart';
@@ -41,6 +40,8 @@ import 'create_event_screen.dart';
 import 'create_post_screen.dart';
 import 'notifications_screen.dart';
 import 'moderation_center_screen.dart';
+import '../services/guest_session.dart';
+import '../widgets/guest_notice_dialog.dart';
 
 class MainNavScreen extends ConsumerStatefulWidget {
   final bool isAdmin;
@@ -202,6 +203,20 @@ class _MainNavScreenState extends ConsumerState<MainNavScreen>
   // available as an explicit replay from Settings.
   Future<void> _startInitialExperience() async {
     if (!mounted) return;
+    // The exception is the guest joyride. First say plainly that the campus is
+    // fabricated — a visitor must not mistake the seeded students, clubs and
+    // messages for real ones, or think their likes were kept — and only then
+    // start the tour, which is the point of the visit and the one surface that
+    // walks every tab. `manual` is deliberate: it keeps
+    // `onboardingService.complete()` out of the picture and skips the calendar
+    // permission prompt an automatic run ends with, so the joyride leaves no
+    // trace on the visitor's device.
+    if (guestSession.isActive) {
+      await showGuestNoticeDialog(context);
+      if (!mounted) return;
+      _startOnboarding(TutorialLaunchSource.manual);
+      return;
+    }
     await _requestCalendarIfNeeded();
   }
 
@@ -237,7 +252,7 @@ class _MainNavScreenState extends ConsumerState<MainNavScreen>
   }
 
   // The flow starts the animated return Home before invoking this callback;
-  // this method owns persistence and the post-tour checklist lifecycle.
+  // this method owns persisting that the tour was completed.
   Future<void> _finishOnboarding() async {
     final source = _tutorialLaunchSource;
     if (source == null) return;
@@ -250,10 +265,7 @@ class _MainNavScreenState extends ConsumerState<MainNavScreen>
       debugPrint('Could not persist tutorial completion: $error');
     }
     if (!mounted) return;
-    if (authService.isStudentSession) {
-      await starterChecklistService.startFor(profileId);
-    }
-    if (mounted && source == TutorialLaunchSource.automatic) {
+    if (source == TutorialLaunchSource.automatic) {
       await _requestCalendarIfNeeded();
     }
   }

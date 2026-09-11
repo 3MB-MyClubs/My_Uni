@@ -8,6 +8,7 @@ import '../l10n/app_localizations.dart';
 import '../services/auth_service.dart';
 import '../services/locale_service.dart';
 import '../services/content_store.dart';
+import '../services/content_visibility.dart';
 import '../services/image_aspect_ratio.dart';
 import '../services/mock_data.dart';
 import '../services/moderation_service.dart';
@@ -16,6 +17,7 @@ import '../services/post_like_helper.dart';
 import '../services/supabase_post_service.dart';
 import '../services/user_state.dart';
 import '../widgets/club_avatar.dart';
+import '../widgets/content_audience_sheet.dart';
 import '../widgets/moderation_reason_sheet.dart';
 import '../widgets/poll_card.dart';
 import 'create_post_screen.dart' show buildPostBanner;
@@ -236,6 +238,7 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
     final likeCount = postLikeCount(widget.post.id);
     final hasImage =
         widget.post.imagePath != null && widget.post.imagePath!.isNotEmpty;
+    final audience = audienceForPost(widget.post);
 
     return Scaffold(
       backgroundColor: AppColors.background,
@@ -274,39 +277,59 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
                   Container(
                     color: AppColors.card,
                     padding: const EdgeInsets.fromLTRB(14, 12, 14, 12),
-                    child: Row(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        ClubAvatar(
-                          clubId: club.id,
-                          clubName: club.name,
-                          size: 42,
-                          fontSize: 18,
-                          color: widget.clubColor,
-                          imageUrl: club.logoUrl,
-                          shape: 'circle',
-                        ),
-                        const SizedBox(width: 12),
-                        Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text(
-                                club.name,
-                                style: TextStyle(
-                                  fontWeight: FontWeight.bold,
-                                  fontSize: 14,
-                                  color: AppColors.text,
-                                ),
+                        Row(
+                          children: [
+                            ClubAvatar(
+                              clubId: club.id,
+                              clubName: club.name,
+                              size: 42,
+                              fontSize: 18,
+                              color: widget.clubColor,
+                              imageUrl: club.logoUrl,
+                              shape: 'circle',
+                            ),
+                            const SizedBox(width: 12),
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    club.name,
+                                    style: TextStyle(
+                                      fontWeight: FontWeight.bold,
+                                      fontSize: 14,
+                                      color: AppColors.text,
+                                    ),
+                                  ),
+                                  Row(
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                      Text(
+                                        _timeAgo(widget.post.createdAt),
+                                        style: TextStyle(
+                                          fontSize: 12,
+                                          color: AppColors.secondaryText,
+                                        ),
+                                      ),
+                                      // Restricted content says so on its own
+                                      // page too, in the same spot the card
+                                      // that led here put it.
+                                      ContentAudienceIcon(
+                                        key: ValueKey(
+                                          'content-audience-icon-${widget.post.id}',
+                                        ),
+                                        audience: audience,
+                                        color: widget.clubColor,
+                                      ),
+                                    ],
+                                  ),
+                                ],
                               ),
-                              Text(
-                                _timeAgo(widget.post.createdAt),
-                                style: TextStyle(
-                                  fontSize: 12,
-                                  color: AppColors.secondaryText,
-                                ),
-                              ),
-                            ],
-                          ),
+                            ),
+                          ],
                         ),
                       ],
                     ),

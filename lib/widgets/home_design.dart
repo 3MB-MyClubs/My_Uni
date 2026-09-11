@@ -10,18 +10,21 @@ import '../screens/create_post_screen.dart' show buildPostBanner;
 import '../services/app_strings.dart';
 import '../services/auth_service.dart';
 import '../services/club_follow_helper.dart';
+import '../services/content_visibility.dart';
 import '../services/comment_store.dart';
 import '../services/image_aspect_ratio.dart';
 import '../services/mock_data.dart';
 import '../services/moderation_service.dart';
 import '../services/post_like_helper.dart';
 import '../services/theme_service.dart';
+import '../services/user_prefs_service.dart';
 import '../services/user_state.dart';
 import '../services/view_tracker.dart';
 import 'app_motion.dart';
 import 'club_avatar.dart';
 import 'club_profile_design.dart' show ClubVerifiedName;
 import 'clubup_design.dart';
+import 'content_audience_sheet.dart';
 import 'expandable_post_caption.dart';
 import 'home_comments_sheet.dart';
 import 'home_share_sheet.dart';
@@ -210,18 +213,41 @@ class HomeFeedHeader extends StatelessWidget {
         ],
         child: SizedBox(
           width: _homeScopeMenuWidth,
-          child: Center(
-            child: Text(
-              label,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: figtree(
-                size: 18,
-                weight: FontWeight.w800,
-                color: ClubUpColors.text,
-                letterSpacing: -0.4,
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              // Flexible, not Expanded: the label and its chevron sit centred
+              // as one unit inside the fixed-width tap target, the way the
+              // label alone used to. A long localized scope name ellipsizes
+              // instead of pushing the chevron out of the box.
+              Flexible(
+                child: Text(
+                  label,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  // Instagram-like navigation-title proportions, expressed
+                  // in ClubUp's app-wide Figtree typeface.
+                  style: figtree(
+                    size: 24,
+                    weight: FontWeight.w700,
+                    color: ClubUpColors.text,
+                    height: 1,
+                    letterSpacing: -0.55,
+                  ),
+                ),
               ),
-            ),
+              const SizedBox(width: 3),
+              // The only thing that says this label is a switch and not a
+              // page title. Static, like Instagram's: the affordance is the
+              // chevron being there, and a rotation would only be visible
+              // while the menu covers it anyway.
+              Icon(
+                key: const ValueKey('home-feed-scope-chevron'),
+                Icons.keyboard_arrow_down_rounded,
+                size: 20,
+                color: ClubUpColors.text,
+              ),
+            ],
           ),
         ),
       ),
@@ -238,9 +264,10 @@ class HomeFeedHeader extends StatelessWidget {
           Text(
             text,
             style: figtree(
-              size: 14,
-              weight: feedTab == value ? FontWeight.w700 : FontWeight.w500,
+              size: 16,
+              weight: feedTab == value ? FontWeight.w600 : FontWeight.w400,
               color: ClubUpColors.text,
+              letterSpacing: -0.2,
             ),
           ),
           if (feedTab == value) ...[
@@ -497,6 +524,19 @@ class _HomeFeedPostCardState extends State<HomeFeedPostCard>
     );
   }
 
+  /// Posts write into the same `userState.savedPostIds` set events already
+  /// use, so a bookmark here lands in Saved items and `userPrefsService`
+  /// persists it per user. Saved items is a student surface — a club-admin
+  /// session has nowhere to read it back — hence the student-only gate, which
+  /// also keeps the control off the card when a club is browsing.
+  void _toggleSave() {
+    final userId = authService.currentUser?.id ?? '';
+    if (!authService.isStudentSession || userId.isEmpty) return;
+    setState(() => userState.toggleSave(widget.post.id));
+    // No-ops for a guest session, so the joyride keeps its in-memory save.
+    userPrefsService.save(userId);
+  }
+
   void _openShare() {
     showHomeShareSheet(
       context,
@@ -545,6 +585,11 @@ class _HomeFeedPostCardState extends State<HomeFeedPostCard>
         widget.post.imagePath != null &&
         widget.post.imagePath!.trim().isNotEmpty;
     final body = widget.post.content.trim();
+    // The announcement chip is the only chip on this card now. A restricted
+    // post says so with a mark on the timestamp line of the header instead
+    // (see [_postInfoHeader]) — "when was this posted" and "who is it for"
+    // belong to one glance.
+    final hasAnnouncementChip = widget.post.isAnnouncement;
 
     return GestureDetector(
       behavior: HitTestBehavior.deferToChild,
@@ -576,10 +621,13 @@ class _HomeFeedPostCardState extends State<HomeFeedPostCard>
               _postInfoHeader(club.name, dark, belowMedia: true),
             ] else
               _postInfoHeader(club.name, dark),
-            if (widget.post.isAnnouncement)
+            if (hasAnnouncementChip)
               Padding(
                 padding: EdgeInsets.fromLTRB(16, hasImage ? 16 : 14, 16, 0),
-                child: _announcementChip(),
+                child: Align(
+                  alignment: Alignment.centerLeft,
+                  child: _announcementChip(),
+                ),
               ),
             if (body.isNotEmpty)
               Padding(
@@ -587,7 +635,7 @@ class _HomeFeedPostCardState extends State<HomeFeedPostCard>
                   16,
                   hasImage
                       ? 10
-                      : widget.post.isAnnouncement
+                      : hasAnnouncementChip
                       ? 14
                       : 16,
                   16,
@@ -704,24 +752,18 @@ class _HomeFeedPostCardState extends State<HomeFeedPostCard>
           GestureDetector(
             behavior: HitTestBehavior.opaque,
             onTap: _openClub,
-            child: Container(
-              decoration: dark
-                  ? const BoxDecoration(
-                      shape: BoxShape.circle,
-                      border: Border.fromBorderSide(
-                        BorderSide(color: ClubUpColors.accent, width: 1.5),
-                      ),
-                    )
-                  : null,
-              child: ClubAvatar(
-                clubId: widget.post.clubId,
-                clubName: clubName,
-                color: ClubUpColors.accent,
-                imageUrl: clubForId(widget.post.clubId)?.logoUrl,
-                size: 32,
-                fontSize: 13,
-                shape: 'circle',
-              ),
+            // No ring. Dark mode used to fence the avatar in a 1.5px burgundy
+            // circle, which framed the club's own photo in an accent it had
+            // nothing to do with — and light mode never drew one, so the two
+            // themes disagreed about the avatar's size as well as its outline.
+            child: ClubAvatar(
+              clubId: widget.post.clubId,
+              clubName: clubName,
+              color: ClubUpColors.accent,
+              imageUrl: clubForId(widget.post.clubId)?.logoUrl,
+              size: 32,
+              fontSize: 13,
+              shape: 'circle',
             ),
           ),
           const SizedBox(width: 10),
@@ -744,13 +786,29 @@ class _HomeFeedPostCardState extends State<HomeFeedPostCard>
                   ),
                 ),
                 const SizedBox(height: 1),
-                Text(
-                  _timeAgo(widget.post.createdAt),
-                  style: figtree(
-                    size: dark ? 10 : 11,
-                    weight: FontWeight.w500,
-                    color: ClubUpColors.muted,
-                  ),
+                Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text(
+                      _timeAgo(widget.post.createdAt),
+                      style: figtree(
+                        size: dark ? 10 : 11,
+                        weight: FontWeight.w500,
+                        color: ClubUpColors.muted,
+                      ),
+                    ),
+                    // The audience mark reads as part of the byline: when it
+                    // was posted, and who it went to.
+                    ContentAudienceIcon(
+                      key: ValueKey('content-audience-icon-${widget.post.id}'),
+                      audience: audienceForPost(widget.post),
+                      // `accent` is `#800020` in both themes and fails
+                      // contrast on a dark card, which is the whole reason
+                      // `accentText` exists.
+                      color: ClubUpColors.accentText,
+                      size: 13,
+                    ),
+                  ],
                 ),
               ],
             ),
@@ -792,11 +850,13 @@ class _HomeFeedPostCardState extends State<HomeFeedPostCard>
     );
   }
 
-  /// `interaction-row` — likes and comments on the left over a hairline, the
-  /// share plane on the right.
+  /// `interaction-row` — like, comment and the share plane grouped on the left
+  /// over a hairline, the save bookmark alone on the right.
   Widget _interactionRow() {
     final keyPrefix = widget.clubContext ? 'club-home-post' : 'home-post';
     final hasStudentIdentity = authService.currentUser != null;
+    // Saved items only exists for students, so club sessions get no bookmark.
+    final canSave = authService.isStudentSession;
     return Container(
       key: ValueKey('$keyPrefix-actions-panel-${widget.post.id}'),
       padding: const EdgeInsets.only(top: 12),
@@ -840,20 +900,10 @@ class _HomeFeedPostCardState extends State<HomeFeedPostCard>
               onTap: _openComments,
             ),
           ),
-          if (widget.clubContext) ...[
-            const SizedBox(width: 18),
-            ListenableBuilder(
-              listenable: viewTracker,
-              builder: (context, _) => _HomePostAction(
-                key: ValueKey('$keyPrefix-views-${widget.post.id}'),
-                icon: Icons.visibility_outlined,
-                count: viewTracker.viewCount(widget.post.id),
-                color: ClubUpColors.muted,
-              ),
-            ),
-          ],
-          const Spacer(),
-          if (hasStudentIdentity)
+          // The 28-wide tap box pads the glyph by 5, so 13 here reads as the
+          // same 18 optical gap the counted actions keep between them.
+          if (hasStudentIdentity) ...[
+            const SizedBox(width: 13),
             GestureDetector(
               key: ValueKey('$keyPrefix-share-${widget.post.id}'),
               behavior: HitTestBehavior.opaque,
@@ -873,7 +923,79 @@ class _HomeFeedPostCardState extends State<HomeFeedPostCard>
                 ),
               ),
             ),
+          ],
+          if (widget.clubContext) ...[
+            SizedBox(width: hasStudentIdentity ? 13 : 18),
+            ListenableBuilder(
+              listenable: viewTracker,
+              builder: (context, _) => _HomePostAction(
+                key: ValueKey('$keyPrefix-views-${widget.post.id}'),
+                icon: Icons.visibility_outlined,
+                count: viewTracker.viewCount(widget.post.id),
+                color: ClubUpColors.muted,
+              ),
+            ),
+          ],
+          const Spacer(),
+          if (canSave)
+            ListenableBuilder(
+              listenable: userState,
+              builder: (context, _) => _HomePostSaveAction(
+                key: ValueKey('$keyPrefix-save-${widget.post.id}'),
+                saved: userState.isSaved(widget.post.id),
+                onTap: _toggleSave,
+              ),
+            ),
         ],
+      ),
+    );
+  }
+}
+
+/// `save-action` — the bookmark that files a post under Saved items. Events
+/// already have one on their own cards; this is the post half of the same
+/// store, so it mirrors that icon pair rather than inventing a new glyph.
+class _HomePostSaveAction extends StatelessWidget {
+  const _HomePostSaveAction({super.key, required this.saved, this.onTap});
+
+  final bool saved;
+  final VoidCallback? onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final reduceMotion = MediaQuery.disableAnimationsOf(context);
+    return Semantics(
+      button: true,
+      label: saved ? S.unsavePostAction : S.savePostAction,
+      child: GestureDetector(
+        behavior: HitTestBehavior.opaque,
+        onTap: onTap,
+        child: SizedBox(
+          width: 28,
+          height: 28,
+          child: Center(
+            child: AnimatedSwitcher(
+              duration: reduceMotion
+                  ? Duration.zero
+                  : const Duration(milliseconds: 200),
+              switchInCurve: Curves.easeOutBack,
+              switchOutCurve: Curves.easeInCubic,
+              transitionBuilder: (child, animation) => FadeTransition(
+                opacity: animation,
+                child: ScaleTransition(
+                  scale: Tween<double>(begin: 0.68, end: 1).animate(animation),
+                  child: child,
+                ),
+              ),
+              child: Icon(
+                saved ? Icons.bookmark_rounded : Icons.bookmark_border_rounded,
+                key: ValueKey(saved),
+                size: 19,
+                color: saved ? ClubUpColors.accent : ClubUpColors.muted,
+              ),
+            ),
+          ),
+        ),
       ),
     );
   }

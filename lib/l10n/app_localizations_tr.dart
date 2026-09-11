@@ -2829,6 +2829,9 @@ class AppLocalizationsTr extends AppLocalizations {
   String get programmeLabel => 'Program';
 
   @override
+  String get programmeSchedule => 'Program Akışı';
+
+  @override
   String get programmeSectionSubtitle => 'Etkinliğin için bir program ekle';
 
   @override
@@ -2921,6 +2924,9 @@ class AppLocalizationsTr extends AppLocalizations {
 
   @override
   String get resendCodeButton => 'Kodu tekrar gönder';
+
+  @override
+  String get reserveMySpot => 'Yerimi Ayır';
 
   @override
   String resendInTime(String time) {

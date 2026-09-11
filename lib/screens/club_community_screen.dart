@@ -8,6 +8,7 @@ import '../l10n/app_localizations.dart';
 import '../models/chat_media_selection.dart';
 import '../models/chat_message.dart';
 import '../models/club.dart';
+import '../models/content_audience.dart';
 import '../models/event.dart';
 import '../models/user.dart';
 import '../navigation/chat_page_route.dart';
@@ -23,23 +24,26 @@ import '../services/chat_attachment_staging.dart';
 import '../services/chat_store.dart';
 import '../services/club_admin_access.dart';
 import '../services/club_chat_prefs.dart';
+import '../services/content_visibility.dart';
 import '../services/club_community_info_controller.dart';
 import '../services/locale_service.dart';
 import '../services/mock_clubup_profile.dart';
 import '../services/mock_data.dart';
 import '../services/people_service.dart';
-import '../services/photo_orientation.dart';
 import '../services/rsvp_store.dart';
 import '../services/student_club_role_service.dart';
 import '../services/theme_service.dart';
 import '../services/user_profile_link.dart';
 import '../services/user_state.dart';
+import '../widgets/brief_toast.dart';
 import '../widgets/chat_campus_backdrop.dart';
+import '../widgets/chat_reaction_strip.dart';
 import '../widgets/club_avatar.dart';
 import '../widgets/chats_design.dart';
 import '../widgets/club_board_lane.dart';
 import '../widgets/club_chat_design.dart';
 import '../widgets/clubup_design.dart';
+import '../widgets/content_audience_sheet.dart';
 import '../widgets/moderation_reason_sheet.dart';
 import '../widgets/club_chat_theme.dart';
 import '../widgets/club_community_header.dart';
@@ -51,6 +55,7 @@ import '../widgets/user_avatar.dart';
 import '../widgets/shared_post_message_card.dart';
 import '../widgets/sent_message_entrance.dart';
 import '../widgets/swipe_to_reply.dart';
+import 'chat_camera_screen.dart';
 import 'chat_thread_screen.dart';
 import 'club_profile_screen.dart';
 import 'event_detail_screen.dart';
@@ -874,6 +879,12 @@ class _ClubCommunityScreenState extends State<ClubCommunityScreen>
     }
   }
 
+  /// Opens the in-app camera. The photo comes back upright and, when the front
+  /// lens took it, mirrored the way the viewfinder showed it.
+  Future<XFile?> _captureWithCamera() => Navigator.of(
+    context,
+  ).push<XFile>(ChatPageRoute(builder: (_) => const ChatCameraScreen()));
+
   Future<void> _pickMediaAttachment({
     required bool useCamera,
     bool asAnnouncement = false,
@@ -881,13 +892,12 @@ class _ClubCommunityScreenState extends State<ClubCommunityScreen>
     late final List<XFile> picked;
     try {
       if (useCamera) {
-        final captured = await ImagePicker().pickImage(
-          source: ImageSource.camera,
-          maxWidth: 2048,
-          maxHeight: 2048,
-          imageQuality: 88,
-        );
-        picked = [?captured];
+        // The in-app camera, not the system one: iOS's picker always inserts
+        // its own Retake/Use Photo step before handing the file back, and this
+        // screen already confirms a photo in MediaPreviewScreen. The camera
+        // screen also knows which lens fired, so a selfie comes back mirrored
+        // to match the viewfinder instead of guessed at from EXIF.
+        picked = [?await _captureWithCamera()];
       } else {
         picked = await ImagePicker().pickMultipleMedia(
           maxWidth: 2048,
@@ -897,6 +907,8 @@ class _ClubCommunityScreenState extends State<ClubCommunityScreen>
         );
       }
     } catch (_) {
+      // Only the library branch can throw now; the camera screen reports its
+      // own failures, which is what makes this message accurate.
       if (mounted) {
         ScaffoldMessenger.of(
           context,
@@ -905,7 +917,6 @@ class _ClubCommunityScreenState extends State<ClubCommunityScreen>
       return;
     }
     if (picked.isEmpty) return;
-    if (useCamera) await unmirrorPhotoFile(picked.single.path);
     if (!mounted) return;
 
     final inspected = await inspectChatMediaFiles(picked);
@@ -1393,9 +1404,7 @@ class _ClubCommunityScreenState extends State<ClubCommunityScreen>
                 onTap: () {
                   Clipboard.setData(ClipboardData(text: message.content));
                   Navigator.of(sheetContext).pop();
-                  ScaffoldMessenger.of(
-                    context,
-                  ).showSnackBar(SnackBar(content: Text(S.copied)));
+                  showBriefToast(context, S.copied);
                 },
               ),
             if (chatStore.isMessageOwner(message, _myId))
@@ -2691,58 +2700,33 @@ class _ClubCommunityScreenState extends State<ClubCommunityScreen>
                   if (message.reactions.isNotEmpty)
                     Padding(
                       padding: const EdgeInsets.only(top: 4),
-                      child: Wrap(
-                        spacing: 5,
-                        alignment: mine
-                            ? WrapAlignment.end
-                            : WrapAlignment.start,
-                        children: [
-                          for (final entry in message.reactions.entries)
-                            GestureDetector(
-                              key: ValueKey(
-                                'club-bubble-reaction-${message.id}-${entry.key}',
-                              ),
-                              onTap: () => chatStore.toggleReaction(
-                                messageId: message.id,
-                                userId: _myId,
-                                emoji: entry.key,
-                              ),
-                              child: Container(
-                                height: 22,
-                                padding: const EdgeInsets.symmetric(
-                                  horizontal: 8,
-                                ),
-                                decoration: BoxDecoration(
-                                  color: entry.value.contains(_myId)
-                                      ? ChatsColors.accent.withValues(
-                                          alpha: 0.10,
-                                        )
-                                      : ChatsColors.card,
-                                  borderRadius: BorderRadius.circular(999),
-                                  border: Border.all(
-                                    color: entry.value.contains(_myId)
-                                        ? ChatsColors.accent
-                                        : ChatsColors.border,
-                                  ),
-                                ),
-                                // Align with both factors, not
-                                // Container.alignment: a bare Align expands to
-                                // the Wrap's loose width.
-                                child: Align(
-                                  widthFactor: 1,
-                                  heightFactor: 1,
-                                  child: Text(
-                                    '${entry.key} ${entry.value.length}',
-                                    style: figtree(
-                                      size: 11,
-                                      weight: FontWeight.w600,
-                                      color: ChatsColors.muted,
-                                    ),
-                                  ),
-                                ),
-                              ),
-                            ),
-                        ],
+                      child: ChatReactionStrip(
+                        key: ValueKey('club-reactions-${message.id}'),
+                        messageId: message.id,
+                        reactions: message.reactions,
+                        myId: _myId,
+                        alignEnd: mine,
+                        keyPrefix: 'club-bubble-reaction',
+                        style: ChatReactionStyle(
+                          mineFill: ChatsColors.accent.withValues(alpha: 0.10),
+                          mineBorder: ChatsColors.accent,
+                          otherFill: ChatsColors.card,
+                          border: ChatsColors.border,
+                          chipHeight: 22,
+                          chipPadding: const EdgeInsets.symmetric(
+                            horizontal: 8,
+                          ),
+                          label: figtree(
+                            size: 11,
+                            weight: FontWeight.w600,
+                            color: ChatsColors.muted,
+                          ),
+                        ),
+                        onToggle: (emoji) => chatStore.toggleReaction(
+                          messageId: message.id,
+                          userId: _myId,
+                          emoji: emoji,
+                        ),
                       ),
                     ),
                   if (mine && seen > 0)
@@ -3125,9 +3109,7 @@ class _ClubCommunityScreenState extends State<ClubCommunityScreen>
             onTap: () {
               Clipboard.setData(ClipboardData(text: message.content));
               if (!mounted) return;
-              ScaffoldMessenger.of(
-                context,
-              ).showSnackBar(SnackBar(content: Text(S.copied)));
+              showBriefToast(context, S.copied);
             },
           ),
         ClubMessageAction(
@@ -3908,6 +3890,16 @@ class _ClubCommunityScreenState extends State<ClubCommunityScreen>
       going: rsvpStore.isAttending(event.id),
       t: t,
       compact: compact,
+      audienceMark: audienceForEvent(event) == ContentAudience.everyone
+          ? null
+          : ContentAudienceIcon(
+              key: ValueKey('content-audience-icon-${event.id}'),
+              audience: audienceForEvent(event),
+              // `t.accent` is the raw club colour; `t.red` is the same accent
+              // corrected for legibility on this surface.
+              color: t.red,
+              size: 13,
+            ),
       onToggleRsvp: () => _toggleRsvp(event),
       onOpen: onOpen ?? () => _openEvent(event),
     );

@@ -2846,6 +2846,9 @@ class AppLocalizationsEn extends AppLocalizations {
   String get programmeLabel => 'Programme';
 
   @override
+  String get programmeSchedule => 'Programme Schedule';
+
+  @override
   String get programmeSectionSubtitle => 'Add a timetable for your event';
 
   @override
@@ -2938,6 +2941,9 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get resendCodeButton => 'Resend code';
+
+  @override
+  String get reserveMySpot => 'Reserve My Spot';
 
   @override
   String resendInTime(String time) {

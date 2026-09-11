@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:integration_test/integration_test.dart';
-import 'package:shared_preferences/shared_preferences.dart';
 
 import 'package:flutter_application_1/features/calendar/providers/calendar_provider.dart';
 import 'package:flutter_application_1/features/calendar/providers/calendar_state.dart';
@@ -10,12 +9,9 @@ import 'package:flutter_application_1/features/calendar/services/calendar_servic
 import 'package:flutter_application_1/l10n/app_localizations.dart';
 import 'package:flutter_application_1/models/club.dart';
 import 'package:flutter_application_1/models/event.dart';
-import 'package:flutter_application_1/onboarding/onboarding_anchors.dart';
 import 'package:flutter_application_1/onboarding/onboarding_steps.dart';
 import 'package:flutter_application_1/onboarding/onboarding_service.dart';
-import 'package:flutter_application_1/onboarding/starter_checklist_service.dart';
 import 'package:flutter_application_1/onboarding/widgets/onboarding_guide_card.dart';
-import 'package:flutter_application_1/onboarding/widgets/starter_checklist_card.dart';
 import 'package:flutter_application_1/screens/main_nav_screen.dart';
 import 'package:flutter_application_1/services/app_strings.dart';
 import 'package:flutter_application_1/services/auth_service.dart';
@@ -68,9 +64,7 @@ void main() {
     expect(guideRect.contains(skipRect.center), isTrue);
   }
 
-  testWidgets('student completes the campus tour and uses the checklist', (
-    tester,
-  ) async {
+  testWidgets('student completes the campus tour', (tester) async {
     authService.logout();
     await hiveBootstrap.initialize();
     await Future.wait([
@@ -82,7 +76,6 @@ void main() {
       themeService.initialize(),
       localeService.initialize(),
       onboardingService.initialize(),
-      starterChecklistService.initialize(),
     ]);
     contentStore.applyToLists();
 
@@ -134,11 +127,6 @@ void main() {
     await themeService.markThemeChosen(userId, false);
     await localeService.markLanguageChosen(userId, 'en');
     await onboardingService.reset(userId);
-
-    // A drive can reuse simulator preferences from an earlier run. Clear only
-    // this test user's checklist so the post-tour card starts fresh.
-    final preferences = await SharedPreferences.getInstance();
-    await preferences.remove('onboarding_checklist_$userId');
 
     await tester.pumpWidget(
       ProviderScope(
@@ -215,58 +203,20 @@ void main() {
     expect(find.text(S.tutorialFinishTitle), findsOneWidget);
     expect(find.text(S.tutorialReplayTour), findsOneWidget);
     expect(find.text(S.tutorialExploreClubUp), findsOneWidget);
-    expect(find.text(S.checklistTitle), findsNothing);
     expect(onboardingService.isComplete(userId), isFalse);
     await shot(tester, 'onboarding-08-finish');
 
     // The one final CTA starts the Home transition while the overlay fades,
-    // then persists completion and starts the checklist.
+    // then persists completion. Nothing follows it — the tour is the whole
+    // first-run experience now that the starter checklist is gone.
     await tester.tap(find.text(S.tutorialExploreClubUp));
     await settleFlow(tester);
     expect(find.byKey(const ValueKey('onboarding-skip-button')), findsNothing);
     expect(onboardingService.isComplete(userId), isTrue);
-    expect(find.byType(StarterChecklistCard), findsNothing);
-    expect(find.text(S.checklistTitle), findsNothing);
     expect(find.byIcon(Icons.send_rounded), findsNothing);
     expect(find.byIcon(Icons.notifications_none_rounded), findsOneWidget);
     await shot(tester, 'onboarding-09-home-after-finish');
 
-    // Get started lives on Profile, with a clear manual close control.
-    await tester.tap(
-      find.byKey(onboardingAnchors.keyFor(OnboardingAnchors.navProfile)),
-    );
-    await tester.pump(const Duration(milliseconds: 500));
-    expect(find.byType(StarterChecklistCard), findsOneWidget);
-    expect(find.text(S.checklistTitle), findsOneWidget);
-    expect(
-      find.byKey(const ValueKey('starter-checklist-close')),
-      findsOneWidget,
-    );
-    await shot(tester, 'onboarding-10-profile-checklist');
-
-    // The checklist's first action requests Explore (student tab 2).
-    await tester.tap(find.text(S.checklistFollowClubAction));
-    await tester.pump(const Duration(milliseconds: 500));
-    expect(
-      find.byKey(onboardingAnchors.keyFor(OnboardingAnchors.searchField)),
-      findsOneWidget,
-    );
-    await shot(tester, 'onboarding-11-checklist-explore');
-
-    // A student who already knows the app can close the checklist directly.
-    await tester.tap(
-      find.byKey(onboardingAnchors.keyFor(OnboardingAnchors.navProfile)),
-    );
-    await tester.pump(const Duration(milliseconds: 500));
-    await tester.tap(find.byKey(const ValueKey('starter-checklist-close')));
-    await tester.pump(const Duration(milliseconds: 500));
-    // The Profile screen keeps the card widget mounted; dismissal collapses
-    // its contents instead of replacing the widget itself.
-    expect(find.byType(StarterChecklistCard), findsOneWidget);
-    expect(find.text(S.checklistTitle), findsNothing);
-    expect(find.byKey(const ValueKey('starter-checklist-close')), findsNothing);
-    expect(starterChecklistService.isActiveFor(userId), isFalse);
-    await shot(tester, 'onboarding-12-profile-checklist-dismissed');
     expect(tester.takeException(), isNull);
   });
 }

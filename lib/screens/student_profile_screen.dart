@@ -10,7 +10,6 @@ import '../services/mock_data.dart';
 import '../services/rsvp_store.dart';
 import '../services/student_activity_service.dart';
 import '../onboarding/onboarding_anchors.dart';
-import '../onboarding/widgets/starter_checklist_card.dart';
 import '../widgets/clubup_design.dart';
 import '../widgets/profile_design.dart';
 import 'event_detail_screen.dart';
@@ -200,16 +199,7 @@ class StudentProfileScreen extends StatelessWidget {
                       ],
                     ),
                   ),
-                  const SizedBox(height: 4),
-                  // Not in the frame, and invisible in every normal session:
-                  // [StarterChecklistCard] collapses to nothing unless the
-                  // first-login checklist is still active for this student.
-                  // Profile is where the onboarding tour hands off to it, so
-                  // dropping it outright would strand that flow. It still
-                  // paints in `AppColors` — restyling it would touch the
-                  // shared onboarding widget.
-                  const StarterChecklistCard(),
-                  const SizedBox(height: 28),
+                  const SizedBox(height: 32),
                   KeyedSubtree(
                     // `tut-profile-clubs` 390:248
                     key: isTutorialHost

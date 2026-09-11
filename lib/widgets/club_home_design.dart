@@ -32,6 +32,8 @@ import 'expandable_post_caption.dart';
 import 'home_comments_sheet.dart';
 import 'home_share_sheet.dart';
 import 'poll_card.dart';
+import '../services/content_visibility.dart';
+import 'content_audience_sheet.dart';
 
 /// The CLUB HOME area of the ClubUp-Desings handoff — `home-feed-alt-light` /
 /// `home-feed-alt-dark` (Figma `272:31` / `272:200`, with the typed-composer
@@ -1081,14 +1083,25 @@ class _ClubHomeFeedPostCardState extends State<ClubHomeFeedPostCard>
                 ),
               ),
               const SizedBox(height: 1),
-              Text(
-                _timeAgo(widget.post.createdAt),
-                maxLines: 1,
-                style: figtree(
-                  size: 9,
-                  weight: FontWeight.w500,
-                  color: ClubHomeColors.muted,
-                ),
+              Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(
+                    _timeAgo(widget.post.createdAt),
+                    maxLines: 1,
+                    style: figtree(
+                      size: 9,
+                      weight: FontWeight.w500,
+                      color: ClubHomeColors.muted,
+                    ),
+                  ),
+                  ContentAudienceIcon(
+                    key: ValueKey('content-audience-icon-${widget.post.id}'),
+                    audience: audienceForPost(widget.post),
+                    color: ClubHomeColors.accent,
+                    size: 12,
+                  ),
+                ],
               ),
             ],
           ),

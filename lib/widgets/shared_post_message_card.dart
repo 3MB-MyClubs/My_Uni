@@ -5,8 +5,10 @@ import '../screens/create_post_screen.dart' show buildPostBanner;
 import '../screens/post_detail_screen.dart';
 import '../services/app_colors.dart';
 import '../services/app_strings.dart';
+import '../services/content_visibility.dart';
 import '../services/mock_data.dart';
 import 'club_avatar.dart';
+import 'content_audience_sheet.dart';
 
 /// Compact, tappable post preview rendered inside conversations.
 class SharedPostMessageCard extends StatelessWidget {
@@ -138,6 +140,17 @@ class SharedPostMessageCard extends StatelessWidget {
                               fontWeight: FontWeight.w800,
                             ),
                           ),
+                        ),
+                        // A restricted post keeps its mark when it is
+                        // forwarded into a conversation — that is where the
+                        // recipient is least likely to know where it came
+                        // from. This card prints no timestamp, so the mark
+                        // ends the byline instead.
+                        ContentAudienceIcon(
+                          key: ValueKey('content-audience-icon-${post.id}'),
+                          audience: audienceForPost(post),
+                          color: onDarkBackground ? Colors.white : color,
+                          size: 13,
                         ),
                       ],
                     ),

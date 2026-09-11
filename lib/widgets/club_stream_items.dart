@@ -892,6 +892,7 @@ class ClubEventCard extends StatelessWidget {
     required this.t,
     required this.onToggleRsvp,
     required this.onOpen,
+    this.audienceMark,
     this.compact = false,
   });
 
@@ -905,6 +906,13 @@ class ClubEventCard extends StatelessWidget {
   final ClubChatTheme t;
   final VoidCallback onToggleRsvp;
   final VoidCallback onOpen;
+
+  /// The `ContentAudienceIcon` for a restricted event, passed in by the screen
+  /// so this stream item stays a pure presentation widget. Null when public.
+  /// It rides the clock line, the closest thing this card has to a date area
+  /// that is not the 52px block on its left.
+  final Widget? audienceMark;
+
   final bool compact;
 
   @override
@@ -972,18 +980,25 @@ class ClubEventCard extends StatelessWidget {
                       ),
                     ),
                     const SizedBox(height: 3),
-                    Text(
-                      [
-                        clockLabel,
-                        place,
-                      ].where((v) => v.isNotEmpty).join(' · '),
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: TextStyle(
-                        fontSize: 11.5,
-                        fontWeight: FontWeight.w600,
-                        color: t.textMuted,
-                      ),
+                    Row(
+                      children: [
+                        Flexible(
+                          child: Text(
+                            [
+                              clockLabel,
+                              place,
+                            ].where((v) => v.isNotEmpty).join(' · '),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: TextStyle(
+                              fontSize: 11.5,
+                              fontWeight: FontWeight.w600,
+                              color: t.textMuted,
+                            ),
+                          ),
+                        ),
+                        ?audienceMark,
+                      ],
                     ),
                     const SizedBox(height: 2),
                     Text(

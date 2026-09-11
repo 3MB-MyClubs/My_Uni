@@ -4676,6 +4676,12 @@ abstract class AppLocalizations {
   /// **'Programme'**
   String get programmeLabel;
 
+  /// No description provided for @programmeSchedule.
+  ///
+  /// In en, this message translates to:
+  /// **'Programme Schedule'**
+  String get programmeSchedule;
+
   /// No description provided for @programmeSectionSubtitle.
   ///
   /// In en, this message translates to:
@@ -4843,6 +4849,12 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Resend code'**
   String get resendCodeButton;
+
+  /// No description provided for @reserveMySpot.
+  ///
+  /// In en, this message translates to:
+  /// **'Reserve My Spot'**
+  String get reserveMySpot;
 
   /// No description provided for @resendInTime.
   ///

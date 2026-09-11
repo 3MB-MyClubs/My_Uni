@@ -1,24 +1,15 @@
-import 'dart:io';
-
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:hive/hive.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import 'package:flutter_application_1/onboarding/onboarding_flow.dart';
 import 'package:flutter_application_1/onboarding/onboarding_service.dart';
 import 'package:flutter_application_1/onboarding/onboarding_steps.dart';
-import 'package:flutter_application_1/onboarding/starter_checklist_service.dart';
 import 'package:flutter_application_1/onboarding/widgets/onboarding_guide_card.dart';
-import 'package:flutter_application_1/models/event.dart';
 import 'package:flutter_application_1/services/app_strings.dart';
-import 'package:flutter_application_1/services/chat_store.dart';
 import 'package:flutter_application_1/services/locale_service.dart';
-import 'package:flutter_application_1/services/mock_data.dart';
-import 'package:flutter_application_1/services/rsvp_store.dart';
 import 'package:flutter_application_1/services/theme_service.dart';
-import 'package:flutter_application_1/services/user_state.dart';
 
 /// Every localized string the tutorial renders, keyed for failure messages.
 Map<String, String Function()> _allOnboardingCopy() => {
@@ -74,17 +65,6 @@ Map<String, String Function()> _allOnboardingCopy() => {
   'clubChats': () => S.onboardingClubChats,
   'clubModeration': () => S.onboardingClubModeration,
   'clubSettings': () => S.onboardingClubSettings,
-  // The starter checklist, which Profile still renders.
-  'checklistTitle': () => S.checklistTitle,
-  'checklistSubtitle': () => S.checklistSubtitle,
-  'checklistFollowClub': () => S.checklistFollowClub,
-  'checklistFollowClubAction': () => S.checklistFollowClubAction,
-  'checklistRsvpEvent': () => S.checklistRsvpEvent,
-  'checklistRsvpEventAction': () => S.checklistRsvpEventAction,
-  'checklistSayHi': () => S.checklistSayHi,
-  'checklistSayHiAction': () => S.checklistSayHiAction,
-  'checklistDismiss': () => S.checklistDismiss,
-  'checklistAllDone': () => S.checklistAllDone,
 };
 
 /// Pumps enough frames for measurement retries + spotlight/switcher motion.
@@ -388,101 +368,6 @@ void main() {
       expect(turkish, isNot(english));
       expect(find.text(turkish), findsOneWidget);
       expect(find.text(english), findsNothing);
-    });
-  });
-
-  group('StarterChecklistService', () {
-    late Directory tempDir;
-
-    setUpAll(() async {
-      tempDir = await Directory.systemTemp.createTemp('onboarding_test_');
-      Hive.init(tempDir.path);
-      await chatStore.initialize();
-    });
-
-    tearDownAll(() async {
-      await Hive.close();
-      if (tempDir.existsSync()) tempDir.deleteSync(recursive: true);
-    });
-
-    test('detection is baseline-relative and sticky', () async {
-      SharedPreferences.setMockInitialValues({});
-      final service = StarterChecklistService();
-      await service.initialize();
-
-      // 'c1' is pre-seeded — it must NOT count as "followed a club".
-      // Earlier widget tests can clear the global mock state, so restore this
-      // test's stated baseline explicitly instead of relying on file order.
-      if (!userState.followedClubIds.contains('c1')) {
-        userState.toggleFollow('c1');
-      }
-      final checklistEvent = Event(
-        id: 'starter-checklist-event',
-        clubId: 'c1',
-        title: 'Starter checklist event',
-        description: '',
-        dateTime: DateTime(2030),
-        endTime: DateTime(2030, 1, 1, 1),
-        location: 'Campus',
-        attendeeUserIds: [],
-      );
-      events.add(checklistEvent);
-      expect(userState.followedClubIds, contains('c1'));
-      await service.startFor('u1');
-      expect(service.isActiveFor('u1'), isTrue);
-      expect(service.followDone, isFalse);
-      expect(service.rsvpDone, isFalse);
-      expect(service.chatDone, isFalse);
-
-      // Following a NEW club checks the item off.
-      userState.toggleFollow('c2');
-      expect(service.followDone, isTrue);
-      // Sticky: unfollowing doesn't un-check it.
-      userState.toggleFollow('c2');
-      expect(service.followDone, isTrue);
-
-      // A new RSVP checks the item off (seed + any store notification).
-      rsvpStore.seed(checklistEvent.id, true);
-      userState.toggleFollowUser('test-peer');
-      expect(service.rsvpDone, isTrue);
-      rsvpStore.seed(checklistEvent.id, false);
-      userState.toggleFollowUser('test-peer');
-
-      // Sending a message after the tour checks the last item off.
-      final threadId = chatStore.ensureDirectThread('u1', 'u2')!;
-      await Future<void>.delayed(const Duration(milliseconds: 5));
-      final sent = chatStore.sendMessage(
-        threadId: threadId,
-        senderId: 'u1',
-        content: 'hi there!',
-      );
-      expect(sent, isNotNull);
-      expect(service.chatDone, isTrue);
-      expect(service.allDone, isTrue);
-      expect(service.isActiveFor('u1'), isFalse);
-      events.remove(checklistEvent);
-    });
-
-    test('dismissal and progress survive a service restart', () async {
-      SharedPreferences.setMockInitialValues({});
-      final service = StarterChecklistService();
-      await service.initialize();
-      await service.startFor('u9');
-      expect(service.isActiveFor('u9'), isTrue);
-
-      userState.toggleFollow('c3');
-      expect(service.followDone, isTrue);
-      userState.toggleFollow('c3'); // restore global state
-
-      await service.dismiss();
-      expect(service.isActiveFor('u9'), isFalse);
-
-      // A fresh instance reading the same prefs sees the same state.
-      final revived = StarterChecklistService();
-      await revived.initialize();
-      await revived.startFor('u9');
-      expect(revived.isActiveFor('u9'), isFalse);
-      expect(revived.followDone, isTrue);
     });
   });
 }

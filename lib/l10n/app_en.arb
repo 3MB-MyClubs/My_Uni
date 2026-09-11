@@ -1518,6 +1518,7 @@
   "profileUpdated": "Profile updated",
   "programme": "Programme",
   "programmeLabel": "Programme",
+  "programmeSchedule": "Programme Schedule",
   "programmeSectionSubtitle": "Add a timetable for your event",
   "publishErrorGenericEvent": "Could not publish event. Check Supabase settings.",
   "publishErrorMigrationEvent": "Could not publish event. Run the latest events SQL migration.",
@@ -1560,6 +1561,7 @@
   "requested": "Requested",
   "requestedLabel": "Requested",
   "resendCodeButton": "Resend code",
+  "reserveMySpot": "Reserve My Spot",
   "resendInTime": "Resend in {time}",
   "@resendInTime": {
     "placeholders": {

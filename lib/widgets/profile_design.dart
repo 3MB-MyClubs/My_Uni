@@ -6,6 +6,7 @@ import 'package:intl/intl.dart';
 import '../l10n/app_localizations.dart';
 import '../models/club.dart';
 import '../models/event.dart';
+import '../services/content_visibility.dart';
 import '../services/locale_service.dart';
 import '../services/photo_file_cache.dart';
 import '../services/theme_service.dart';
@@ -13,6 +14,7 @@ import '../theme/specialized_semantic_palettes.dart';
 import '../services/user_state.dart';
 import 'app_network_image.dart';
 import 'clubup_design.dart';
+import 'content_audience_sheet.dart';
 import 'event_cover_image.dart';
 import 'loading_skeleton.dart';
 import 'user_avatar.dart';
@@ -936,6 +938,15 @@ class ProfileEventCard extends StatelessWidget {
                     weight: FontWeight.w400,
                     color: ProfileColors.muted,
                     gap: clubName == null ? 6 : 4,
+                    // `ProfileColors` has no lifted accent-text token, so the
+                    // mark borrows the same `accent` the club line below it
+                    // already uses as text on this card.
+                    trailing: ContentAudienceIcon(
+                      key: ValueKey('content-audience-icon-${event.id}'),
+                      audience: audienceForEvent(event),
+                      color: ProfileColors.accent,
+                      size: 13,
+                    ),
                   ),
                   if (clubName != null) ...[
                     const SizedBox(height: 4),
@@ -966,6 +977,7 @@ class _MetaLine extends StatelessWidget {
     required this.weight,
     required this.color,
     required this.gap,
+    this.trailing,
   });
 
   final IconData icon;
@@ -974,6 +986,10 @@ class _MetaLine extends StatelessWidget {
   final FontWeight weight;
   final Color color;
   final double gap;
+
+  /// Rides the end of the line — the audience mark on the date line. The text
+  /// is [Expanded], so anything here has to be intrinsic-width.
+  final Widget? trailing;
 
   @override
   Widget build(BuildContext context) {
@@ -989,6 +1005,7 @@ class _MetaLine extends StatelessWidget {
             style: figtree(size: size, weight: weight, color: color),
           ),
         ),
+        ?trailing,
       ],
     );
   }
