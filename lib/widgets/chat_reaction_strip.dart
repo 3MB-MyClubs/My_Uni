@@ -18,7 +18,20 @@ class ChatReactionStyle {
     this.mineBorder,
     this.chipPadding = const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
     this.chipHeight,
-  });
+  }) : bare = false;
+
+  /// A strip with nothing behind the faces: the emoji on its own, tucked under
+  /// the bubble as a quiet indicator. Fills and frames mean nothing once the
+  /// pill is gone, so this constructor does not ask for them.
+  const ChatReactionStyle.bare({
+    required this.label,
+    this.chipPadding = const EdgeInsets.symmetric(horizontal: 2),
+  }) : bare = true,
+       mineFill = const Color(0x00000000),
+       otherFill = const Color(0x00000000),
+       border = const Color(0x00000000),
+       mineBorder = null,
+       chipHeight = null;
 
   /// Fill of a chip — or of a stacked face — you are part of, and of one you
   /// are not.
@@ -35,6 +48,9 @@ class ChatReactionStyle {
 
   final TextStyle label;
   final EdgeInsets chipPadding;
+
+  /// Drop the pill and paint the emoji straight onto whatever is behind it.
+  final bool bare;
 
   /// Fixed chip height, for the club bubbles that pin theirs to 22.
   final double? chipHeight;
@@ -88,6 +104,9 @@ class ChatReactionStrip extends StatefulWidget {
 
 class _ChatReactionStripState extends State<ChatReactionStrip> {
   static const double _faceSize = 24;
+
+  /// A bare face carries no circle, so it needs no room for one.
+  static const double _bareFaceSize = 18;
   static const double _faceOverlap = 7;
 
   /// Whether the reader has opened a stacked row. Held here rather than in the
@@ -127,10 +146,15 @@ class _ChatReactionStripState extends State<ChatReactionStrip> {
     animate: widget.newEmojis.contains(face.emoji),
     child: GestureDetector(
       onTap: () => widget.onToggle(face.emoji),
+      // A bare face is a small target with no fill to catch the tap, so the
+      // padding around it has to answer for the whole box.
+      behavior: HitTestBehavior.opaque,
       child: Container(
         height: widget.style.chipHeight,
         padding: widget.style.chipPadding,
-        decoration: _pill(mine: face.mine(widget.myId)),
+        decoration: widget.style.bare
+            ? null
+            : _pill(mine: face.mine(widget.myId)),
         // Align with both factors, not Container.alignment: a bare Align
         // expands to the Wrap's loose width.
         child: Align(
@@ -151,7 +175,9 @@ class _ChatReactionStripState extends State<ChatReactionStrip> {
   /// then how many people reacted in all.
   Widget _stack(List<_Face> faces) {
     final shown = faces.take(widget.maxVisible).toList();
-    final step = _faceSize - _faceOverlap;
+    // Overlapping circles need the tuck to read as a stack; bare faces have no
+    // edge to overlap, so they simply sit side by side.
+    final step = widget.style.bare ? _bareFaceSize : _faceSize - _faceOverlap;
     final total = faces.fold<int>(0, (sum, face) => sum + face.users.length);
     return ChatReactionPop(
       // Keyed by the faces it holds, so a reaction landing on an already
@@ -169,8 +195,8 @@ class _ChatReactionStripState extends State<ChatReactionStrip> {
           mainAxisSize: MainAxisSize.min,
           children: [
             SizedBox(
-              width: _faceSize + step * (shown.length - 1),
-              height: _faceSize,
+              width: _faceExtent + step * (shown.length - 1),
+              height: _faceExtent,
               child: Stack(
                 children: [
                   // Back to front, so the busiest face is the one on top.
@@ -189,8 +215,22 @@ class _ChatReactionStripState extends State<ChatReactionStrip> {
     );
   }
 
+  double get _faceExtent => widget.style.bare ? _bareFaceSize : _faceSize;
+
   Widget _face(_Face face) {
     final mine = face.mine(widget.myId);
+    if (widget.style.bare) {
+      return SizedBox(
+        width: _bareFaceSize,
+        height: _bareFaceSize,
+        child: Center(
+          child: Text(
+            face.emoji,
+            style: widget.style.label.copyWith(height: 1),
+          ),
+        ),
+      );
+    }
     return Container(
       width: _faceSize,
       height: _faceSize,
@@ -220,7 +260,7 @@ class _ChatReactionStripState extends State<ChatReactionStrip> {
     child: Container(
       height: widget.style.chipHeight,
       padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 2),
-      decoration: _pill(mine: false),
+      decoration: widget.style.bare ? null : _pill(mine: false),
       child: Align(
         widthFactor: 1,
         heightFactor: 1,

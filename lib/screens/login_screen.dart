@@ -154,7 +154,12 @@ class _LoginScreenState extends State<LoginScreen>
     });
     // Post-login screens read Hive boxes that open in the background after
     // first paint; by the time credentials are typed this is a no-op.
-    await appBootstrap.ready;
+    await appBootstrap.readyFor([
+      'preferences',
+      'content',
+      'personalization',
+      'audience',
+    ]);
     final success = await authService.loginStudent(email, password);
     if (!mounted) return;
     if (success) {
@@ -186,8 +191,8 @@ class _LoginScreenState extends State<LoginScreen>
 
   void _openClubAdmin() {
     Navigator.of(context).push(
-      _fadeSlideRoute(
-        ClubAdminAuthScreen(
+      MaterialPageRoute<void>(
+        builder: (_) => ClubAdminAuthScreen(
           onAdminLogin: () {
             Navigator.of(context).pop();
             widget.onAdminLogin();
@@ -199,8 +204,8 @@ class _LoginScreenState extends State<LoginScreen>
 
   void _openPlatformAdmin() {
     Navigator.of(context).push(
-      _fadeSlideRoute(
-        PlatformAdminAuthScreen(
+      MaterialPageRoute<void>(
+        builder: (_) => PlatformAdminAuthScreen(
           onAdminLogin: () {
             Navigator.of(context).pop();
             widget.onAdminLogin();
@@ -598,19 +603,3 @@ class _NoDomainFormatter extends TextInputFormatter {
     );
   }
 }
-
-// ─── Shared fade+slide route (matches the old auth-choice transition) ──────────
-Route _fadeSlideRoute(Widget page) => PageRouteBuilder(
-  pageBuilder: (context, animation, secondaryAnimation) => page,
-  transitionsBuilder: (context, animation, secondaryAnimation, child) {
-    final slide = Tween<Offset>(
-      begin: const Offset(0, 0.06),
-      end: Offset.zero,
-    ).animate(CurvedAnimation(parent: animation, curve: Curves.easeOutCubic));
-    return FadeTransition(
-      opacity: animation,
-      child: SlideTransition(position: slide, child: child),
-    );
-  },
-  transitionDuration: const Duration(milliseconds: 320),
-);

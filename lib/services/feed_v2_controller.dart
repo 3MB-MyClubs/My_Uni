@@ -85,12 +85,20 @@ class FeedV2Controller extends ChangeNotifier {
     _followedOnly = followedOnly;
     final generation = _generation;
 
+    if (!_hasLoadedFirstPage && _source is CachedFeedPageV2Source) {
+      final cached = (_source as CachedFeedPageV2Source).cachedFirstPage(
+        limit: pageSize,
+        followedOnly: followedOnly,
+      );
+      if (cached != null) _applyFirstPage(cached);
+    }
+
     late final Future<void> task;
     task =
         _loadFirstPage(
           generation: generation,
           force: force,
-          refreshing: force && _items.isNotEmpty,
+          refreshing: _hasLoadedFirstPage,
         ).whenComplete(() {
           if (identical(_firstPageTask, task)) _firstPageTask = null;
         });

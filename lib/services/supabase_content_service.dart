@@ -13,6 +13,10 @@ import 'supabase_config.dart';
 import 'supabase_club_service.dart';
 import 'user_state.dart';
 import 'guest_session.dart';
+import 'supabase_read_cache.dart';
+import 'rsvp_store.dart';
+import 'view_tracker.dart';
+import 'focused_read_service.dart';
 
 class StudentEventHistorySnapshot {
   final List<Event> events;
@@ -60,6 +64,194 @@ class SupabaseContentService {
       // Unit/widget tests and local-only previews can use the in-memory content
       // registries without initializing Supabase first.
       return null;
+    }
+  }
+
+  /// Merge a partial directory page without erasing unrelated clubs or
+  /// board membership already hydrated by a detail screen.
+  List<Club> mergeClubRows(Iterable<Map<String, dynamic>> rows) {
+    final result = <Club>[];
+    for (final row in rows) {
+      final existing = clubForId(row['id']?.toString() ?? '');
+      final club = _clubFromRow({
+        if (existing != null) ...{
+          'email': existing.email,
+          'admin_user_ids': existing.adminUserIds,
+          'category_id': existing.categoryId,
+          'category_name': existing.categoryName,
+          'created_at': existing.createdAt?.toIso8601String(),
+        },
+        ...row,
+      });
+      if (existing != null && !row.containsKey('board_member_ids')) {
+        club.boardMemberIds.addAll(existing.boardMemberIds);
+        club.boardMemberTitles.addAll(existing.boardMemberTitles);
+      }
+      if (club.id.isEmpty) continue;
+      upsertClub(club);
+      if (row['member_count'] is num) {
+        supabaseClubMemberCounts[club.id] = (row['member_count'] as num)
+            .toInt();
+      }
+      result.add(club);
+    }
+    return result;
+  }
+
+  List<Event> mergeEventRows(Iterable<Map<String, dynamic>> rows) {
+    final result = <Event>[];
+    final byId = {for (final event in events) event.id: event};
+    for (final row in rows) {
+      if (row['club'] is Map) {
+        mergeClubRows([Map<String, dynamic>.from(row['club'] as Map)]);
+      }
+      final parsed = _eventFromRow(row);
+      final event = rsvpStore.isPending(parsed.id)
+          ? byId[parsed.id] ?? parsed
+          : parsed;
+      byId[event.id] = event;
+      result.add(event);
+    }
+    events
+      ..clear()
+      ..addAll(byId.values);
+    return result;
+  }
+
+  List<NewsPost> mergePostRows(Iterable<Map<String, dynamic>> rows) {
+    final result = <NewsPost>[];
+    final byId = {for (final post in newsPosts) post.id: post};
+    for (final row in rows) {
+      if (row['club'] is Map) {
+        mergeClubRows([Map<String, dynamic>.from(row['club'] as Map)]);
+      }
+      final post = _postFromRow(row);
+      if (row['view_count'] is num) {
+        viewTracker.seedFeedViewCounts({
+          post.id: (row['view_count'] as num).toInt(),
+        });
+      }
+      if (row['like_count'] is num) {
+        supabasePostLikeCounts[post.id] = (row['like_count'] as num).toInt();
+      }
+      final poll = row['poll'];
+      if (poll is Map) {
+        pollStore.seedFeedSummaries(
+          optionCountsByPostId: {
+            post.id: [
+              for (final count in poll['counts'] as List? ?? [])
+                (count as num).toInt(),
+            ],
+          },
+          viewerVotesByPostId: {
+            post.id: (poll['viewer_vote'] as num?)?.toInt(),
+          },
+          userId: _client?.auth.currentUser?.id ?? '',
+        );
+      }
+      byId[post.id] = post;
+      result.add(post);
+    }
+    newsPosts
+      ..clear()
+      ..addAll(byId.values);
+    return result;
+  }
+
+  /// Profile club metadata is scoped to that user's memberships. No post,
+  /// event, poll, or campus-wide engagement snapshot is needed here.
+  Future<void> loadProfileClubs(String profileId, {bool force = false}) async {
+    final client = _client;
+    if (client == null || !_uuidPattern.hasMatch(profileId)) return;
+    final actor = client.auth.currentUser?.id;
+    final generation = supabaseReadCache.generation;
+    final rows = await supabaseReadCache.getOrFetch<List<Map<String, dynamic>>>(
+      key: 'profile-clubs:$actor:$profileId',
+      ttl: const Duration(seconds: 30),
+      force: force,
+      fetch: () async {
+        final result = <Map<String, dynamic>>[];
+        String? after;
+        while (true) {
+          var query = client
+              .from('club_followers')
+              .select(
+                'club_id, clubs(id,name,short_name,description,logo_url,category_id,email,created_at,club_categories(name))',
+              )
+              .eq('profile_id', profileId);
+          if (after != null) query = query.gt('club_id', after);
+          final page = await query.order('club_id').limit(50);
+          result.addAll([
+            for (final row in page)
+              if (row['clubs'] is Map)
+                Map<String, dynamic>.from(row['clubs'] as Map),
+          ]);
+          if (page.length < 50) break;
+          after = page.last['club_id'] as String;
+        }
+        return result;
+      },
+    );
+    if (client.auth.currentUser?.id != actor ||
+        generation != supabaseReadCache.generation) {
+      return;
+    }
+    final merged = mergeClubRows(rows);
+    await _hydrateBoardMembers(client, merged);
+    if (client.auth.currentUser?.id != actor ||
+        generation != supabaseReadCache.generation) {
+      return;
+    }
+    final ids = rows.map((row) => row['id'].toString()).toList();
+    if (ids.isEmpty) return;
+    for (var start = 0; start < ids.length; start += 50) {
+      final batch = ids.sublist(start, (start + 50).clamp(0, ids.length));
+      final counts = await supabaseReadCache
+          .getOrFetch<List<Map<String, dynamic>>>(
+            key: 'profile-club-counts:$actor:${batch.join(',')}',
+            ttl: const Duration(seconds: 30),
+            force: force,
+            fetch: () => client
+                .from('club_member_counts')
+                .select('club_id,member_count')
+                .inFilter('club_id', batch),
+          );
+      if (client.auth.currentUser?.id != actor ||
+          generation != supabaseReadCache.generation) {
+        return;
+      }
+      for (final row in counts) {
+        supabaseClubMemberCounts[row['club_id'].toString()] =
+            (row['member_count'] as num?)?.toInt() ?? 0;
+      }
+    }
+  }
+
+  /// Analytics needs complete history for one club, not a campus-wide snapshot.
+  /// Fetch in bounded pages only when the analytics screen is explicitly opened.
+  Future<void> loadClubHistoryForInsights(String clubId) async {
+    if (!focusedReadService.available || !_uuidPattern.hasMatch(clubId)) return;
+    for (final kind in ['events', 'posts']) {
+      Map<String, dynamic>? cursor;
+      do {
+        final page = await focusedReadService.page(
+          'get_content_page_v1',
+          {
+            'p_kind': kind,
+            'p_club_id': clubId,
+            'p_limit': 50,
+            'p_descending': true,
+          },
+          cursor: cursor,
+          force: true,
+        );
+        if (kind == 'events') {
+          mergeEventRows(page.items);
+        } else {
+          mergePostRows(page.items);
+        }
+        cursor = page.nextCursor;
+      } while (cursor != null);
     }
   }
 
@@ -151,6 +343,42 @@ class SupabaseContentService {
     return true;
   }
 
+  /// Detail links must resolve independently of any loaded page.
+  Future<NewsPost?> fetchPostById(String postId) async {
+    final cached = newsPosts.where((post) => post.id == postId).firstOrNull;
+    final client = _client;
+    if (client == null || !_uuidPattern.hasMatch(postId)) return cached;
+    final actor = client.auth.currentUser?.id;
+    final generation = supabaseReadCache.generation;
+    bool current() =>
+        actor == client.auth.currentUser?.id &&
+        generation == supabaseReadCache.generation;
+    try {
+      final row = await client
+          .from('club_posts')
+          .select(
+            'id,club_id,author_id,content,image_url,image_path,created_at',
+          )
+          .eq('id', postId)
+          .maybeSingle();
+      if (!current()) return null;
+      if (row == null) {
+        newsPosts.removeWhere((post) => post.id == postId);
+        return null;
+      }
+      final posts = await _attachPolls(client, [
+        _postFromRow(row),
+      ], shouldApply: current);
+      await fetchClubById(posts.single.clubId);
+      if (!current()) return null;
+      newsPosts.removeWhere((post) => post.id == postId);
+      newsPosts.add(posts.single);
+      return posts.single;
+    } catch (_) {
+      return current() ? cached : null;
+    }
+  }
+
   /// Resolves a shared event that is not in this device's current feed cache.
   /// A direct id query also covers valid events outside the feed time window.
   Future<Event?> fetchEventById(String eventId) async {
@@ -162,13 +390,19 @@ class SupabaseContentService {
 
     final client = _client;
     if (client == null) return null;
+    final actor = client.auth.currentUser?.id;
+    final generation = supabaseReadCache.generation;
     try {
       final row = await client
           .from('events')
           .select(_eventSelectColumns)
           .eq('id', normalizedId)
           .maybeSingle();
-      if (row == null) return null;
+      if (row == null ||
+          actor != client.auth.currentUser?.id ||
+          generation != supabaseReadCache.generation) {
+        return null;
+      }
       final event = _eventFromRow(Map<String, dynamic>.from(row));
       if (event.id.isEmpty) return null;
 
@@ -196,6 +430,8 @@ class SupabaseContentService {
     final client = _client;
     if (client == null) return clubForId(normalizedClubId);
 
+    final actor = client.auth.currentUser?.id;
+    final generation = supabaseReadCache.generation;
     final row = await client
         .from('clubs')
         .select(
@@ -207,6 +443,10 @@ class SupabaseContentService {
 
     final club = _clubFromRow(Map<String, dynamic>.from(row));
     await _hydrateBoardMembers(client, [club]);
+    if (actor != client.auth.currentUser?.id ||
+        generation != supabaseReadCache.generation) {
+      return null;
+    }
     upsertClub(club);
     return club;
   }
@@ -585,18 +825,24 @@ class SupabaseContentService {
       rows = await client
           .from('club_followers')
           .select('club_id, profile_id, role, role_title')
-          .eq('role', 'board_member');
+          .eq('role', 'board_member')
+          .inFilter('club_id', targetClubs.map((club) => club.id).toList());
     } catch (_) {
       try {
         rows = await client
             .from('club_followers')
             .select('club_id, profile_id, role')
-            .eq('role', 'board_member');
+            .eq('role', 'board_member')
+            .inFilter('club_id', targetClubs.map((club) => club.id).toList());
       } catch (_) {
         return;
       }
     }
 
+    for (final club in targetClubs) {
+      club.boardMemberIds.clear();
+      club.boardMemberTitles.clear();
+    }
     final byClub = {for (final club in targetClubs) club.id: club};
     for (final raw in rows) {
       final row = Map<String, dynamic>.from(raw as Map);
@@ -719,6 +965,13 @@ class SupabaseContentService {
         row['tagged_user_ids'] ?? row['taggedUserIds'],
       ),
       imagePath: _postImagePath(row),
+      poll: row['poll'] is Map
+          ? PollData(
+              question: row['poll']['question'] as String,
+              options: List<String>.from(row['poll']['options'] as List),
+              pollId: row['poll']['id'] as String?,
+            )
+          : null,
       isAnnouncement:
           row['is_announcement'] == true || row['isAnnouncement'] == true,
     );

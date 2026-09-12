@@ -1,3 +1,4 @@
+import 'focused_read_service.dart';
 import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
@@ -168,6 +169,7 @@ class ModerationService extends ChangeNotifier {
     if (userId.isEmpty || userId == actorId) return;
 
     _blockedUserIds.add(userId);
+    focusedReadService.invalidate();
     await _persist();
     notifyListeners();
 
@@ -198,6 +200,7 @@ class ModerationService extends ChangeNotifier {
     if (!_blockedUserIds.contains(userId)) return;
     final actorId = _actorId;
     _blockedUserIds.remove(userId);
+    focusedReadService.invalidate();
     await _persist();
     notifyListeners();
 
@@ -215,6 +218,7 @@ class ModerationService extends ChangeNotifier {
           .eq('blocked_id', userId);
     } catch (error) {
       _blockedUserIds.add(userId);
+      focusedReadService.invalidate();
       await _persist();
       notifyListeners();
       rethrow;
@@ -226,6 +230,7 @@ class ModerationService extends ChangeNotifier {
     if (clubId.isEmpty) return;
 
     _blockedClubIds.add(clubId);
+    focusedReadService.invalidate();
     await _persist();
     notifyListeners();
 
@@ -256,6 +261,7 @@ class ModerationService extends ChangeNotifier {
     if (!_blockedClubIds.contains(clubId)) return;
     final actorId = _actorId;
     _blockedClubIds.remove(clubId);
+    focusedReadService.invalidate();
     await _persist();
     notifyListeners();
 
@@ -273,6 +279,7 @@ class ModerationService extends ChangeNotifier {
           .eq('club_id', clubId);
     } catch (error) {
       _blockedClubIds.add(clubId);
+      focusedReadService.invalidate();
       await _persist();
       notifyListeners();
       rethrow;

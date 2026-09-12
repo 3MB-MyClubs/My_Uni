@@ -206,6 +206,8 @@ class MediaDeliveryService {
   final metrics = MediaDeliveryMetrics();
   final Map<String, ({ResolvedMedia media, DateTime expiresAt})> _signed = {};
   final Map<String, Future<ResolvedMedia>> _inFlight = {};
+  final Map<String, Object> _requestTokens = {};
+  static const maxSignedEntries = 256;
 
   SupabaseClient? get _client {
     // Guest mode reuses the unconfigured-backend path: with no client every
@@ -280,8 +282,12 @@ class MediaDeliveryService {
     }
     final key = reference.stableKey(rendition, dimensions, actorId: actorId);
     final now = _now();
-    final cached = _signed[key];
+    _signed.removeWhere(
+      (_, entry) => !entry.expiresAt.isAfter(now.add(_expirySkew)),
+    );
+    final cached = _signed.remove(key);
     if (cached != null && cached.expiresAt.isAfter(now.add(_expirySkew))) {
+      _signed[key] = cached;
       metrics.signedUrlCacheHits++;
       return Future.value(cached.media);
     }
@@ -290,9 +296,22 @@ class MediaDeliveryService {
       metrics.signedUrlInFlightHits++;
       return pending;
     }
-    final future = _sign(reference, actorId, rendition, dimensions, key, now);
+    final token = Object();
+    _requestTokens[key] = token;
+    final future = _sign(
+      reference,
+      actorId,
+      rendition,
+      dimensions,
+      key,
+      now,
+      token,
+    );
     _inFlight[key] = future;
-    return future.whenComplete(() => _inFlight.remove(key));
+    return future.whenComplete(() {
+      if (identical(_inFlight[key], future)) _inFlight.remove(key);
+      if (identical(_requestTokens[key], token)) _requestTokens.remove(key);
+    });
   }
 
   Future<ResolvedMedia> resolvePrivateForCurrentAccount({
@@ -315,6 +334,7 @@ class MediaDeliveryService {
     MediaDimensions dimensions,
     String key,
     DateTime now,
+    Object token,
   ) async {
     final client = _client;
     if (actorId.isEmpty ||
@@ -349,16 +369,24 @@ class MediaDeliveryService {
                       ),
               );
     final media = ResolvedMedia(url: url, cacheKey: key);
+    if (!identical(_requestTokens[key], token)) {
+      throw StateError('Private media request invalidated');
+    }
     _signed[key] = (media: media, expiresAt: now.add(signedUrlLifetime));
+    while (_signed.length > maxSignedEntries) {
+      _signed.remove(_signed.keys.first);
+    }
     return media;
   }
 
   void clearAccount(String actorId) {
+    _requestTokens.removeWhere((key, _) => key.startsWith('$actorId:'));
     _signed.removeWhere((key, _) => key.startsWith('$actorId:'));
     _inFlight.removeWhere((key, _) => key.startsWith('$actorId:'));
   }
 
   void clearAllPrivate() {
+    _requestTokens.clear();
     _signed.clear();
     _inFlight.clear();
   }

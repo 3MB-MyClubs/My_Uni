@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'performance_metrics.dart';
 
 /// Small process-local cache for idempotent Supabase reads.
 ///
@@ -7,10 +8,37 @@ import 'dart:async';
 /// app's offline-first state. Entries are short-lived and all in-flight calls
 /// for the same key share one request.
 class SupabaseReadCache {
+  SupabaseReadCache({this.maxEntries = 256, DateTime Function()? now})
+    : _now = now ?? DateTime.now;
+
+  final int maxEntries;
+  final DateTime Function() _now;
   final Map<String, _CacheEntry> _entries = {};
   final Map<String, Future<dynamic>> _inFlight = {};
-  final Map<String, int> _keyGenerations = {};
+  final Map<String, Object> _requestTokens = {};
   int _generation = 0;
+
+  /// Synchronous stale-while-revalidate read. Callers own the refresh and its
+  /// error/loading state; no detached callbacks can outlive a screen/account.
+  T? peek<T>(String key, {Duration? maxAge}) {
+    final entry = _entries.remove(key);
+    if (entry == null) return null;
+    _entries[key] = entry;
+    if (maxAge != null && _now().difference(entry.createdAt) >= maxAge) {
+      return null;
+    }
+    performanceMetrics.increment('cache.peek_hits');
+    return entry.value as T;
+  }
+
+  bool isFresh(String key, Duration ttl) {
+    final entry = _entries[key];
+    return entry != null && _now().difference(entry.createdAt) < ttl;
+  }
+
+  int get generation => _generation;
+
+  int get entryCount => _entries.length;
 
   Future<T> getOrFetch<T>({
     required String key,
@@ -21,33 +49,45 @@ class SupabaseReadCache {
   }) async {
     if (!force) {
       final entry = _entries[key];
-      if (entry != null && DateTime.now().difference(entry.createdAt) < ttl) {
-        return entry.value as T;
+      if (entry != null && isFresh(key, ttl)) {
+        performanceMetrics.increment('cache.hits');
+        return peek<T>(key) as T;
       }
     }
 
     final inFlight = _inFlight[key];
-    if (inFlight != null) return (await inFlight) as T;
+    if (inFlight != null) {
+      performanceMetrics.increment('cache.in_flight_hits');
+      return (await inFlight) as T;
+    }
 
     final generation = _generation;
-    final keyGeneration = _keyGenerations[key] ?? 0;
-    final future = fetch();
+    final token = Object();
+    _requestTokens[key] = token;
+    performanceMetrics.increment('cache.misses');
+    final future = Future<T>.sync(fetch);
     _inFlight[key] = future;
     try {
       final value = await future;
       if (generation == _generation &&
-          keyGeneration == (_keyGenerations[key] ?? 0) &&
-          (shouldCache?.call(value) ?? true)) {
-        _entries[key] = _CacheEntry(value: value, createdAt: DateTime.now());
+          identical(token, _requestTokens[key]) &&
+          (shouldCache?.call(value) ?? true) &&
+          maxEntries > 0) {
+        _entries.remove(key);
+        _entries[key] = _CacheEntry(value: value, createdAt: _now());
+        while (_entries.length > maxEntries) {
+          _entries.remove(_entries.keys.first);
+        }
       }
       return value;
     } finally {
       if (identical(_inFlight[key], future)) _inFlight.remove(key);
+      if (identical(token, _requestTokens[key])) _requestTokens.remove(key);
     }
   }
 
   void invalidate(String key) {
-    _keyGenerations[key] = (_keyGenerations[key] ?? 0) + 1;
+    _requestTokens.remove(key);
     _entries.remove(key);
     _inFlight.remove(key);
   }
@@ -65,7 +105,7 @@ class SupabaseReadCache {
   void clear() {
     _generation++;
     _entries.clear();
-    _keyGenerations.clear();
+    _requestTokens.clear();
     // Do not let a request started under the previous auth scope satisfy a
     // later caller after logout/login. The old future may still complete, but
     // it is no longer reachable through this cache.

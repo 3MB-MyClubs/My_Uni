@@ -10,6 +10,7 @@ import 'supabase_interaction_service.dart';
 import 'supabase_read_cache.dart';
 import 'people_service.dart';
 import 'student_activity_service.dart';
+import 'focused_read_service.dart';
 
 typedef GuardedContentRefresh =
     Future<bool> Function(bool Function() shouldApply);
@@ -98,6 +99,7 @@ class LazyContentLoader {
   /// Supabase. The generation guard also prevents an older refresh that was
   /// already running when the write completed from being applied afterward.
   void invalidateContent() {
+    focusedReadService.invalidate();
     _generation++;
     _contentLoadedAt = null;
     _countsLoadedAt = null;

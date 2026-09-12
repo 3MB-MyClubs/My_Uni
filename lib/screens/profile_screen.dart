@@ -22,7 +22,7 @@ import '../services/club_admin_access.dart';
 import '../services/club_role_localization.dart';
 import '../services/content_store.dart';
 import '../services/event_access.dart';
-import '../services/lazy_content_loader.dart';
+import '../services/supabase_content_service.dart';
 import '../services/mock_data.dart';
 import '../services/people_service.dart';
 import '../services/photo_upload_quality.dart';
@@ -92,7 +92,9 @@ class _ProfileScreenState extends State<ProfileScreen> {
     try {
       // Profile visits should reuse the shared 30-second engagement snapshot.
       // Pull-to-refresh remains the explicit force-refresh path.
-      await lazyContentLoader.ensureCountsLoaded();
+      await supabaseContentService.loadProfileClubs(
+        authService.currentUser?.id ?? '',
+      );
       if (mounted) setState(() {});
     } catch (_) {
       // Keep the last successful aggregate snapshot while offline.
@@ -112,7 +114,9 @@ class _ProfileScreenState extends State<ProfileScreen> {
     final request = ++_clubContentRequest;
     unawaited(() async {
       try {
-        await lazyContentLoader.ensureContentLoaded();
+        await supabaseContentService.loadProfileClubs(
+          authService.currentUser?.id ?? '',
+        );
       } catch (_) {
         // Keep any previously loaded directory visible when offline.
       }
