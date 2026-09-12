@@ -1,6 +1,7 @@
 begin;
 create extension if not exists pgtap with schema extensions;
 select plan(19);
+create temporary table notification_test_baseline as select count(*) as total from public.notifications;
 
 insert into auth.users(id) values ('ffffffff-ffff-4fff-8fff-ffffffffffff');
 insert into public.profiles(id,email,full_name)
@@ -35,7 +36,7 @@ select lives_ok($$
 $$, 'one logical event enqueues');
 select is((select count(*) from public.notification_outbox_v2 where event_key='test:large-club'),1::bigint,
   'one outbox row is durable');
-select is((select count(*) from public.notifications),0::bigint,
+select is((select count(*) from public.notifications),(select total from notification_test_baseline),
   'enqueue performs no synchronous recipient inserts');
 select lives_ok($$
   select private.enqueue_notification_outbox_v2(
@@ -92,6 +93,9 @@ select is((select count(*) from public.notification_deliveries_v2),2::bigint,
 select is((select count(*) from net.http_request_queue),0::bigint,
   'v2 canonical rows do not fire legacy pg_net webhooks');
 
+-- Eliminate clock-resolution races between insert defaults and worker eligibility.
+update public.notification_deliveries_v2 set next_attempt_at=clock_timestamp()-interval '1 second'
+where outbox_id=(select id from public.notification_outbox_v2 where event_key='test:large-club');
 create temporary table notification_test_deliveries as
 select * from public.claim_notification_deliveries_v2('delivery-a',250,90,8);
 select is((select count(*) from notification_test_deliveries),2::bigint,

@@ -1,0 +1,95 @@
+{
+  "verified_at_utc": "2026-09-12T09:41:27.009146+00:00",
+  "project": "bfntlbisipxgzxdmwxkz",
+  "migration": "20260911154857_app_performance_pages_v1.sql",
+  "sha256": "6dc2c783639cf985504e0756bde756cc597b52553ef4c98aef2df00f6c9f4af0",
+  "before": {
+    "columns": "1996fe5b9c1efebdadf2c83580c4e69d",
+    "functions": "e5d68289b457b3a849161305e6708484",
+    "new_function_count": 0,
+    "policies": "da249d15a38eb9a718510d88f5c88a05",
+    "relations": "6441205a5eb10d244b2c2c5aee2dcb54",
+    "triggers": "7515271e602915da68c0391693bd4dcb"
+  },
+  "after": {
+    "columns": "1996fe5b9c1efebdadf2c83580c4e69d",
+    "functions": "e5d68289b457b3a849161305e6708484",
+    "new_function_count": 8,
+    "policies": "da249d15a38eb9a718510d88f5c88a05",
+    "relations": "6441205a5eb10d244b2c2c5aee2dcb54",
+    "triggers": "7515271e602915da68c0391693bd4dcb"
+  },
+  "read_only_smoke": {
+    "club_counts": "object",
+    "club_directory_items": "array",
+    "directory_categories": "array",
+    "effective_role": "authenticated",
+    "event_categories": "array",
+    "event_page_items": "array",
+    "member_page_items": "array",
+    "old_chat_items": "array",
+    "old_feed_items": "array",
+    "post_page_items": "array",
+    "student_directory_items": "array"
+  },
+  "admin_smoke": {
+    "admin_response_type": "object"
+  },
+  "integrity": {
+    "indexes": {
+      "events_page_order_v1_idx": true,
+      "profiles_directory_order_v1_idx": true
+    },
+    "migration_recorded": true,
+    "new_rpc_permissions": [
+      {
+        "anonymous": false,
+        "authenticated": true,
+        "name": "directory_fold_v1",
+        "security_definer": false
+      },
+      {
+        "anonymous": false,
+        "authenticated": true,
+        "name": "get_admin_overview_v1",
+        "security_definer": false
+      },
+      {
+        "anonymous": false,
+        "authenticated": true,
+        "name": "get_club_content_counts_v1",
+        "security_definer": false
+      },
+      {
+        "anonymous": false,
+        "authenticated": true,
+        "name": "get_club_members_page_v1",
+        "security_definer": false
+      },
+      {
+        "anonymous": false,
+        "authenticated": true,
+        "name": "get_content_page_v1",
+        "security_definer": false
+      },
+      {
+        "anonymous": false,
+        "authenticated": true,
+        "name": "get_directory_categories_v1",
+        "security_definer": false
+      },
+      {
+        "anonymous": false,
+        "authenticated": true,
+        "name": "get_directory_page_v1",
+        "security_definer": false
+      },
+      {
+        "anonymous": false,
+        "authenticated": true,
+        "name": "get_event_categories_v1",
+        "security_definer": false
+      }
+    ]
+  }
+}

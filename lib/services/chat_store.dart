@@ -31,6 +31,8 @@ import 'supabase_config.dart';
 import 'user_state.dart';
 import 'upload_failure_classifier.dart';
 import 'guest_session.dart';
+import 'work_scheduler.dart';
+import 'performance_metrics.dart';
 
 /// The two lanes of a club room, per the Club Board + Chat handoff: `board` is
 /// the official notice area, `chat` is the room where the conversation lives.
@@ -169,6 +171,21 @@ class ChatStore extends ChangeNotifier {
   RealtimeChannel? _chatV2Channel;
   String? _chatV2ActorId;
   bool _chatV2SubscribedOnce = false;
+  final _summaryRefresh = CoalescingRefresh();
+  final _reconnectRefresh = CoalescingRefresh();
+  final Map<String, int> _appliedHistoryRevisions = {};
+  int _appliedSummaryRevision = -1;
+  String? activeThreadId;
+  bool _foreground = true;
+
+  void setForeground(bool foreground) {
+    if (_foreground == foreground) return;
+    _foreground = foreground;
+    if (foreground && _chatV2ActorId != null) {
+      unawaited(_reconcileLoadedChatV2Threads());
+    }
+  }
+
   final Set<String> _chatV2ManagedMessageIds = {};
   final Set<String> _chatV2InitializedThreads = {};
   final Map<String, int> _chatV2UnreadCounts = {};
@@ -601,9 +618,19 @@ class ChatStore extends ChangeNotifier {
     _syncRetryAt = null;
     _chatV2ManagedMessageIds.clear();
     _chatV2InitializedThreads.clear();
+    _appliedHistoryRevisions.clear();
+    _appliedSummaryRevision = -1;
+    activeThreadId = null;
+    _summaryRefresh.reset();
+    _reconnectRefresh.reset();
     _chatV2UnreadCounts.clear();
     _chatV2ClubLaneUnreadCounts.clear();
+    // Reset must not feed an empty revision through the persistence debounce.
+    _saveDebounce?.cancel();
+    _saveDebounce = null;
+    _chatV2.removeListener(_applyChatV2State);
     _chatV2.reset();
+    _chatV2.addListener(_applyChatV2State);
     _clearTypingAtAuthBoundary();
     if (_chatV2Source is SupabaseChatV2Service) {
       _chatV2Source.clearAccountCache();
@@ -700,21 +727,30 @@ class ChatStore extends ChangeNotifier {
     _remoteTyping.clear();
   }
 
-  Future<void> _refreshChatV2Summaries() async {
-    if (_chatV2ActorId == null) return;
+  Future<void> _refreshChatV2Summaries() => _summaryRefresh.run(() async {
+    if (_chatV2ActorId == null || !_foreground) return;
     if (_chatV2Source is SupabaseChatV2Service) {
       _chatV2Source.invalidateSummaries();
     }
     await _chatV2.loadFirstSummaries(force: true);
-  }
+  });
 
-  Future<void> _reconcileLoadedChatV2Threads() async {
-    await Future.wait([
-      for (final threadId in _chatV2.loadedThreadIds)
-        _chatV2.reconcile(threadId),
-    ]);
-    await _refreshChatV2Summaries();
-  }
+  Future<void> _reconcileLoadedChatV2Threads() =>
+      _reconnectRefresh.run(() async {
+        final actor = _chatV2ActorId;
+        if (actor == null || !_foreground) return;
+        final active = activeThreadId;
+        if (active != null) await _chatV2.reconcile(active);
+        await performanceMetrics.measure(
+          'chat.reconcile',
+          () => runWithConcurrency(
+            _chatV2.loadedThreadIds.where((id) => id != active).toList(),
+            _chatV2.reconcile,
+            shouldContinue: () => _foreground && _chatV2ActorId == actor,
+          ),
+        );
+        if (_chatV2ActorId == actor) await _refreshChatV2Summaries();
+      });
 
   Future<void> _handleChatV2JournalChange(
     PostgresChangePayload payload,
@@ -762,74 +798,83 @@ class ChatStore extends ChangeNotifier {
   }
 
   void _applyChatV2State() {
-    final participants = <User>[];
-    _chatV2UnreadCounts
-      ..clear()
-      ..addEntries(
-        _chatV2.summaries.map(
-          (summary) => MapEntry(summary.threadId, summary.unreadCount),
-        ),
-      );
-    _chatV2ClubLaneUnreadCounts
-      ..clear()
-      ..addEntries(
-        _chatV2.summaries
-            .where((summary) => summary.threadType == 'club')
-            .map(
-              (summary) => MapEntry(summary.threadId, {
-                ClubChatLane.board: summary.unreadBoardCount ?? 0,
-                ClubChatLane.chat: summary.unreadChatCount ?? 0,
-              }),
-            ),
-      );
-
-    for (final summary in _chatV2.summaries) {
-      final peer = summary.peer;
-      if (peer != null) participants.add(_chatUser(peer));
-      final inboxProfile = summary.inboxProfile;
-      if (inboxProfile != null) participants.add(_chatUser(inboxProfile));
-      final group = summary.group;
-      if (group != null) {
-        participants.addAll(group.members.map(_chatUser));
-        _groups[group.id] = ChatGroup(
-          id: group.id,
-          creatorId: group.creatorId,
-          memberIds: group.members.map((member) => member.id).toList(),
-          adminIds: group.adminIds,
-          customName: group.customName,
-          photoUrl: group.photoUrl,
-          createdAt: group.createdAt,
+    final summariesChanged = _appliedSummaryRevision != _chatV2.summaryRevision;
+    _appliedSummaryRevision = _chatV2.summaryRevision;
+    var dataChanged = summariesChanged;
+    if (summariesChanged) {
+      final participants = <User>[];
+      _chatV2UnreadCounts
+        ..clear()
+        ..addEntries(
+          _chatV2.summaries.map(
+            (summary) => MapEntry(summary.threadId, summary.unreadCount),
+          ),
         );
-      }
-      if (isDirectThread(summary.threadId)) {
-        _directThreadIds.add(summary.threadId);
-      }
-      if (isClubInboxThread(summary.threadId)) {
-        final inboxId = clubInboxIdOf(summary.threadId);
-        final clubId = summary.club?.id;
-        final profileId = summary.inboxProfile?.id;
-        if (inboxId != null && clubId != null && profileId != null) {
-          _clubInboxes[inboxId] = ClubInboxConversation(
-            id: inboxId,
-            clubId: clubId,
-            profileId: profileId,
-            createdAt: summary.activityAt,
-            updatedAt: summary.activityAt,
+      _chatV2ClubLaneUnreadCounts
+        ..clear()
+        ..addEntries(
+          _chatV2.summaries
+              .where((summary) => summary.threadType == 'club')
+              .map(
+                (summary) => MapEntry(summary.threadId, {
+                  ClubChatLane.board: summary.unreadBoardCount ?? 0,
+                  ClubChatLane.chat: summary.unreadChatCount ?? 0,
+                }),
+              ),
+        );
+
+      for (final summary in _chatV2.summaries) {
+        final peer = summary.peer;
+        if (peer != null) participants.add(_chatUser(peer));
+        final inboxProfile = summary.inboxProfile;
+        if (inboxProfile != null) participants.add(_chatUser(inboxProfile));
+        final group = summary.group;
+        if (group != null) {
+          participants.addAll(group.members.map(_chatUser));
+          _groups[group.id] = ChatGroup(
+            id: group.id,
+            creatorId: group.creatorId,
+            memberIds: group.members.map((member) => member.id).toList(),
+            adminIds: group.adminIds,
+            customName: group.customName,
+            photoUrl: group.photoUrl,
+            createdAt: group.createdAt,
           );
         }
+        if (isDirectThread(summary.threadId)) {
+          _directThreadIds.add(summary.threadId);
+        }
+        if (isClubInboxThread(summary.threadId)) {
+          final inboxId = clubInboxIdOf(summary.threadId);
+          final clubId = summary.club?.id;
+          final profileId = summary.inboxProfile?.id;
+          if (inboxId != null && clubId != null && profileId != null) {
+            _clubInboxes[inboxId] = ClubInboxConversation(
+              id: inboxId,
+              clubId: clubId,
+              profileId: profileId,
+              createdAt: summary.activityAt,
+              updatedAt: summary.activityAt,
+            );
+          }
+        }
+        final latest = summary.latestMessage;
+        if (latest != null &&
+            !_chatV2.historyFor(summary.threadId).hasLoadedInitial) {
+          _upsertChatV2Message(latest);
+        }
       }
-      final latest = summary.latestMessage;
-      if (latest != null &&
-          !_chatV2.historyFor(summary.threadId).hasLoadedInitial) {
-        _upsertChatV2Message(latest);
+      if (participants.isNotEmpty) {
+        peopleService.seedChatParticipants(participants);
       }
-    }
-    if (participants.isNotEmpty) {
-      peopleService.seedChatParticipants(participants);
     }
 
     for (final threadId in _chatV2.loadedThreadIds) {
       final history = _chatV2.historyFor(threadId);
+      if (_appliedHistoryRevisions[threadId] == history.revision) continue;
+      _appliedHistoryRevisions[threadId] = history.revision;
+      dataChanged = true;
+      performanceMetrics.increment('chat.applied_histories');
       final incomingIds = history.messages.map((message) => message.id).toSet();
       if (_chatV2InitializedThreads.add(threadId)) {
         _messages.removeWhere(
@@ -849,10 +894,8 @@ class ChatStore extends ChangeNotifier {
         _upsertChatV2Message(message);
       }
     }
-    final normalizedPins = _normalizePinnedMessages();
-    if (_chatV2.summaries.isNotEmpty ||
-        _chatV2.loadedThreadIds.isNotEmpty ||
-        normalizedPins) {
+    final normalizedPins = dataChanged && _normalizePinnedMessages();
+    if (dataChanged || normalizedPins) {
       scheduleSave();
     }
     notifyListeners();

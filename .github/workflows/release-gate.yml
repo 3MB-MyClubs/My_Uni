@@ -31,6 +31,9 @@ jobs:
           test/auth_protocol_contract_test.dart
           test/f2_f3_protocol_contract_test.dart
           test/rate_limit_error_test.dart
+          test/performance_foundations_test.dart
+          test/supabase_read_cache_test.dart
+          test/startup_lifecycle_race_test.dart
           test/feed_v2_controller_test.dart
           test/chat_v2_auth_boundary_test.dart
           test/chat_v2_controller_test.dart
@@ -82,3 +85,40 @@ jobs:
       - name: Edge Function unit tests
         working-directory: supabase/functions
         run: deno task --frozen test
+
+  android-release:
+    name: Android release compilation
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+      - run: flutter pub get
+      - name: Create disposable compilation key
+        run: |
+          keytool -genkeypair -noprompt -keystore "$RUNNER_TEMP/compile.jks" -storepass compilation -keypass compilation -alias compile -dname "CN=CI" -keyalg RSA -validity 1
+          cat > android/key.properties <<EOF
+          storeFile=$RUNNER_TEMP/compile.jks
+          storePassword=compilation
+          keyPassword=compilation
+          keyAlias=compile
+          EOF
+      - run: flutter build apk --release
+
+  ios-release:
+    name: iOS release compilation (unsigned)
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+      - run: flutter pub get
+      - run: flutter build ios --release --no-codesign

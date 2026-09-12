@@ -25,7 +25,8 @@ class ChatVideoPlayer extends StatefulWidget {
   State<ChatVideoPlayer> createState() => _ChatVideoPlayerState();
 }
 
-class _ChatVideoPlayerState extends State<ChatVideoPlayer> {
+class _ChatVideoPlayerState extends State<ChatVideoPlayer>
+    with WidgetsBindingObserver {
   VideoPlayerController? _controller;
   Object? _error;
   int _initializationGeneration = 0;
@@ -37,6 +38,7 @@ class _ChatVideoPlayerState extends State<ChatVideoPlayer> {
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     if (_shouldInitialize) unawaited(_initialize());
   }
 
@@ -130,7 +132,16 @@ class _ChatVideoPlayerState extends State<ChatVideoPlayer> {
   }
 
   @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state != AppLifecycleState.resumed) {
+      final controller = _controller;
+      if (controller != null) unawaited(controller.pause());
+    }
+  }
+
+  @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
     _queueControllerDisposal();
     super.dispose();
   }

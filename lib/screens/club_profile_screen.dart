@@ -1,3 +1,4 @@
+import '../services/focused_read_service.dart';
 import 'dart:async';
 
 import 'package:flutter/material.dart';
@@ -46,6 +47,7 @@ import 'user_profile_screen.dart';
 import 'create_post_screen.dart' show buildPostBanner;
 import '../widgets/user_avatar.dart';
 import '../models/content_audience.dart';
+import '../widgets/remote_content_pane.dart';
 import '../services/content_visibility.dart';
 import '../widgets/content_audience_sheet.dart';
 
@@ -108,6 +110,8 @@ class _ClubProfileScreenState extends State<ClubProfileScreen>
   /// Mirrors [_tabController]'s index so the design frame's segmented pill can
   /// repaint on a swipe as well as a tap.
   int _tabIndex = 0;
+  int? _remotePostCount;
+  int? _remoteEventCount;
 
   @override
   void initState() {
@@ -119,6 +123,53 @@ class _ClubProfileScreenState extends State<ClubProfileScreen>
     );
     _tabIndex = widget.initialTabIndex;
     _tabController.addListener(_syncTabIndex);
+    unawaited(_hydrateClubDetails());
+    unawaited(_hydrateCounts());
+  }
+
+  Future<void> _hydrateCounts() async {
+    if (!focusedReadService.available) return;
+    final actor = focusedReadService.scope;
+    try {
+      final counts = await focusedReadService.read<Map<String, dynamic>>(
+        'get_club_content_counts_v1',
+        {'p_club_id': widget.club.id},
+      );
+      if (!mounted || actor != focusedReadService.scope) return;
+      setState(() {
+        _remotePostCount = (counts['posts'] as num).toInt();
+        _remoteEventCount = (counts['events'] as num).toInt();
+      });
+    } catch (_) {
+      /* Retain known counts while offline. */
+    }
+  }
+
+  Future<void> _hydrateClubDetails() async {
+    if (!focusedReadService.available) return;
+    final actor = focusedReadService.scope;
+    try {
+      final club = await supabaseContentService.fetchClubById(widget.club.id);
+      if (!mounted || club == null || actor != focusedReadService.scope) return;
+      setState(() {
+        widget.club.boardMemberIds
+          ..clear()
+          ..addAll(club.boardMemberIds);
+        widget.club.boardMemberTitles
+          ..clear()
+          ..addAll(club.boardMemberTitles);
+        widget.club.adminUserIds
+          ..clear()
+          ..addAll(club.adminUserIds);
+        widget.club.name = club.name;
+        widget.club.description = club.description;
+        widget.club.logoUrl = club.logoUrl;
+        widget.club.categoryId = club.categoryId;
+        widget.club.categoryName = club.categoryName;
+      });
+    } catch (_) {
+      /* Keep the existing club visible while offline. */
+    }
   }
 
   void _syncTabIndex() {
@@ -486,7 +537,7 @@ class _ClubProfileScreenState extends State<ClubProfileScreen>
                     ClubProfileStatsRow(
                       cells: [
                         ClubProfileStat(
-                          value: '${clubPosts.length}',
+                          value: '${_remotePostCount ?? clubPosts.length}',
                           label: S.clubProfileTimeline,
                         ),
                         ClubProfileStat(
@@ -495,7 +546,7 @@ class _ClubProfileScreenState extends State<ClubProfileScreen>
                           onTap: _openMembersDirectory,
                         ),
                         ClubProfileStat(
-                          value: '${clubEvents.length}',
+                          value: '${_remoteEventCount ?? clubEvents.length}',
                           label: l10n.events,
                         ),
                       ],
@@ -524,26 +575,43 @@ class _ClubProfileScreenState extends State<ClubProfileScreen>
         body: TabBarView(
           controller: _tabController,
           children: [
-            _PostsTab(
-              posts: clubPosts,
-              club: widget.club,
-              clubColor: widget.color,
-              isAdmin: _isThisClubAdmin,
-              designed: true,
-              onChanged: () {
-                if (mounted) setState(() {});
-              },
-            ),
-            _EventsTab(
+            RemoteContentPane(
+              kind: 'posts',
               clubId: widget.club.id,
-              events: clubEvents,
-              monthAbbr: _monthAbbr,
-              clubColor: widget.color,
-              isAdmin: _isThisClubAdmin,
-              designed: true,
-              onChanged: () {
-                if (mounted) setState(() {});
-              },
+              builder: (context, ids) => _PostsTab(
+                posts: ids == null
+                    ? _clubPosts
+                    : _clubPosts
+                          .where((post) => ids.contains(post.id))
+                          .toList(),
+                club: widget.club,
+                clubColor: widget.color,
+                isAdmin: _isThisClubAdmin,
+                designed: true,
+                onChanged: () {
+                  if (mounted) setState(() {});
+                },
+              ),
+            ),
+            RemoteContentPane(
+              kind: 'events',
+              clubId: widget.club.id,
+              from: DateUtils.dateOnly(DateTime.now()),
+              builder: (context, ids) => _EventsTab(
+                clubId: widget.club.id,
+                events: ids == null
+                    ? _clubEvents
+                    : _clubEvents
+                          .where((event) => ids.contains(event.id))
+                          .toList(),
+                monthAbbr: _monthAbbr,
+                clubColor: widget.color,
+                isAdmin: _isThisClubAdmin,
+                designed: true,
+                onChanged: () {
+                  if (mounted) setState(() {});
+                },
+              ),
             ),
             _BoardTab(
               club: widget.club,
@@ -776,7 +844,8 @@ class _ClubProfileScreenState extends State<ClubProfileScreen>
                                       MainAxisAlignment.spaceAround,
                                   children: [
                                     _StatCell(
-                                      value: '${clubPosts.length}',
+                                      value:
+                                          '${_remotePostCount ?? clubPosts.length}',
                                       label: AppLocalizations.of(
                                         context,
                                       )!.posts,
@@ -801,7 +870,8 @@ class _ClubProfileScreenState extends State<ClubProfileScreen>
                                       color: borderColor,
                                     ),
                                     _StatCell(
-                                      value: '${clubEvents.length}',
+                                      value:
+                                          '${_remoteEventCount ?? clubEvents.length}',
                                       label: AppLocalizations.of(
                                         context,
                                       )!.events,
@@ -1000,24 +1070,41 @@ class _ClubProfileScreenState extends State<ClubProfileScreen>
         body: TabBarView(
           controller: _tabController,
           children: [
-            _PostsTab(
-              posts: clubPosts,
-              club: widget.club,
-              clubColor: widget.color,
-              isAdmin: _isThisClubAdmin,
-              onChanged: () {
-                if (mounted) setState(() {});
-              },
-            ),
-            _EventsTab(
+            RemoteContentPane(
+              kind: 'posts',
               clubId: widget.club.id,
-              events: clubEvents,
-              monthAbbr: _monthAbbr,
-              clubColor: widget.color,
-              isAdmin: _isThisClubAdmin,
-              onChanged: () {
-                if (mounted) setState(() {});
-              },
+              builder: (context, ids) => _PostsTab(
+                posts: ids == null
+                    ? _clubPosts
+                    : _clubPosts
+                          .where((post) => ids.contains(post.id))
+                          .toList(),
+                club: widget.club,
+                clubColor: widget.color,
+                isAdmin: _isThisClubAdmin,
+                onChanged: () {
+                  if (mounted) setState(() {});
+                },
+              ),
+            ),
+            RemoteContentPane(
+              kind: 'events',
+              clubId: widget.club.id,
+              from: DateUtils.dateOnly(DateTime.now()),
+              builder: (context, ids) => _EventsTab(
+                clubId: widget.club.id,
+                events: ids == null
+                    ? _clubEvents
+                    : _clubEvents
+                          .where((event) => ids.contains(event.id))
+                          .toList(),
+                monthAbbr: _monthAbbr,
+                clubColor: widget.color,
+                isAdmin: _isThisClubAdmin,
+                onChanged: () {
+                  if (mounted) setState(() {});
+                },
+              ),
             ),
             _BoardTab(
               club: widget.club,
@@ -1602,6 +1689,9 @@ class _EventsTabState extends State<_EventsTab> {
   List<Event> _loadedPastEvents = const [];
   bool _pastLoaded = false;
   bool _loadingPast = false;
+  Map<String, dynamic>? _pastCursor;
+  DateTime? _pastBoundary;
+  bool _pastFailed = false;
 
   String _statusOf(Event event, [DateTime? at]) {
     final now = at ?? DateTime.now();
@@ -1638,24 +1728,86 @@ class _EventsTabState extends State<_EventsTab> {
     }
   }
 
-  Future<void> _loadPastEvents({bool force = false}) async {
-    if (_loadingPast || (_pastLoaded && !force)) return;
-    setState(() => _loadingPast = true);
-    final fetched = await supabaseContentService.fetchPastEventsForClub(
-      widget.clubId,
-    );
-    if (!mounted) return;
+  Future<void> _loadPastEvents({
+    bool force = false,
+    bool append = false,
+  }) async {
+    if (_loadingPast || (_pastLoaded && !force && !append)) return;
+    final clubId = widget.clubId;
+    final actor = focusedReadService.scope;
     setState(() {
-      // This is a targeted query, so it never passes through _clubEvents and
-      // needs the audience filter applied on its own.
-      _loadedPastEvents = fetched.where(canViewEvent).toList();
-      _pastLoaded = true;
-      _loadingPast = false;
+      _loadingPast = true;
+      _pastFailed = false;
     });
-    // The targeted query is merged into the shared event cache, so update the
-    // Club Profile's event count without moving away from this filter.
-    widget.onChanged();
+    try {
+      List<Event> fetched;
+      if (focusedReadService.available) {
+        if (!append) _pastBoundary = DateTime.now();
+        final page = await focusedReadService.page(
+          'get_content_page_v1',
+          {
+            'p_kind': 'events',
+            'p_club_id': clubId,
+            'p_limit': 25,
+            'p_until': _pastBoundary!.toUtc().toIso8601String(),
+            'p_descending': true,
+          },
+          cursor: append ? _pastCursor : null,
+          force: force,
+        );
+        if (!mounted ||
+            widget.clubId != clubId ||
+            focusedReadService.scope != actor) {
+          return;
+        }
+        fetched = supabaseContentService.mergeEventRows(page.items);
+        _pastCursor = page.nextCursor;
+      } else {
+        fetched = await supabaseContentService.fetchPastEventsForClub(clubId);
+      }
+      if (!mounted ||
+          widget.clubId != clubId ||
+          focusedReadService.scope != actor) {
+        return;
+      }
+      setState(() {
+        _loadedPastEvents = {
+          if (append)
+            for (final event in _loadedPastEvents) event.id: event,
+          for (final event in fetched.where(canViewEvent)) event.id: event,
+        }.values.toList();
+        _pastLoaded = true;
+      });
+      widget.onChanged();
+    } catch (_) {
+      if (mounted) setState(() => _pastFailed = true);
+    } finally {
+      if (mounted) setState(() => _loadingPast = false);
+    }
   }
+
+  Widget _pastPaging() => Row(
+    mainAxisAlignment: MainAxisAlignment.center,
+    children: [
+      if (_loadingPast)
+        const SizedBox(
+          width: 20,
+          height: 20,
+          child: CircularProgressIndicator(strokeWidth: 2),
+        ),
+      if (_pastFailed)
+        TextButton(
+          onPressed: () => _loadPastEvents(force: true),
+          child: Text(AppLocalizations.of(context)!.retry),
+        ),
+      if (!_loadingPast && _pastCursor != null)
+        IconButton(
+          tooltip: MaterialLocalizations.of(context).moreButtonTooltip,
+          onPressed: () => _loadPastEvents(append: true),
+          icon: const Icon(Icons.expand_more),
+        ),
+    ],
+  );
 
   void _handleEventChanged() {
     widget.onChanged();
@@ -1701,6 +1853,7 @@ class _EventsTabState extends State<_EventsTab> {
             onChanged: (i) => _selectFilter(segments[i]),
           ),
         ),
+        if (_filter == 'past') _pastPaging(),
         Expanded(
           child: _filter == 'past' && _loadingPast && !_pastLoaded
               ? const Center(child: CircularProgressIndicator())
@@ -1841,6 +1994,7 @@ class _EventsTabState extends State<_EventsTab> {
         ),
 
         // Cards / empty state.
+        if (_filter == 'past') _pastPaging(),
         Expanded(
           child: _filter == 'past' && _loadingPast && !_pastLoaded
               ? const Center(child: CircularProgressIndicator())

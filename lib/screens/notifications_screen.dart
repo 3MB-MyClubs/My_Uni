@@ -700,6 +700,42 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
                         else ...[
                           for (final group in _Group.values)
                             ..._buildGroup(group, all),
+                          if (notificationInboxService.hasMore)
+                            SliverToBoxAdapter(
+                              child: Center(
+                                child: IconButton(
+                                  tooltip: MaterialLocalizations.of(
+                                    context,
+                                  ).moreButtonTooltip,
+                                  onPressed:
+                                      notificationInboxService.isLoadingOlder
+                                      ? null
+                                      : () => unawaited(
+                                          notificationInboxService.loadOlder(),
+                                        ),
+                                  icon: notificationInboxService.isLoadingOlder
+                                      ? const SizedBox(
+                                          width: 20,
+                                          height: 20,
+                                          child: CircularProgressIndicator(
+                                            strokeWidth: 2,
+                                          ),
+                                        )
+                                      : const Icon(Icons.expand_more),
+                                ),
+                              ),
+                            ),
+                          if (notificationInboxService.pageError != null)
+                            SliverToBoxAdapter(
+                              child: TextButton(
+                                onPressed: () => unawaited(
+                                  notificationInboxService.loadOlder(),
+                                ),
+                                child: Text(
+                                  AppLocalizations.of(context)!.retry,
+                                ),
+                              ),
+                            ),
                           SliverToBoxAdapter(child: _buildFooter()),
                         ],
                       ],

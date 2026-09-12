@@ -1,3 +1,4 @@
+import 'focused_read_service.dart';
 import 'dart:async';
 
 import 'package:supabase_flutter/supabase_flutter.dart' hide User;
@@ -130,25 +131,30 @@ class SupabaseInteractionService {
     required String postId,
     required bool liked,
   }) async {
-    final client = _client;
-    if (client == null || profileId.isEmpty || postId.isEmpty) return;
+    focusedReadService.invalidate();
+    try {
+      final client = _client;
+      if (client == null || profileId.isEmpty || postId.isEmpty) return;
 
-    supabaseReadCache.invalidate(_key('liked-posts', profileId));
-    supabaseReadCache.invalidate(_key('post-likers', postId));
-    _invalidatePostLikerPreview(postId);
-    _invalidateBatch('post-like-counts', postId);
+      supabaseReadCache.invalidate(_key('liked-posts', profileId));
+      supabaseReadCache.invalidate(_key('post-likers', postId));
+      _invalidatePostLikerPreview(postId);
+      _invalidateBatch('post-like-counts', postId);
 
-    if (liked) {
-      await _insertIgnoringDuplicate(client, 'post_likes', {
-        'profile_id': profileId,
-        'post_id': postId,
-      });
-    } else {
-      await client
-          .from('post_likes')
-          .delete()
-          .eq('profile_id', profileId)
-          .eq('post_id', postId);
+      if (liked) {
+        await _insertIgnoringDuplicate(client, 'post_likes', {
+          'profile_id': profileId,
+          'post_id': postId,
+        });
+      } else {
+        await client
+            .from('post_likes')
+            .delete()
+            .eq('profile_id', profileId)
+            .eq('post_id', postId);
+      }
+    } finally {
+      focusedReadService.invalidate();
     }
   }
 
@@ -417,31 +423,36 @@ class SupabaseInteractionService {
     required String eventId,
     required bool attending,
   }) async {
-    if (profileId.isEmpty || eventId.isEmpty) return;
+    focusedReadService.invalidate();
+    try {
+      if (profileId.isEmpty || eventId.isEmpty) return;
 
-    // Keep every read surface from restoring the pre-mutation snapshot after
-    // the optimistic store update. Feed v2 carries viewer RSVP state inside
-    // its cached page, while the other keys hold the profile/attendee reads.
-    supabaseReadCache.invalidate(_key('rsvp-events', profileId));
-    supabaseReadCache.invalidate(_key('event-attendees', eventId));
-    _invalidateBatch('event-rsvp-counts', eventId);
-    _invalidateBatch('event-checkin-counts', eventId);
-    supabaseFeedV2Service.invalidateFirstPages();
+      // Keep every read surface from restoring the pre-mutation snapshot after
+      // the optimistic store update. Feed v2 carries viewer RSVP state inside
+      // its cached page, while the other keys hold the profile/attendee reads.
+      supabaseReadCache.invalidate(_key('rsvp-events', profileId));
+      supabaseReadCache.invalidate(_key('event-attendees', eventId));
+      _invalidateBatch('event-rsvp-counts', eventId);
+      _invalidateBatch('event-checkin-counts', eventId);
+      supabaseFeedV2Service.invalidateFirstPages();
 
-    final client = _client;
-    if (client == null) return;
+      final client = _client;
+      if (client == null) return;
 
-    if (attending) {
-      await _insertIgnoringDuplicate(client, 'event_rsvps', {
-        'profile_id': profileId,
-        'event_id': eventId,
-      });
-    } else {
-      await client
-          .from('event_rsvps')
-          .delete()
-          .eq('profile_id', profileId)
-          .eq('event_id', eventId);
+      if (attending) {
+        await _insertIgnoringDuplicate(client, 'event_rsvps', {
+          'profile_id': profileId,
+          'event_id': eventId,
+        });
+      } else {
+        await client
+            .from('event_rsvps')
+            .delete()
+            .eq('profile_id', profileId)
+            .eq('event_id', eventId);
+      }
+    } finally {
+      focusedReadService.invalidate();
     }
   }
 
@@ -583,33 +594,43 @@ class SupabaseInteractionService {
     required int optionIndex,
     String? pollId,
   }) async {
-    final client = _client;
-    final profileId = client?.auth.currentUser?.id ?? '';
-    if (client == null || postId.isEmpty || profileId.isEmpty) return;
+    focusedReadService.invalidate();
+    try {
+      final client = _client;
+      final profileId = client?.auth.currentUser?.id ?? '';
+      if (client == null || postId.isEmpty || profileId.isEmpty) return;
 
-    supabaseReadCache.invalidate(_key('poll-votes', postId));
+      supabaseReadCache.invalidate(_key('poll-votes', postId));
 
-    pollId ??= await _pollIdForPost(client, postId);
-    if (pollId == null) return;
+      pollId ??= await _pollIdForPost(client, postId);
+      if (pollId == null) return;
 
-    await client.rpc(
-      'vote_poll_v2',
-      params: {'p_poll_id': pollId, 'p_option_index': optionIndex},
-    );
+      await client.rpc(
+        'vote_poll_v2',
+        params: {'p_poll_id': pollId, 'p_option_index': optionIndex},
+      );
+    } finally {
+      focusedReadService.invalidate();
+    }
   }
 
   /// Removes the authenticated caller's vote. The current product UI does not
   /// expose this yet, but keeping the v2 operation here avoids any future need
   /// to reintroduce a caller-supplied voter id.
   Future<void> removePollVote({required String postId, String? pollId}) async {
-    final client = _client;
-    if (client == null || postId.isEmpty) return;
+    focusedReadService.invalidate();
+    try {
+      final client = _client;
+      if (client == null || postId.isEmpty) return;
 
-    supabaseReadCache.invalidate(_key('poll-votes', postId));
-    pollId ??= await _pollIdForPost(client, postId);
-    if (pollId == null) return;
+      supabaseReadCache.invalidate(_key('poll-votes', postId));
+      pollId ??= await _pollIdForPost(client, postId);
+      if (pollId == null) return;
 
-    await client.rpc('remove_poll_vote_v2', params: {'p_poll_id': pollId});
+      await client.rpc('remove_poll_vote_v2', params: {'p_poll_id': pollId});
+    } finally {
+      focusedReadService.invalidate();
+    }
   }
 
   // ── Comments ────────────────────────────────────────────────────────────────

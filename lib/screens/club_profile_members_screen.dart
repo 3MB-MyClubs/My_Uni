@@ -1,3 +1,6 @@
+import '../services/account_switcher_service.dart';
+import '../services/focused_read_service.dart';
+import '../services/paged_controller.dart';
 import 'dart:async' show unawaited;
 
 import 'package:flutter/material.dart';
@@ -43,17 +46,25 @@ class _ClubProfileMembersScreenState extends State<ClubProfileMembersScreen> {
   final TextEditingController _search = TextEditingController();
   late List<User> _members = _sorted(widget.initialMembers);
   String _query = '';
+  final _pages = PagedController<Map<String, dynamic>>(
+    idOf: (row) => row['id'].toString(),
+  );
+  int _pageRevision = -1;
   bool _loading = true;
   bool _loadFailed = false;
 
   @override
   void initState() {
     super.initState();
+    _pages.addListener(_pageChanged);
+    accountSwitcherService.addListener(_accountChanged);
     unawaited(_loadMembers());
   }
 
   @override
   void dispose() {
+    accountSwitcherService.removeListener(_accountChanged);
+    _pages.dispose();
     _search.dispose();
     super.dispose();
   }
@@ -72,7 +83,48 @@ class _ClubProfileMembersScreenState extends State<ClubProfileMembersScreen> {
     return members;
   }
 
+  void _accountChanged() {
+    _members = [];
+    _pages.reset();
+    unawaited(_loadMembers());
+  }
+
+  void _pageChanged() {
+    if (!mounted) return;
+    if (_pageRevision != _pages.revision) {
+      _pageRevision = _pages.revision;
+      if (_pages.loaded) {
+        _members = peopleService.mergeDirectoryRows(
+          _pages.items,
+          clubId: widget.club.id,
+        );
+      }
+    }
+    setState(() {
+      _loading = _pages.loading;
+      _loadFailed = _pages.error != null;
+    });
+  }
+
+  Future<void> _loadRemoteMembers({bool debounce = false}) async {
+    final params = {
+      'p_club_id': widget.club.id,
+      'p_query': _query,
+      'p_limit': 25,
+    };
+    await _pages.load(
+      (cursor) => focusedReadService.page(
+        'get_club_members_page_v1',
+        params,
+        cursor: cursor,
+      ),
+      cached: focusedReadService.cached('get_club_members_page_v1', params),
+      debounce: debounce ? const Duration(milliseconds: 250) : Duration.zero,
+    );
+  }
+
   Future<void> _loadMembers() async {
+    if (focusedReadService.available) return _loadRemoteMembers();
     try {
       final fetched = await peopleService.fetchClubMembers(widget.club.id);
       if (!mounted) return;
@@ -162,10 +214,25 @@ class _ClubProfileMembersScreenState extends State<ClubProfileMembersScreen> {
                 child: ClubProfileSearchField(
                   controller: _search,
                   hint: S.clubProfileSearchMembers,
-                  onChanged: (value) => setState(() => _query = value),
+                  onChanged: (value) {
+                    setState(() => _query = value);
+                    if (focusedReadService.available) {
+                      unawaited(_loadRemoteMembers(debounce: true));
+                    }
+                  },
                 ),
               ),
             ),
+            if (focusedReadService.available &&
+                _pages.hasMore &&
+                !_pages.loading)
+              IconButton(
+                tooltip: MaterialLocalizations.of(context).moreButtonTooltip,
+                onPressed: _pages.loadMore,
+                icon: const Icon(Icons.expand_more),
+              ),
+            if (focusedReadService.available && _pages.error != null)
+              TextButton(onPressed: _pages.retry, child: Text(l10n.retry)),
             Expanded(
               child: _loading && _members.isEmpty
                   ? const Center(

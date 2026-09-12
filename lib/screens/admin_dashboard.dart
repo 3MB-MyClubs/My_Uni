@@ -9,7 +9,9 @@ import '../services/app_colors.dart';
 import '../services/auth_service.dart';
 import '../services/club_insights_service.dart';
 import '../services/content_store.dart';
-import '../services/lazy_content_loader.dart';
+import '../services/focused_read_service.dart';
+import '../services/supabase_content_service.dart';
+import '../widgets/remote_content_pane.dart';
 import '../services/locale_service.dart';
 import '../services/mock_clubup_profile.dart';
 import '../services/mock_data.dart';
@@ -49,6 +51,8 @@ class _AdminDashboardState extends State<AdminDashboard> {
   final Set<String> _deletingEventIds = {};
   int _peopleCount = 0;
   bool _refreshing = false;
+  Map<String, dynamic>? _overviewData;
+  List<Club> _rankedClubs = [];
 
   @override
   void initState() {
@@ -79,7 +83,21 @@ class _AdminDashboardState extends State<AdminDashboard> {
     if (_refreshing) return;
     if (mounted) setState(() => _refreshing = true);
     try {
-      await lazyContentLoader.ensureContentLoaded(force: true);
+      if (focusedReadService.available) {
+        final response = await focusedReadService.read<Map>(
+          'get_admin_overview_v1',
+          {},
+          force: true,
+        );
+        if (!mounted) return;
+        _overviewData = Map<String, dynamic>.from(response);
+        _rankedClubs = supabaseContentService.mergeClubRows([
+          for (final row in response['leaders'] as List)
+            Map<String, dynamic>.from(row as Map),
+        ]);
+        setState(() => _peopleCount = (response['students'] as num).toInt());
+        return;
+      }
       final people = await peopleService.fetchPeople();
       if (!mounted) return;
       setState(() => _peopleCount = people.length);
@@ -104,8 +122,7 @@ class _AdminDashboardState extends State<AdminDashboard> {
   // MainNavScreen's floating bottom navigation overlays this dashboard's
   // inner Scaffold, so keep enough room for the final row to scroll clear of
   // it on devices with and without a bottom safe-area inset.
-  double get _bottomScrollInset =>
-      128 + MediaQuery.of(context).padding.bottom;
+  double get _bottomScrollInset => 128 + MediaQuery.of(context).padding.bottom;
 
   Future<void> _confirmAndLogout() async {
     if (widget.onLogout == null) return;
@@ -259,14 +276,43 @@ class _AdminDashboardState extends State<AdminDashboard> {
             ],
           ),
         ),
-        body: TabBarView(children: [_overviewTab(), _postsTab(), _eventsTab()]),
+        body: TabBarView(
+          children: [
+            _overviewTab(),
+            RemoteContentPane(
+              kind: 'posts',
+              builder: (context, ids) => _postsTab(ids),
+            ),
+            RemoteContentPane(
+              kind: 'events',
+              descending: true,
+              builder: (context, ids) => _eventsTab(ids),
+            ),
+          ],
+        ),
       ),
     );
   }
 
   Widget _overviewTab() {
-    final ranked = [...clubs];
+    final ranked = _overviewData == null ? [...clubs] : [..._rankedClubs];
     final stats = clubInsightsService.computeAll(ranked);
+    if (_overviewData != null) {
+      for (final raw in _overviewData!['leaders'] as List) {
+        final row = raw as Map;
+        stats[row['id'].toString()] = ClubInsightsData(
+          followers: (row['member_count'] as num).toInt(),
+          totalRsvps: (row['total_rsvps'] as num).toInt(),
+          totalLikes: 0,
+          totalViews: 0,
+          postCount: 0,
+          since:
+              DateTime.tryParse(row['created_at'].toString()) ?? DateTime.now(),
+          events: const [],
+          topPosts: const [],
+        );
+      }
+    }
     ranked.sort((a, b) {
       final byFollowers = stats[b.id]!.followers.compareTo(
         stats[a.id]!.followers,
@@ -291,15 +337,27 @@ class _AdminDashboardState extends State<AdminDashboard> {
                 Icons.school_outlined,
               ),
               const SizedBox(width: 10),
-              _tile(l10n.clubs, clubs.length, Icons.groups_2_outlined),
+              _tile(
+                l10n.clubs,
+                (_overviewData?['clubs'] as num?)?.toInt() ?? clubs.length,
+                Icons.groups_2_outlined,
+              ),
             ],
           ),
           const SizedBox(height: 10),
           Row(
             children: [
-              _tile(l10n.events, events.length, Icons.event_outlined),
+              _tile(
+                l10n.events,
+                (_overviewData?['events'] as num?)?.toInt() ?? events.length,
+                Icons.event_outlined,
+              ),
               const SizedBox(width: 10),
-              _tile(l10n.posts, newsPosts.length, Icons.article_outlined),
+              _tile(
+                l10n.posts,
+                (_overviewData?['posts'] as num?)?.toInt() ?? newsPosts.length,
+                Icons.article_outlined,
+              ),
             ],
           ),
           const SizedBox(height: 24),
@@ -320,9 +378,10 @@ class _AdminDashboardState extends State<AdminDashboard> {
     );
   }
 
-  Widget _postsTab() {
-    final allPosts = [...newsPosts]
-      ..sort((a, b) => b.createdAt.compareTo(a.createdAt));
+  Widget _postsTab([Set<String>? ids]) {
+    final allPosts =
+        newsPosts.where((post) => ids == null || ids.contains(post.id)).toList()
+          ..sort((a, b) => b.createdAt.compareTo(a.createdAt));
     if (allPosts.isEmpty) {
       return _emptyTab(AppLocalizations.of(context)!.noPostsYet);
     }
@@ -390,9 +449,10 @@ class _AdminDashboardState extends State<AdminDashboard> {
     );
   }
 
-  Widget _eventsTab() {
-    final allEvents = [...events]
-      ..sort((a, b) => b.dateTime.compareTo(a.dateTime));
+  Widget _eventsTab([Set<String>? ids]) {
+    final allEvents =
+        events.where((event) => ids == null || ids.contains(event.id)).toList()
+          ..sort((a, b) => b.dateTime.compareTo(a.dateTime));
     if (allEvents.isEmpty) {
       return _emptyTab(AppLocalizations.of(context)!.noEventsYet);
     }

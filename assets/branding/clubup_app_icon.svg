@@ -4,7 +4,7 @@
      height="1024"
      viewBox="0 0 1024 1024">
   <title>ClubUp app icon</title>
-  <desc>A white location pin containing a three-person community mark on a maroon background.</desc>
+  <desc>A pink location pin containing a three-person community mark on a near-black background.</desc>
   <defs>
     <mask id="clubup-mark" maskUnits="userSpaceOnUse" x="0" y="0" width="1024" height="1024">
       <rect width="1024" height="1024" fill="black"/>
@@ -19,7 +19,7 @@
         C 834 258 705 124 512 124
         Z"/>
 
-      <!-- Community field, cut through the white pin to reveal maroon. -->
+      <!-- Community field, cut through the pin to reveal the background. -->
       <circle cx="512" cy="426" r="210" fill="black"/>
 
       <!-- Three people and the three open links between them. -->
@@ -46,6 +46,12 @@
   </defs>
 
   <!-- Full bleed: platform launchers apply their own corner mask. -->
-  <rect width="1024" height="1024" fill="#9E2045"/>
-  <rect width="1024" height="1024" fill="white" mask="url(#clubup-mark)"/>
+  <defs>
+    <linearGradient id="clubup-ground" x1="0" y1="0" x2="0" y2="1024" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#222225"/>
+      <stop offset="1" stop-color="#151518"/>
+    </linearGradient>
+  </defs>
+  <rect width="1024" height="1024" fill="url(#clubup-ground)"/>
+  <rect width="1024" height="1024" fill="#E3466C" mask="url(#clubup-mark)"/>
 </svg>

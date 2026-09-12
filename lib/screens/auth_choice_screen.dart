@@ -83,8 +83,8 @@ class AuthChoiceScreen extends StatelessWidget {
                       Center(
                         child: TextButton(
                           onPressed: () => Navigator.of(context).push(
-                            _fadeSlideRoute(
-                              ClubAdminAuthScreen(
+                            MaterialPageRoute<void>(
+                              builder: (_) => ClubAdminAuthScreen(
                                 onAdminLogin: () {
                                   Navigator.of(context).pop();
                                   onAdminLogin();
@@ -272,19 +272,4 @@ class AuthChoiceScreen extends StatelessWidget {
       ],
     );
   }
-
-  Route _fadeSlideRoute(Widget page) => PageRouteBuilder(
-    pageBuilder: (context, animation, secondaryAnimation) => page,
-    transitionsBuilder: (context, animation, secondaryAnimation, child) {
-      final slide = Tween<Offset>(
-        begin: const Offset(0, 0.06),
-        end: Offset.zero,
-      ).animate(CurvedAnimation(parent: animation, curve: Curves.easeOutCubic));
-      return FadeTransition(
-        opacity: animation,
-        child: SlideTransition(position: slide, child: child),
-      );
-    },
-    transitionDuration: const Duration(milliseconds: 320),
-  );
 }

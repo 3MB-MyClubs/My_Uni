@@ -2671,6 +2671,7 @@ export type Database = {
         Args: { p_club_id: string; p_post_id: string }
         Returns: Json
       }
+      directory_fold_v1: { Args: { p_text: string }; Returns: string }
       expand_notification_outbox_v2: {
         Args: {
           p_batch_size?: number
@@ -2690,12 +2691,53 @@ export type Database = {
         }
         Returns: undefined
       }
+      get_admin_overview_v1: { Args: never; Returns: Json }
+      get_club_content_counts_v1: { Args: { p_club_id: string }; Returns: Json }
+      get_club_members_page_v1: {
+        Args: {
+          p_club_id: string
+          p_cursor?: Json
+          p_limit?: number
+          p_query?: string
+        }
+        Returns: Json
+      }
+      get_content_page_v1: {
+        Args: {
+          p_category?: string
+          p_club_id?: string
+          p_cursor?: Json
+          p_descending?: boolean
+          p_from?: string
+          p_kind?: string
+          p_limit?: number
+          p_query?: string
+          p_until?: string
+        }
+        Returns: Json
+      }
       get_conversation_summaries_v2: {
         Args: {
           p_cursor_activity_at?: string
           p_cursor_thread_id?: string
           p_limit?: number
         }
+        Returns: Json
+      }
+      get_directory_categories_v1: { Args: never; Returns: Json }
+      get_directory_page_v1: {
+        Args: {
+          p_cursor?: Json
+          p_filters?: Json
+          p_kind?: string
+          p_language?: string
+          p_limit?: number
+          p_query?: string
+        }
+        Returns: Json
+      }
+      get_event_categories_v1: {
+        Args: { p_from: string; p_until: string }
         Returns: Json
       }
       get_feed_page_v2: {

@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import '../l10n/app_localizations.dart';
 import '../services/locale_service.dart';
@@ -8,7 +9,10 @@ import '../services/academic_year_options.dart';
 import '../services/app_strings.dart';
 import '../services/auth_service.dart';
 import '../services/guest_world.dart' show kGuestIdPrefix;
-import '../services/lazy_content_loader.dart';
+import '../services/focused_read_service.dart';
+import '../services/paged_controller.dart';
+import '../services/supabase_content_service.dart';
+import '../services/account_switcher_service.dart';
 import '../services/mock_data.dart';
 import '../services/people_service.dart';
 import '../services/personalization_service.dart'
@@ -112,6 +116,128 @@ class ExploreScreen extends StatefulWidget {
 class _ExploreScreenState extends State<ExploreScreen> {
   final _searchController = TextEditingController();
   String _query = '';
+  final _clubPages = PagedController<Map<String, dynamic>>(
+    idOf: (row) => row['id'].toString(),
+  );
+  final _peoplePages = PagedController<Map<String, dynamic>>(
+    idOf: (row) => row['id'].toString(),
+  );
+  List<String> _remoteCategories = [];
+  List<Club> _remoteClubs = [];
+  List<User> _remotePeople = [];
+  int _clubPageRevision = -1;
+  int _peoplePageRevision = -1;
+  bool get _remoteDirectory => focusedReadService.available;
+
+  void _onDirectoryChanged() {
+    if (!mounted) return;
+    if (_clubPageRevision != _clubPages.revision) {
+      _clubPageRevision = _clubPages.revision;
+      final changed = supabaseContentService.mergeClubRows(
+        _clubPages.changedItems,
+      );
+      final byId = {
+        for (final club in _remoteClubs) club.id: club,
+        for (final club in changed) club.id: club,
+      };
+      _remoteClubs = [
+        for (final row in _clubPages.items)
+          if (byId[row['id']] != null) byId[row['id']]!,
+      ];
+    }
+    if (_peoplePageRevision != _peoplePages.revision) {
+      _peoplePageRevision = _peoplePages.revision;
+      final changed = peopleService.mergeDirectoryRows(
+        _peoplePages.changedItems,
+      );
+      final byId = {
+        for (final person in _remotePeople) person.id: person,
+        for (final person in changed) person.id: person,
+      };
+      _remotePeople = [
+        for (final row in _peoplePages.items)
+          if (byId[row['id']] != null) byId[row['id']]!,
+      ];
+    }
+    setState(() {
+      _peopleLoading = _peoplePages.loading;
+      _peopleHasError = _peoplePages.error != null;
+    });
+  }
+
+  Future<void> _loadDirectoryCategories() async {
+    final actor = focusedReadService.scope;
+    try {
+      final names = await focusedReadService.read<List<dynamic>>(
+        'get_directory_categories_v1',
+        {},
+      );
+      if (mounted && actor == focusedReadService.scope) {
+        setState(() => _remoteCategories = names.whereType<String>().toList());
+      }
+    } catch (_) {
+      /* Existing categories remain available while offline. */
+    }
+  }
+
+  void _reloadDirectory({bool debounce = false, bool force = false}) {
+    if (!_remoteDirectory) return;
+    final filters = <String, dynamic>{
+      'categories': _filters.categories.toList()..sort(),
+      'majors': _filters.majors.toList()..sort(),
+      'years': _filters.years.toList()..sort(),
+      'sort': _filters.clubSort.name,
+    };
+    for (final entry in {
+      'clubs': _clubPages,
+      'students': _peoplePages,
+    }.entries) {
+      final params = focusedReadService.directoryParams(
+        kind: entry.key,
+        query: _query,
+        filters: filters,
+      );
+      unawaited(
+        entry.value.load(
+          (cursor) => focusedReadService.page(
+            'get_directory_page_v1',
+            params,
+            cursor: cursor,
+            force: force,
+          ),
+          cached: focusedReadService.cached('get_directory_page_v1', params),
+          debounce: debounce
+              ? const Duration(milliseconds: 250)
+              : Duration.zero,
+        ),
+      );
+    }
+  }
+
+  void _onAccountChanged() {
+    _clubPages.reset();
+    _peoplePages.reset();
+    _remoteClubs = [];
+    _remotePeople = [];
+    _remoteCategories = [];
+    _reloadDirectory();
+    if (_remoteDirectory) unawaited(_loadDirectoryCategories());
+  }
+
+  void _changeQuery(String value) {
+    setState(() => _query = value);
+    _reloadDirectory(debounce: true);
+  }
+
+  void _loadMoreDirectory() {
+    if (!_remoteDirectory) return;
+    if (_searchingClubs || _searchingAllDirectories || !_showingResults) {
+      unawaited(_clubPages.loadMore());
+    }
+    if (!_searchingClubs || _searchingAllDirectories || !_showingResults) {
+      unawaited(_peoplePages.loadMore());
+    }
+  }
 
   late SearchFilters _filters = SearchFilters(
     scope: widget.initialTabIndex == 1
@@ -166,12 +292,23 @@ class _ExploreScreenState extends State<ExploreScreen> {
     super.initState();
     localeService.addListener(_onLocaleChanged);
     themeService.addListener(_onLocaleChanged);
-    _loadClubContent();
-    _loadPeople();
+    _clubPages.addListener(_onDirectoryChanged);
+    _peoplePages.addListener(_onDirectoryChanged);
+    accountSwitcherService.addListener(_onAccountChanged);
+    if (_remoteDirectory) {
+      _reloadDirectory();
+      unawaited(_loadDirectoryCategories());
+      unawaited(peopleService.hydrateFollowing(_myId));
+    } else {
+      _loadPeople();
+    }
   }
 
   @override
   void dispose() {
+    _clubPages.dispose();
+    _peoplePages.dispose();
+    accountSwitcherService.removeListener(_onAccountChanged);
     _searchController.dispose();
     localeService.removeListener(_onLocaleChanged);
     themeService.removeListener(_onLocaleChanged);
@@ -182,19 +319,11 @@ class _ExploreScreenState extends State<ExploreScreen> {
     if (mounted) setState(() {});
   }
 
-  Future<void> _loadClubContent() async {
-    try {
-      await lazyContentLoader.ensureContentLoaded();
-      if (mounted) setState(() {});
-    } catch (_) {
-      // Keep local seed clubs visible if Supabase content is unreachable.
-    }
-  }
-
   // ─── Club data ───────────────────────────────────────────────────────────
 
-  List<Club> get _visibleClubs =>
-      clubs.where((c) => !moderationService.isClubBlocked(c.id)).toList();
+  List<Club> get _visibleClubs => (_remoteDirectory ? _remoteClubs : clubs)
+      .where((c) => !moderationService.isClubBlocked(c.id))
+      .toList();
 
   /// Most recent post for a club, used by the "Recently Active" sort. Falls
   /// back to when the club itself was created so every club still orders.
@@ -216,6 +345,11 @@ class _ExploreScreenState extends State<ExploreScreen> {
   }
 
   List<Club> get _resultClubs {
+    if (_remoteDirectory) {
+      return _remoteClubs
+          .where((c) => !moderationService.isClubBlocked(c.id))
+          .toList();
+    }
     final q = _query.toLowerCase().trim();
     final categories = _filters.categories;
 
@@ -257,6 +391,7 @@ class _ExploreScreenState extends State<ExploreScreen> {
   // ─── People data ─────────────────────────────────────────────────────────
 
   List<User> get _peopleDirectory {
+    if (_remoteDirectory) return _remotePeople;
     final byId = <String, User>{
       for (final person in peopleService.cachedPeople) person.id: person,
       for (final person in _people) person.id: person,
@@ -292,6 +427,11 @@ class _ExploreScreenState extends State<ExploreScreen> {
   /// Search by first name, surname, or display name, with strongest matches
   /// first, intersected with the major and year filters.
   List<User> get _resultPeople {
+    if (_remoteDirectory) {
+      return _remotePeople
+          .where((p) => !moderationService.isUserBlocked(p.id))
+          .toList();
+    }
     final q = _query.toLowerCase().trim();
     final majors = _filters.majors.map(normalizeAcademicProgramName).toSet();
     final years = _filters.years;
@@ -401,9 +541,15 @@ class _ExploreScreenState extends State<ExploreScreen> {
     return [for (final id in _suggestedProfileIds) ?candidatesById[id]];
   }
 
+  final Set<String> _pendingFollows = {};
+
   void _persist() => userPrefsService.save(_myId);
 
   Future<void> _loadPeople() async {
+    if (_remoteDirectory) {
+      _reloadDirectory(force: true);
+      return;
+    }
     if (_peopleLoading) return;
     setState(() {
       _peopleLoading = true;
@@ -429,7 +575,7 @@ class _ExploreScreenState extends State<ExploreScreen> {
   }
 
   Future<void> _togglePersonFollow(User person) async {
-    if (!_canFollowPeople) return;
+    if (!_canFollowPeople || !_pendingFollows.add(person.id)) return;
 
     final nowFollowing = !userState.isFollowingUser(person.id);
     final feedbackVersion = ++_peopleFeedbackVersion;
@@ -460,6 +606,8 @@ class _ExploreScreenState extends State<ExploreScreen> {
         _peopleFeedback = AppLocalizations.of(context)!.couldNotUpdateFollow;
       });
       return;
+    } finally {
+      _pendingFollows.remove(person.id);
     }
 
     Future.delayed(const Duration(seconds: 2), () {
@@ -486,7 +634,9 @@ class _ExploreScreenState extends State<ExploreScreen> {
       l10n.categorySocial,
       l10n.categoryAcademic,
     ];
-    return ordered.where(present.contains).toList();
+    return _remoteDirectory
+        ? {...ordered, ..._remoteCategories, ...present}.toList()
+        : ordered.where(present.contains).toList();
   }
 
   Future<void> _openFilters() async {
@@ -510,6 +660,7 @@ class _ExploreScreenState extends State<ExploreScreen> {
         _peopleFeedback = null;
         _peopleFeedbackVersion++;
       });
+      _reloadDirectory();
       return;
     }
 
@@ -517,6 +668,7 @@ class _ExploreScreenState extends State<ExploreScreen> {
       _filters = result.filters;
       _directoryScopeApplied = true;
     });
+    _reloadDirectory();
   }
 
   // ─── Build ───────────────────────────────────────────────────────────────
@@ -534,7 +686,47 @@ class _ExploreScreenState extends State<ExploreScreen> {
               _searchBar(),
               _followFeedback(),
               Expanded(
-                child: _showingResults ? _resultsList() : _discoveryList(),
+                child: NotificationListener<ScrollNotification>(
+                  onNotification: (notification) {
+                    if (notification.metrics.axis == Axis.vertical &&
+                        notification.metrics.extentAfter < 300 &&
+                        _showingResults) {
+                      _loadMoreDirectory();
+                    }
+                    return false;
+                  },
+                  child: Column(
+                    children: [
+                      Expanded(
+                        child: _showingResults
+                            ? _resultsList()
+                            : _discoveryList(),
+                      ),
+                      if (_remoteDirectory &&
+                          (_clubPages.loading || _peoplePages.loading))
+                        const LinearProgressIndicator(minHeight: 2),
+                      if (_remoteDirectory &&
+                          (_clubPages.error != null ||
+                              _peoplePages.error != null))
+                        TextButton(
+                          onPressed: () {
+                            unawaited(_clubPages.retry());
+                            unawaited(_peoplePages.retry());
+                          },
+                          child: Text(AppLocalizations.of(context)!.retry),
+                        ),
+                      if (_remoteDirectory &&
+                          _showingResults &&
+                          !_clubPages.loading &&
+                          !_peoplePages.loading &&
+                          (_clubPages.hasMore || _peoplePages.hasMore))
+                        TextButton(
+                          onPressed: _loadMoreDirectory,
+                          child: const Icon(Icons.expand_more),
+                        ),
+                    ],
+                  ),
+                ),
               ),
             ],
           ),
@@ -573,7 +765,7 @@ class _ExploreScreenState extends State<ExploreScreen> {
             Expanded(
               child: TextField(
                 controller: _searchController,
-                onChanged: (value) => setState(() => _query = value),
+                onChanged: _changeQuery,
                 style: figtree(
                   size: 14,
                   weight: FontWeight.w400,
@@ -606,7 +798,7 @@ class _ExploreScreenState extends State<ExploreScreen> {
                 child: GestureDetector(
                   onTap: () {
                     _searchController.clear();
-                    setState(() => _query = '');
+                    _changeQuery('');
                   },
                   child: Icon(
                     Icons.close_rounded,

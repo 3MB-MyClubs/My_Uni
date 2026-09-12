@@ -177,6 +177,7 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
   @override
   void initState() {
     super.initState();
+    chatStore.activeThreadId = widget.threadId;
     final club = _club;
     if (club != null) {
       _communityInfo = ClubCommunityInfoController(
@@ -231,6 +232,9 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
 
   @override
   void dispose() {
+    if (chatStore.activeThreadId == widget.threadId) {
+      chatStore.activeThreadId = null;
+    }
     WidgetsBinding.instance.removeObserver(this);
     themeService.removeListener(_onEnvChanged);
     localeService.removeListener(_onEnvChanged);
@@ -1863,18 +1867,30 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
             ),
           ),
         ),
-        // The row grows into the chips instead of jumping a line taller the
-        // instant a reaction lands.
-        AnimatedSize(
-          duration: const Duration(milliseconds: 200),
-          curve: Curves.easeOutCubic,
-          alignment: mine ? Alignment.centerRight : Alignment.centerLeft,
-          child: m.reactions.isEmpty
-              ? const SizedBox.shrink()
-              : Padding(
-                  padding: const EdgeInsets.only(top: 4),
-                  child: _designReactionChips(m, alignEnd: mine),
-                ),
+        // The faces sit on the bubble's bottom edge rather than on a line of
+        // their own: pulled up over the corner, and inset from it so they read
+        // as a mark on the box. The row grows into them instead of the bubble
+        // jumping a line taller the instant a reaction lands.
+        Transform.translate(
+          // Enough of a pull that the glyph itself — not just its text box —
+          // lands on the bubble's edge: an emoji sits low inside its line.
+          offset: const Offset(0, -9),
+          child: AnimatedSize(
+            duration: const Duration(milliseconds: 200),
+            curve: Curves.easeOutCubic,
+            alignment: mine ? Alignment.centerRight : Alignment.centerLeft,
+            child: m.reactions.isEmpty
+                ? const SizedBox.shrink()
+                : Padding(
+                    // The bubble reserves its tail strip on the sender's side,
+                    // so the inset has to clear that before the corner.
+                    padding: EdgeInsets.only(
+                      left: mine ? 0 : kChatBubbleTailWidth + 6,
+                      right: mine ? kChatBubbleTailWidth + 6 : 0,
+                    ),
+                    child: _designReactionChips(m, alignEnd: mine),
+                  ),
+          ),
         ),
       ],
     );
@@ -2022,7 +2038,6 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
     final faces = m.reactions.keys.toSet();
     final seen = _seenReactions[m.id];
     _seenReactions[m.id] = faces;
-    final dark = themeService.isDark;
     return ChatReactionStrip(
       // Keyed on the message so a bubble keeps its own opened/stacked state
       // across the rebuild every new reaction triggers.
@@ -2032,17 +2047,12 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
       myId: _myId,
       alignEnd: alignEnd,
       newEmojis: seen == null ? const <String>{} : faces.difference(seen),
-      style: ChatReactionStyle(
-        // Your own reaction is a soft wash, not an outlined chip: a burgundy
-        // ring around an emoji reads as a warning, and the frame is the
-        // loudest thing in a quiet thread.
-        mineFill: dark
-            ? const Color(0xFFE8A1A6).withValues(alpha: 0.18)
-            : ChatsColors.accent.withValues(alpha: 0.10),
-        otherFill: ChatsColors.card,
-        border: ChatsColors.border,
+      // No pill at all: the faces hang off the bubble's bottom edge as a mark
+      // that somebody reacted, and a chip's fill and frame would be the
+      // loudest thing in a quiet thread.
+      style: ChatReactionStyle.bare(
         label: figtree(
-          size: 12,
+          size: 13,
           weight: FontWeight.w600,
           color: ChatsColors.muted,
         ),
