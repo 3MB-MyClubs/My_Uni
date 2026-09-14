@@ -54,10 +54,21 @@ class ExploreScreen extends StatefulWidget {
   @override
   State<ExploreScreen> createState() => _ExploreScreenState();
 
-  static String categoryFor(BuildContext context, Club club) {
-    final category = club.categoryName?.trim();
-    if (category != null && category.isNotEmpty) return category;
+  static List<String> categoriesFor(BuildContext context, Club club) {
+    final categories = (club.categoryName ?? '')
+        .split(',')
+        .map((category) => category.trim())
+        .where((category) => category.isNotEmpty)
+        .toList();
+    if (categories.isNotEmpty) return categories;
+    return [fallbackCategoryFor(context, club)];
+  }
 
+  static String categoryFor(BuildContext context, Club club) {
+    return categoriesFor(context, club).first;
+  }
+
+  static String fallbackCategoryFor(BuildContext context, Club club) {
     final n = club.name.toLowerCase();
     bool has(List<String> keys) => keys.any(n.contains);
 
@@ -354,14 +365,16 @@ class _ExploreScreenState extends State<ExploreScreen> {
     final categories = _filters.categories;
 
     final list = _visibleClubs.where((c) {
-      final category = ExploreScreen.categoryFor(context, c);
-      if (categories.isNotEmpty && !categories.contains(category)) return false;
+      final clubCategories = ExploreScreen.categoriesFor(context, c);
+      if (categories.isNotEmpty && !clubCategories.any(categories.contains)) {
+        return false;
+      }
       if (q.isEmpty) return true;
       return c.name.toLowerCase().contains(q) ||
           c.description.toLowerCase().contains(q) ||
           (c.shortName?.toLowerCase().contains(q) ?? false) ||
           (c.email?.toLowerCase().contains(q) ?? false) ||
-          category.toLowerCase().contains(q);
+          clubCategories.any((category) => category.toLowerCase().contains(q));
     }).toList();
 
     switch (_filters.clubSort) {
@@ -618,12 +631,12 @@ class _ExploreScreenState extends State<ExploreScreen> {
 
   // ─── Filters ─────────────────────────────────────────────────────────────
 
-  /// Every category [ExploreScreen.categoryFor] can return, in the order the
+  /// Every category [ExploreScreen.categoriesFor] can return, in the order the
   /// design lists them, limited to the ones actually present on a club.
   List<String> get _categoryOptions {
     final present = <String>{
       for (final club in _visibleClubs)
-        ExploreScreen.categoryFor(context, club),
+        ...ExploreScreen.categoriesFor(context, club),
     };
     final l10n = AppLocalizations.of(context)!;
     final ordered = [
@@ -1434,16 +1447,18 @@ class _ExploreScreenState extends State<ExploreScreen> {
                 ],
               ),
             ),
-            const SizedBox(width: 10),
-            _actionPill(
-              active: joined,
-              activeLabel: l10n.joined,
-              inactiveLabel: l10n.join,
-              onTap: () => handleFollowTap(context, club.id, () {
-                _persist();
-                setState(() {});
-              }),
-            ),
+            if (canCurrentSessionFollowClubs) ...[
+              const SizedBox(width: 10),
+              _actionPill(
+                active: joined,
+                activeLabel: l10n.joined,
+                inactiveLabel: l10n.join,
+                onTap: () => handleFollowTap(context, club.id, () {
+                  _persist();
+                  setState(() {});
+                }),
+              ),
+            ],
           ],
         ),
       ),

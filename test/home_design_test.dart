@@ -126,7 +126,7 @@ void main() {
     // (the assertion above) rather than the label alone.
     final scopeLabel = find.descendant(
       of: feedScope,
-      matching: find.text(S.forYou),
+      matching: find.text(S.allClubs),
     );
     final chevron = find.descendant(
       of: feedScope,
@@ -215,7 +215,7 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
-  testWidgets('For You uses the foreground colour when Home theme changes', (
+  testWidgets('All Clubs uses the foreground colour when Home theme changes', (
     tester,
   ) async {
     await themeService.setDark(false, persistToAccount: false);
@@ -223,22 +223,22 @@ void main() {
     await pumpHome(tester);
 
     final feedScope = find.byKey(const ValueKey('home-feed-scope-dropdown'));
-    Text forYouLabel() => tester.widget<Text>(
-      find.descendant(of: feedScope, matching: find.text(S.forYou)),
+    Text allClubsLabel() => tester.widget<Text>(
+      find.descendant(of: feedScope, matching: find.text(S.allClubs)),
     );
 
-    expect(forYouLabel().style?.color, const Color(0xFF18181B));
-    expect(forYouLabel().style?.color, ClubUpColors.text);
-    expect(forYouLabel().data, S.forYou);
-    expect(forYouLabel().style?.fontSize, 24);
-    expect(forYouLabel().style?.fontWeight, FontWeight.w700);
-    expect(forYouLabel().style?.fontFamily, kClubUpFontFamily);
+    expect(allClubsLabel().style?.color, const Color(0xFF18181B));
+    expect(allClubsLabel().style?.color, ClubUpColors.text);
+    expect(allClubsLabel().data, S.allClubs);
+    expect(allClubsLabel().style?.fontSize, 24);
+    expect(allClubsLabel().style?.fontWeight, FontWeight.w700);
+    expect(allClubsLabel().style?.fontFamily, kClubUpFontFamily);
 
     await themeService.setDark(true, persistToAccount: false);
     await tester.pump();
 
-    expect(forYouLabel().style?.color, const Color(0xFFFAFAFA));
-    expect(forYouLabel().style?.color, ClubUpColors.text);
+    expect(allClubsLabel().style?.color, const Color(0xFFFAFAFA));
+    expect(allClubsLabel().style?.color, ClubUpColors.text);
     expect(tester.takeException(), isNull);
   });
 

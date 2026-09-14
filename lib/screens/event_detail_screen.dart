@@ -2466,28 +2466,30 @@ class _HostCard extends StatelessWidget {
             ),
           ),
         ),
-        const SizedBox(width: 12),
-        GestureDetector(
-          onTap: () => handleFollowTap(context, club.id, () {}),
-          child: Container(
-            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
-            decoration: BoxDecoration(
-              color: ClubUpColors.accent.withValues(alpha: 0.08),
-              borderRadius: BorderRadius.circular(14),
-              border: Border.all(
-                color: ClubUpColors.accent.withValues(alpha: 0.15),
+        if (canCurrentSessionFollowClubs) ...[
+          const SizedBox(width: 12),
+          GestureDetector(
+            onTap: () => handleFollowTap(context, club.id, () {}),
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
+              decoration: BoxDecoration(
+                color: ClubUpColors.accent.withValues(alpha: 0.08),
+                borderRadius: BorderRadius.circular(14),
+                border: Border.all(
+                  color: ClubUpColors.accent.withValues(alpha: 0.15),
+                ),
               ),
-            ),
-            child: Text(
-              following ? l10n.followingCheckLabel : l10n.follow,
-              style: figtree(
-                size: 12,
-                weight: FontWeight.w700,
-                color: ClubUpColors.accentText,
+              child: Text(
+                following ? l10n.followingCheckLabel : l10n.follow,
+                style: figtree(
+                  size: 12,
+                  weight: FontWeight.w700,
+                  color: ClubUpColors.accentText,
+                ),
               ),
             ),
           ),
-        ),
+        ],
       ],
     );
   }

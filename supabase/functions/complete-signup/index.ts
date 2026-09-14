@@ -44,7 +44,7 @@ function json(body: unknown, status = 200) {
 }
 
 function isValidPassword(password: string) {
-  return /^\d{6,}$/.test(password);
+  return /^\d{8,}$/.test(password);
 }
 
 Deno.serve(async (req) => {
@@ -83,7 +83,7 @@ Deno.serve(async (req) => {
     }
 
     if (!password || !isValidPassword(password)) {
-      return json({ error: "Password must be at least 6 numbers." }, 400);
+      return json({ error: "Password must be at least 8 numbers." }, 400);
     }
 
     if (!fullName) {
@@ -140,15 +140,13 @@ Deno.serve(async (req) => {
       return json(
         {
           error: "Could not check account status.",
-          details: existingProfileError.message,
-          code: existingProfileError.code,
         },
         500,
       );
     }
 
     if (existingProfile) {
-      return json({ error: "An account with this email already exists." }, 409);
+      return json({ error: "Could not complete signup request." }, 400);
     }
 
     const { data: major, error: majorError } = await supabase
@@ -194,8 +192,6 @@ Deno.serve(async (req) => {
         return json(
           {
             error: "Could not validate interests.",
-            details: interestsError.message,
-            code: interestsError.code,
           },
           500,
         );
@@ -245,7 +241,6 @@ Deno.serve(async (req) => {
       return json(
         {
           error: "Could not create user.",
-          details: createUserError?.message,
         },
         500,
       );
@@ -272,8 +267,6 @@ Deno.serve(async (req) => {
       return json(
         {
           error: "Could not create profile.",
-          details: profileInsertError.message,
-          code: profileInsertError.code,
         },
         500,
       );
@@ -295,8 +288,6 @@ Deno.serve(async (req) => {
         return json(
           {
             error: "Could not save interests.",
-            details: interestsInsertError.message,
-            code: interestsInsertError.code,
           },
           500,
         );
@@ -319,8 +310,6 @@ Deno.serve(async (req) => {
       return json(
         {
           error: "Could not save Terms acceptance.",
-          details: termsAcceptanceError?.message,
-          code: termsAcceptanceError?.code,
         },
         500,
       );

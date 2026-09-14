@@ -26,12 +26,12 @@ class _StepPasswordState extends State<StepPassword> {
     super.initState();
     final digitsOnly = widget.initialValue.replaceAll(RegExp(r'[^0-9]'), '');
     _passwordController = TextEditingController(
-      text: digitsOnly.length > 6 ? digitsOnly.substring(0, 6) : digitsOnly,
+      text: digitsOnly.length > 8 ? digitsOnly.substring(0, 8) : digitsOnly,
     );
     _confirmController = TextEditingController();
   }
 
-  bool get _isExactlySix => _passwordController.text.trim().length == 6;
+  bool get _isExactlySix => _passwordController.text.trim().length == 8;
   bool get _hasOnlyNumbers =>
       RegExp(r'^[0-9]+$').hasMatch(_passwordController.text.trim());
   bool get _hasNoRepeatedNeighbors {
@@ -115,9 +115,9 @@ class _StepPasswordState extends State<StepPassword> {
                   keyboardType: TextInputType.number,
                   inputFormatters: [
                     FilteringTextInputFormatter.digitsOnly,
-                    LengthLimitingTextInputFormatter(6),
+                    LengthLimitingTextInputFormatter(8),
                   ],
-                  maxLength: 6,
+                  maxLength: 8,
                   buildCounter:
                       (
                         _, {
@@ -130,7 +130,7 @@ class _StepPasswordState extends State<StepPassword> {
                   style: TextStyle(color: SC.ink, fontSize: 16),
                   decoration: SC.fieldDecoration(
                     label: AppLocalizations.of(context)!.passwordFieldLabel,
-                    hint: AppLocalizations.of(context)!.digitPinHint(6),
+                    hint: AppLocalizations.of(context)!.digitPinHint(8),
                     prefixIcon: Icon(Icons.lock_outline, color: SC.muted),
                     suffixIcon: IconButton(
                       icon: Icon(
@@ -153,9 +153,9 @@ class _StepPasswordState extends State<StepPassword> {
                   keyboardType: TextInputType.number,
                   inputFormatters: [
                     FilteringTextInputFormatter.digitsOnly,
-                    LengthLimitingTextInputFormatter(6),
+                    LengthLimitingTextInputFormatter(8),
                   ],
-                  maxLength: 6,
+                  maxLength: 8,
                   buildCounter:
                       (
                         _, {
@@ -171,7 +171,7 @@ class _StepPasswordState extends State<StepPassword> {
                     label: AppLocalizations.of(
                       context,
                     )!.confirmCredentialLabel('password'),
-                    hint: AppLocalizations.of(context)!.reenterDigitPinHint(6),
+                    hint: AppLocalizations.of(context)!.reenterDigitPinHint(8),
                     prefixIcon: Icon(Icons.lock_outline, color: SC.muted),
                     suffixIcon: IconButton(
                       icon: Icon(
@@ -198,7 +198,7 @@ class _StepPasswordState extends State<StepPassword> {
                 ),
                 const SizedBox(height: 18),
                 _RuleRow(
-                  label: AppLocalizations.of(context)!.exactlyNDigits(6),
+                  label: AppLocalizations.of(context)!.exactlyNDigits(8),
                   passed: _isExactlySix,
                 ),
                 _RuleRow(

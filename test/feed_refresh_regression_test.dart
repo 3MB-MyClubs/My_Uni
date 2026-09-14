@@ -56,7 +56,7 @@ void main() {
     final scrollView = find.byType(CustomScrollView);
     // The redesigned student Home puts the feed scope in the header dropdown
     // (`home-feed-alt`) instead of the old segmented pill, so only the active
-    // label is on screen at rest. Home opens on For You.
+    // label is on screen at rest. Home opens on All Clubs.
     final dropdown = find.byKey(const ValueKey('home-feed-scope-dropdown'));
     expect(dropdown, findsOneWidget);
     final refreshControl = tester.widget<InstagramRefreshControl>(

@@ -135,11 +135,14 @@ class AuthService {
   }
 
   bool isValidStudentPassword(String password) {
-    return password.length == 6 && _digitsOnly.hasMatch(password);
+    // Existing six-digit credentials remain accepted during migration;
+    // newly created/reset credentials use eight digits.
+    return (password.length == 6 || password.length == 8) &&
+        _digitsOnly.hasMatch(password);
   }
 
   bool isValidNewStudentPassword(String password) {
-    return password.length == 6 &&
+    return password.length == 8 &&
         _digitsOnly.hasMatch(password) &&
         hasNoAdjacentRepeatedDigits(password) &&
         hasNoAdjacentSequentialDigits(password);

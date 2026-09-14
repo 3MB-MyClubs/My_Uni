@@ -1384,6 +1384,15 @@ class AppLocalizationsEn extends AppLocalizations {
   String get boardMemberLabel => 'Board Member';
 
   @override
+  String get boardMemberUnfollowBody =>
+      'You are a board member of this club. Are you sure you want to unfollow it?';
+
+  @override
+  String boardMemberUnfollowTitle(String clubName) {
+    return 'Unfollow $clubName?';
+  }
+
+  @override
   String get boardMembersPublicHint =>
       'Followers added here are shown publicly in the Board tab.';
 
@@ -1582,7 +1591,7 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get choose6DigitPinHint =>
-      'Choose a 6-digit PIN — numbers only, no letters or symbols.';
+      'Choose an 8-digit PIN — numbers only, no letters or symbols.';
 
   @override
   String get chooseFromLibraryOption => 'Choose from library';
@@ -2438,6 +2447,11 @@ class AppLocalizationsEn extends AppLocalizations {
   @override
   String minutesAgoSuffix(int n) {
     return '${n}m ago';
+  }
+
+  @override
+  String monthsAgoSuffix(int n) {
+    return '${n}mo ago';
   }
 
   @override
@@ -3526,6 +3540,9 @@ class AppLocalizationsEn extends AppLocalizations {
   String unfollowedPerson(String name) {
     return 'You unfollowed $name.';
   }
+
+  @override
+  String get unfollowClubAction => 'Unfollow';
 
   @override
   String get universityEmailLabel => 'University email';

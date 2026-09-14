@@ -22,6 +22,7 @@ import '../services/content_store.dart';
 import '../services/image_aspect_ratio.dart';
 import '../services/mock_data.dart';
 import '../services/post_like_helper.dart';
+import '../services/post_timestamp_formatter.dart';
 import '../services/supabase_post_service.dart';
 import '../services/theme_service.dart';
 import '../services/user_state.dart';
@@ -871,9 +872,7 @@ class _ClubHomeFeedPostCardState extends State<ClubHomeFeedPostCard>
     final l10n = AppLocalizations.of(context)!;
     final diff = DateTime.now().difference(dt);
     if (diff.inMinutes < 1) return l10n.justNow;
-    if (diff.inMinutes < 60) return l10n.minutesAgoSuffix(diff.inMinutes);
-    if (diff.inHours < 24) return l10n.hoursAgoSuffix(diff.inHours);
-    return l10n.daysAgoSuffix(diff.inDays);
+    return formatPostTimestamp(l10n, dt);
   }
 
   void _openClub() {

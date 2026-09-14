@@ -4,6 +4,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:uuid/uuid.dart';
 
 import '../models/club.dart';
+import 'focused_read_service.dart';
 import 'lazy_content_loader.dart';
 import 'people_service.dart';
 import 'supabase_config.dart';
@@ -114,6 +115,38 @@ class SupabaseClubService {
     if (client == null || !_looksLikeUuid(club.id) || value.isEmpty) return;
 
     await client.from('clubs').update({'description': value}).eq('id', club.id);
+    lazyContentLoader.invalidateContent();
+  }
+
+  Future<void> updateClubCategories({
+    required Club club,
+    required List<String> categories,
+  }) async {
+    final client = _client;
+    if (client == null || !_looksLikeUuid(club.id)) return;
+
+    final normalized = <String>[];
+    final seen = <String>{};
+    for (final category in categories) {
+      final value = category.trim();
+      if (value.isEmpty || !seen.add(value.toLowerCase())) continue;
+      normalized.add(value);
+    }
+
+    final saved = await client
+        .from('clubs')
+        .update({'categories': normalized})
+        .eq('id', club.id)
+        .select('categories')
+        .maybeSingle();
+    final persisted = saved?['categories'];
+    if (persisted is! List ||
+        persisted.map((value) => value.toString()).toList().join('\n') !=
+            normalized.join('\n')) {
+      throw StateError('Club category update did not affect the owned club.');
+    }
+
+    focusedReadService.invalidate();
     lazyContentLoader.invalidateContent();
   }
 

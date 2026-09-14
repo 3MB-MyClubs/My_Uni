@@ -2077,6 +2077,7 @@ class _ClubCategoriesSheet extends StatefulWidget {
 class _ClubCategoriesSheetState extends State<_ClubCategoriesSheet> {
   late final Set<String> _selected;
   late final TextEditingController _controller;
+  bool _saving = false;
 
   List<String> _clubCategories() {
     final raw = widget.club.categoryName?.trim();
@@ -2112,19 +2113,37 @@ class _ClubCategoriesSheetState extends State<_ClubCategoriesSheet> {
     return {..._selected, ...custom}.toList()..sort();
   }
 
-  void _save() {
-    final nextValue = _categories().join(', ');
+  Future<void> _save() async {
+    if (_saving) return;
+    final categories = _categories();
+    final nextValue = categories.join(', ');
     final currentValue = _clubCategories().join(', ');
     if (nextValue == currentValue) return;
 
-    widget.club.categoryName = nextValue.isEmpty ? null : nextValue;
-    userState.bumpClubInfo();
-    Navigator.of(context).pop();
-    unawaited(
-      userPrefsService
-          .saveClubCategory(widget.club.id, widget.club.categoryName)
-          .catchError((_) {}),
-    );
+    setState(() => _saving = true);
+    try {
+      await supabaseClubService.updateClubCategories(
+        club: widget.club,
+        categories: categories,
+      );
+      widget.club.categoryName = nextValue.isEmpty ? null : nextValue;
+      userState.bumpClubInfo();
+      await userPrefsService.saveClubCategory(
+        widget.club.id,
+        widget.club.categoryName,
+      );
+      if (mounted) Navigator.of(context).pop();
+    } catch (_) {
+      if (!mounted) return;
+      setState(() => _saving = false);
+      ScaffoldMessenger.of(context)
+        ..hideCurrentSnackBar()
+        ..showSnackBar(
+          SnackBar(
+            content: Text(AppLocalizations.of(context)!.couldNotSaveChanges),
+          ),
+        );
+    }
   }
 
   @override
@@ -2132,7 +2151,7 @@ class _ClubCategoriesSheetState extends State<_ClubCategoriesSheet> {
     final l10n = AppLocalizations.of(context)!;
     final nextValue = _categories().join(', ');
     final currentValue = _clubCategories().join(', ');
-    final canSave = nextValue != currentValue;
+    final canSave = nextValue != currentValue && !_saving;
 
     return Padding(
       padding: EdgeInsets.only(

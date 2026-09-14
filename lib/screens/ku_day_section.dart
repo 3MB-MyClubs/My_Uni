@@ -863,6 +863,8 @@ class _ClubActionsState extends State<_ClubActions> {
   }
 
   Future<void> _toggleFollow() async {
+    if (!canCurrentSessionFollowClubs) return;
+
     await handleFollowTap(context, widget.club.id, () {
       final uid = widget.userId;
       if (uid.isNotEmpty) userPrefsService.save(uid);
@@ -877,17 +879,18 @@ class _ClubActionsState extends State<_ClubActions> {
       spacing: 8,
       runSpacing: 8,
       children: [
-        _ActionChip(
-          label: _following
-              ? AppLocalizations.of(context)!.followingCheckLabel
-              : AppLocalizations.of(context)!.follow,
-          icon: _following
-              ? Icons.favorite_rounded
-              : Icons.favorite_border_rounded,
-          color: widget.color,
-          filled: _following,
-          onTap: _toggleFollow,
-        ),
+        if (canCurrentSessionFollowClubs)
+          _ActionChip(
+            label: _following
+                ? AppLocalizations.of(context)!.followingCheckLabel
+                : AppLocalizations.of(context)!.follow,
+            icon: _following
+                ? Icons.favorite_rounded
+                : Icons.favorite_border_rounded,
+            color: widget.color,
+            filled: _following,
+            onTap: _toggleFollow,
+          ),
         _ActionChip(
           label: AppLocalizations.of(context)!.view,
           icon: Icons.open_in_new_rounded,

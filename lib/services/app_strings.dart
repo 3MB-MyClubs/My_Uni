@@ -28,8 +28,6 @@ class S {
   static String get clubFeed => _t('CLUB FEED', 'KULÜp AKIŞI');
   static String get following => _t('Following', 'Takip');
   static String get all => _t('All', 'Tümü');
-  // Instagram's feed label uses sentence case rather than title case.
-  static String get forYou => _t('For you', 'Senin için');
   static String get latest => _t('Latest', 'Son Gönderiler');
   static String get nothingHere => _t('Nothing here yet', 'Henüz bir şey yok');
   static String get followClubs => _t(
@@ -73,7 +71,8 @@ class S {
   static String get findPeople => _t('Find People', 'Kişileri Bul');
   static String get searchClubs => _t('Search…', 'Ara…');
   static String get searchPeople => _t('Search people…', 'Kişi ara…');
-  static String get allClubs => _t('All clubs', 'Tüm kulüpler');
+  /// The home feed's second scope — the tab beside Following.
+  static String get allClubs => _t('All Clubs', 'Tüm Kulüpler');
   static String get exploreContentTab => _t('Events', 'Etkinlikler');
   static String get searchEventsPosts => _t('Search events…', 'Etkinlik ara…');
   static String get upcomingEvents =>

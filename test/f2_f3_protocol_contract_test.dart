@@ -92,7 +92,7 @@ void main() {
     });
   });
 
-  test('new Flutter F2/F3 mutations are v2-only with no v1 fallback', () {
+  test('new Flutter F2/F3 mutations use transactional RPCs with no v1 fallback', () {
     final interactions = File(
       'lib/services/supabase_interaction_service.dart',
     ).readAsStringSync();
@@ -108,7 +108,8 @@ void main() {
     ]) {
       expect(interactions, contains("'$rpc'"));
     }
-    expect(posts, contains("'create_club_post_transactional_v2'"));
+    expect(posts, contains("'create_club_post_transactional_v3'"));
+    expect(posts, contains("'p_audience': audience.wireValue"));
     expect(posts, contains("'p_poll_options': poll?.options"));
 
     expect(

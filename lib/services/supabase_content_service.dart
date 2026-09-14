@@ -3,6 +3,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../l10n/app_localizations.dart';
 import '../models/club.dart';
+import '../models/content_audience.dart';
 import '../models/event.dart';
 import '../models/news_post.dart';
 import 'locale_service.dart';
@@ -44,7 +45,7 @@ class SupabaseContentService {
   static const _eventSelectColumns =
       'id, club_id, title, description, location, image_url, starts_at, '
       'ends_at, image_path, created_by_user_id, tags, registration_url, '
-      'schedule, speakers';
+      'schedule, speakers, audience';
 
   bool _hasAppliedRemoteContent = false;
 
@@ -176,7 +177,7 @@ class SupabaseContentService {
           var query = client
               .from('club_followers')
               .select(
-                'club_id, clubs(id,name,short_name,description,logo_url,category_id,email,created_at,club_categories(name))',
+                'club_id, clubs(id,name,short_name,description,logo_url,category_id,categories,email,created_at,club_categories(name))',
               )
               .eq('profile_id', profileId);
           if (after != null) query = query.gt('club_id', after);
@@ -272,7 +273,7 @@ class SupabaseContentService {
       client
           .from('clubs')
           .select(
-            'id, name, short_name, description, logo_url, category_id, email, created_at, club_categories(name)',
+            'id, name, short_name, description, logo_url, category_id, categories, email, created_at, club_categories(name)',
           ),
       if (includeModerationArchive)
         _fetchAllRows(client, table: 'events', columns: _eventSelectColumns)
@@ -288,13 +289,13 @@ class SupabaseContentService {
           client,
           table: 'club_posts',
           columns:
-              'id, club_id, author_id, content, image_url, image_path, created_at',
+              'id, club_id, author_id, content, image_url, image_path, created_at, audience',
         )
       else
         client
             .from('club_posts')
             .select(
-              'id, club_id, author_id, content, image_url, image_path, created_at',
+              'id, club_id, author_id, content, image_url, image_path, created_at, audience',
             )
             .order('created_at', ascending: false)
             .limit(500),
@@ -357,7 +358,7 @@ class SupabaseContentService {
       final row = await client
           .from('club_posts')
           .select(
-            'id,club_id,author_id,content,image_url,image_path,created_at',
+            'id,club_id,author_id,content,image_url,image_path,created_at,audience',
           )
           .eq('id', postId)
           .maybeSingle();
@@ -435,7 +436,7 @@ class SupabaseContentService {
     final row = await client
         .from('clubs')
         .select(
-          'id, name, short_name, description, logo_url, category_id, email, created_at, club_categories(name)',
+          'id, name, short_name, description, logo_url, category_id, categories, email, created_at, club_categories(name)',
         )
         .eq('id', normalizedClubId)
         .maybeSingle();
@@ -858,6 +859,9 @@ class SupabaseContentService {
   }
 
   String? _categoryName(Map<String, dynamic> row) {
+    final categories = _stringList(row['categories']);
+    if (categories.isNotEmpty) return categories.join(', ');
+
     final direct = _nullableString(row, ['category_name', 'categoryName']);
     if (direct != null) return direct;
 
@@ -914,6 +918,7 @@ class SupabaseContentService {
           : int.tryParse(row['capacity']?.toString() ?? ''),
       schedule: _eventSchedule(row['schedule']),
       speakers: _eventSpeakers(row['speakers']),
+      audience: contentAudienceFromWire(row['audience']),
     );
   }
 
@@ -974,6 +979,7 @@ class SupabaseContentService {
           : null,
       isAnnouncement:
           row['is_announcement'] == true || row['isAnnouncement'] == true,
+      audience: contentAudienceFromWire(row['audience']),
     );
   }
 

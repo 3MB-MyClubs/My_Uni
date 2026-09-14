@@ -635,6 +635,15 @@
   "bestForYouThisWeek": "Best for You This Week",
   "boardMemberFallbackTitle": "Board Member",
   "boardMemberLabel": "Board Member",
+  "boardMemberUnfollowBody": "You are a board member of this club. Are you sure you want to unfollow it?",
+  "boardMemberUnfollowTitle": "Unfollow {clubName}?",
+  "@boardMemberUnfollowTitle": {
+    "placeholders": {
+      "clubName": {
+        "type": "String"
+      }
+    }
+  },
   "boardMembersPublicHint": "Followers added here are shown publicly in the Board tab.",
   "boardMemberships": "Board Memberships",
   "bothInClub": "Both in {club}",
@@ -726,7 +735,7 @@
   "changePhotoButton": "Change photo",
   "checkBackSoonEvents": "Check back soon for new events.",
   "checkYourInboxTitle": "Check your inbox.",
-  "choose6DigitPinHint": "Choose a 6-digit PIN — numbers only, no letters or symbols.",
+  "choose6DigitPinHint": "Choose an 8-digit PIN — numbers only, no letters or symbols.",
   "chooseFromLibraryOption": "Choose from library",
   "chooseYourLanguage": "Choose your language",
   "chooseYourLook": "Choose your look",
@@ -1310,6 +1319,14 @@
       }
     }
   },
+  "monthsAgoSuffix": "{n}mo ago",
+  "@monthsAgoSuffix": {
+    "placeholders": {
+      "n": {
+        "type": "int"
+      }
+    }
+  },
   "minutesShort": "{n}m",
   "@minutesShort": {
     "placeholders": {
@@ -1874,6 +1891,7 @@
   "typeAtToTagHint": "Type @ to tag a club or student",
   "typeLabel": "Type",
   "unfollowedPerson": "You unfollowed {name}.",
+  "unfollowClubAction": "Unfollow",
   "@unfollowedPerson": {
     "placeholders": {
       "name": {

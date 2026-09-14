@@ -640,6 +640,7 @@ export type Database = {
       }
       clubs: {
         Row: {
+          categories: string[]
           category_id: string | null
           created_at: string
           description: string | null
@@ -653,6 +654,7 @@ export type Database = {
           updated_at: string
         }
         Insert: {
+          categories?: string[]
           category_id?: string | null
           created_at?: string
           description?: string | null
@@ -666,6 +668,7 @@ export type Database = {
           updated_at?: string
         }
         Update: {
+          categories?: string[]
           category_id?: string | null
           created_at?: string
           description?: string | null
