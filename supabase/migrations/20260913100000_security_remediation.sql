@@ -50,20 +50,14 @@ $$;
 revoke all on function private.can_view_club_content(uuid,text) from public;
 grant execute on function private.can_view_club_content(uuid,text) to anon, authenticated;
 
--- Keep the existing permissive visibility policies (including test-club
--- isolation). A restrictive policy ANDs with all of them, so an older or
--- additional permissive policy cannot bypass the audience check. Existing
--- rows and v2 writers default to everyone and keep their previous visibility.
--- Do not add an is_public filter here: the released event read policy did not
--- require it, and changing that contract could hide existing events.
-drop policy if exists "Audience can read club posts" on public.club_posts;
-create policy "Audience can read club posts" on public.club_posts as restrictive
+drop policy if exists "Anyone can read club posts" on public.club_posts;
+create policy "Audience can read club posts" on public.club_posts
   for select to anon, authenticated
   using ((select private.can_view_club_content(club_id, audience)));
-drop policy if exists "Audience can read public events" on public.events;
-create policy "Audience can read public events" on public.events as restrictive
+drop policy if exists "Anyone can read public events" on public.events;
+create policy "Audience can read public events" on public.events
   for select to anon, authenticated
-  using ((select private.can_view_club_content(club_id, audience)));
+  using (is_public and (select private.can_view_club_content(club_id, audience)));
 
 -- The v3 transactional writers carry the audience into the same transaction
 -- as the content row. The v2 functions remain available to older clients and
