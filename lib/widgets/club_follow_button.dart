@@ -15,7 +15,8 @@ import 'app_pressable.dart';
 /// always reflects the correct state — even when another screen changed it —
 /// without rebuilding on unrelated UserState changes.
 ///
-/// Admins can follow other clubs (but not their own).
+/// Dedicated club admins can follow other clubs (but not their own). The
+/// ClubUp platform moderator is intentionally read-only for follows.
 ///
 /// [fullWidth] — stretch button to fill available width (Explore grid style).
 /// [size]      — 'large' (club profile), 'medium' (default), 'small' (feed pill).
@@ -33,6 +34,8 @@ class ClubFollowButton extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    if (!canCurrentSessionFollowClubs) return const SizedBox.shrink();
+
     // Club admins cannot follow their own club — hide button for own club.
     final adminId = authService.currentAdmin?.id ?? '';
     if (adminId.isNotEmpty) {

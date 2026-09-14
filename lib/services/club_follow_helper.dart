@@ -1,10 +1,12 @@
 import 'package:flutter/material.dart';
 
 import '../l10n/app_localizations.dart';
+import 'app_colors.dart';
 import 'auth_service.dart';
 import 'club_admin_access.dart';
 import 'club_follow_service.dart';
 import 'locale_service.dart';
+import 'mock_clubup_profile.dart';
 import 'mock_data.dart';
 import 'people_service.dart';
 import 'rate_limit_error.dart';
@@ -17,15 +19,23 @@ import 'user_state.dart';
 AppLocalizations get _l10n =>
     lookupAppLocalizations(Locale(localeService.languageCode));
 
+/// ClubUp moderates club activity but never participates as a follower.
+/// Ordinary students and dedicated club accounts keep their existing access.
+bool get canCurrentSessionFollowClubs =>
+    !isClubUpAdmin(authService.currentAdmin);
+
 /// Handles a follow/unfollow tap on a club.
 /// - Club admins CAN follow other clubs (but not their own).
-/// - Regular users: simple toggle, persisted immediately.
+/// - Regular followers: simple toggle, persisted immediately.
+/// - A student who sits on this club's board must confirm before unfollowing.
 /// - Board membership is granted exclusively by the club admin from the Board tab.
 Future<void> handleFollowTap(
   BuildContext context,
   String clubId,
   VoidCallback onChanged,
 ) async {
+  if (!canCurrentSessionFollowClubs) return;
+
   // Determine the acting identity (user or club admin).
   final uid = authService.currentUser?.id ?? authService.currentAdmin?.id ?? '';
   if (uid.isEmpty) return;
@@ -37,6 +47,50 @@ Future<void> handleFollowTap(
   }
 
   final wasFollowing = userState.isFollowing(clubId);
+  final studentUserId = authService.currentUser?.id;
+  final isBoardMemberOfClub =
+      authService.isStudentSession &&
+      studentUserId != null &&
+      studentUserId.isNotEmpty &&
+      (clubForId(clubId)?.boardMemberIds.contains(studentUserId) ?? false);
+  if (wasFollowing && isBoardMemberOfClub) {
+    final club = clubForId(clubId)!;
+    final l10n = AppLocalizations.of(context)!;
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        key: const ValueKey('board-member-unfollow-confirm'),
+        backgroundColor: AppColors.card,
+        shape: const RoundedRectangleBorder(
+          borderRadius: BorderRadius.all(Radius.circular(16)),
+        ),
+        title: Text(
+          l10n.boardMemberUnfollowTitle(club.name),
+          style: TextStyle(color: AppColors.text, fontWeight: FontWeight.bold),
+        ),
+        content: Text(
+          l10n.boardMemberUnfollowBody,
+          style: TextStyle(color: AppColors.secondaryText, height: 1.4),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext, false),
+            child: Text(l10n.cancel),
+          ),
+          FilledButton(
+            style: FilledButton.styleFrom(
+              backgroundColor: Colors.red,
+              foregroundColor: Colors.white,
+            ),
+            onPressed: () => Navigator.pop(dialogContext, true),
+            child: Text(l10n.unfollowClubAction),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true || !context.mounted) return;
+  }
+
   final previousMemberCount = supabaseClubMemberCounts[clubId];
   final effectiveMemberCount = previousMemberCount ?? clubMemberCount(clubId);
   userState.toggleFollow(clubId);
@@ -48,7 +102,6 @@ Future<void> handleFollowTap(
   onChanged();
 
   try {
-    final studentUserId = authService.currentUser?.id;
     if (studentUserId != null && studentUserId.isNotEmpty) {
       if (wasFollowing) {
         await clubFollowService.unfollowClub(

@@ -1,3 +1,4 @@
+import 'focused_read_service.dart';
 import 'package:flutter/widgets.dart' show Locale;
 import 'package:hive/hive.dart';
 import 'package:supabase_flutter/supabase_flutter.dart' hide User;
@@ -35,14 +36,67 @@ class PeopleService {
   ///
   /// This intentionally contains only profiles fetched from the real profiles
   /// table and accounts explicitly registered on this device.
+  List<User>? _sortedPeople;
+  List<User>? _sortedRemoteSource;
+  int _localRevision = 0;
+  int _sortedLocalRevision = -1;
+
   List<User> get cachedPeople {
+    if (identical(_sortedRemoteSource, _cachedPeople) &&
+        _sortedLocalRevision == _localRevision &&
+        _sortedPeople != null) {
+      return _sortedPeople!;
+    }
     final byId = <String, User>{
       for (final user in _localPeople.values) user.id: user,
       for (final user in _cachedPeople) user.id: user,
     };
     final result = byId.values.toList()
-      ..sort((a, b) => a.name.toLowerCase().compareTo(b.name.toLowerCase()));
-    return List.unmodifiable(result);
+      ..sort((a, b) {
+        final order = a.name.toLowerCase().compareTo(b.name.toLowerCase());
+        return order == 0 ? a.id.compareTo(b.id) : order;
+      });
+    _sortedRemoteSource = _cachedPeople;
+    _sortedLocalRevision = _localRevision;
+    return _sortedPeople = List.unmodifiable(result);
+  }
+
+  /// Apply a server-filtered directory projection without another lookup RPC.
+  List<User> mergeDirectoryRows(
+    Iterable<Map<String, dynamic>> rows, {
+    String? clubId,
+  }) {
+    final known = {for (final user in _cachedPeople) user.id: user};
+    final users = <User>[];
+    for (final row in rows) {
+      final id = row['id'].toString();
+      if (row['avatar_url'] is String) {
+        userState.setProfilePhotoUrl(id, row['avatar_url'] as String);
+      }
+      if (row['bio'] is String) userState.setBio(id, row['bio'] as String);
+      if (row['major_name'] is String) {
+        userState.setMajor(id, row['major_name'] as String);
+      }
+      if (row['year_name'] is String) {
+        userState.setYear(id, row['year_name'] as String);
+      }
+      users.add(
+        User(
+          id: id,
+          name: row['full_name']?.toString() ?? '',
+          email: known[id]?.email ?? '',
+          password: '',
+          role: row['role']?.toString() ?? known[id]?.role ?? 'student',
+          subscribedClubIds: {
+            ...?known[id]?.subscribedClubIds,
+            ?clubId,
+          }.toList(),
+          followingUserIds: known[id]?.followingUserIds ?? const [],
+        ),
+      );
+    }
+    seedChatParticipants(users);
+    return users;
   }
 
   Future<void> initialize() async {
@@ -67,6 +121,7 @@ class PeopleService {
         );
       }
     }
+    _localRevision++;
     _localDirectoryBox = box;
   }
 
@@ -86,6 +141,7 @@ class PeopleService {
   /// [registerLocalUser] additionally persists it across launches.
   void cacheRegisteredUser(User user) {
     if (user.id.isEmpty || user.email.isEmpty || user.role != 'student') return;
+    _localRevision++;
     final normalizedEmail = user.email.trim().toLowerCase();
     _localPeople.removeWhere(
       (id, person) =>
@@ -264,8 +320,12 @@ class PeopleService {
 
     final rows = await _peopleRowsFor(force: force);
 
-    final majorNames = await _lookupNames('majors');
-    final yearNames = await _lookupNames('academic_years');
+    final names = await Future.wait([
+      _lookupNames('majors'),
+      _lookupNames('academic_years'),
+    ]);
+    final majorNames = names[0];
+    final yearNames = names[1];
     final q = query.toLowerCase().trim();
 
     final people = <User>[];
@@ -660,49 +720,22 @@ class PeopleService {
   }
 
   Future<List<User>> _fetchClubMembers(String clubId) async {
-    final client = _client;
-    if (client == null) return const [];
-
-    final followerRows = await client
-        .from('club_followers')
-        .select('profile_id')
-        .eq('club_id', clubId);
-
-    final profileIds = followerRows
-        .map((row) => row['profile_id']?.toString() ?? '')
-        .where((id) => id.isNotEmpty)
-        .toSet()
-        .toList();
-    if (profileIds.isEmpty) return const [];
-
-    final rows = await client
-        .from('profiles')
-        .select(
-          'id, full_name, role, avatar_url, bio, major_id, academic_year_id',
-        )
-        .inFilter('id', profileIds);
-
-    final majorNames = await _lookupNames('majors');
-    final yearNames = await _lookupNames('academic_years');
-    final members = rows.map((row) {
-      return _userFromProfileRow(
-        Map<String, dynamic>.from(row as Map),
-        majorNames: majorNames,
-        yearNames: yearNames,
-        subscribedClubIds: [clubId],
-      );
-    }).toList();
-
-    final fetchedIds = members.map((user) => user.id).toSet();
-    _cachedPeople = [
-      ..._cachedPeople.where((user) => !fetchedIds.contains(user.id)),
-      ...members,
-    ];
-    final fetchedAt = DateTime.now();
-    _profileRowsFetchedAt.addAll({
-      for (final member in members) member.id: fetchedAt,
-    });
-    return members;
+    if (!focusedReadService.available) return const [];
+    final actor = focusedReadService.scope;
+    final rows = <Map<String, dynamic>>[];
+    Map<String, dynamic>? cursor;
+    do {
+      final page = await focusedReadService.page('get_club_members_page_v1', {
+        'p_club_id': clubId,
+        'p_limit': 50,
+      }, cursor: cursor);
+      if (actor != focusedReadService.scope) return const [];
+      rows.addAll(page.items);
+      cursor = page.nextCursor;
+    } while (cursor != null);
+    // Legacy board-management and recipient flows require the complete set.
+    // Their transport is bounded, while the profile directory shows one page.
+    return mergeDirectoryRows(rows, clubId: clubId);
   }
 
   Future<void> refreshPeopleDirectory({
@@ -953,8 +986,12 @@ class PeopleService {
     );
     if (generation != _remoteCacheGeneration) return;
 
-    final majorNames = await _lookupNames('majors');
-    final yearNames = await _lookupNames('academic_years');
+    final names = await Future.wait([
+      _lookupNames('majors'),
+      _lookupNames('academic_years'),
+    ]);
+    final majorNames = names[0];
+    final yearNames = names[1];
     if (generation != _remoteCacheGeneration) return;
     final loaded = rows.map(
       (row) => _userFromProfileRow(

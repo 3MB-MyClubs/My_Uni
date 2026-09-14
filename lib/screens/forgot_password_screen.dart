@@ -9,7 +9,7 @@ enum _ResetStep { email, code, password, done }
 class ForgotPasswordScreen extends StatefulWidget {
   final String initialEmail;
 
-  /// Required digit count for the new credential (6 for students, 8 for clubs).
+  /// Required digit count for the new credential (8 for students, 8 for clubs).
   final int passwordLength;
 
   /// What the credential is called in the copy ('password' or 'passcode').
@@ -22,7 +22,7 @@ class ForgotPasswordScreen extends StatefulWidget {
   const ForgotPasswordScreen({
     super.key,
     this.initialEmail = '',
-    this.passwordLength = 6,
+    this.passwordLength = 8,
     this.passwordNoun = 'password',
     this.allowExternalEmail = false,
   });

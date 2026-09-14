@@ -47,7 +47,7 @@ class SupabaseEventService {
     try {
       response = await client
           .rpc(
-            'create_club_event_transactional_v2',
+            'create_club_event_transactional_v3',
             params: {
               'p_event_id': eventId,
               'p_club_id': event.clubId,
@@ -57,6 +57,7 @@ class SupabaseEventService {
               'p_event_date': _dateOnly(event.dateTime),
               'p_starts_at': event.dateTime.toUtc().toIso8601String(),
               'p_ends_at': event.endTime.toUtc().toIso8601String(),
+              'p_audience': event.audience.wireValue,
               'p_image_path': uploadedImage?.path,
               'p_image_url': uploadedImage?.publicUrl,
               'p_tags': event.tags,

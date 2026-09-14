@@ -97,20 +97,18 @@ class SupabasePostService {
     try {
       response = await client
           .rpc(
-            'create_club_post_transactional_v2',
+            'create_club_post_transactional_v3',
             params: {
               'p_post_id': postId,
               'p_club_id': clubId,
               'p_content': content,
+              'p_audience': audience.wireValue,
               'p_image_path': uploadedImage?.path,
               'p_image_url': uploadedImage?.publicUrl,
               'p_is_announcement': isAnnouncement,
               'p_mentioned_user_ids': taggedUserIds,
               'p_poll_question': poll?.question,
               'p_poll_options': poll?.options,
-              // Once `club_posts.audience` exists this becomes
-              // 'p_audience': audience.wireValue — the RPC ignores it today,
-              // so the choice is held locally by contentAudienceStore below.
             },
           )
           .single();

@@ -2408,6 +2408,18 @@ abstract class AppLocalizations {
   /// **'Board Member'**
   String get boardMemberLabel;
 
+  /// No description provided for @boardMemberUnfollowBody.
+  ///
+  /// In en, this message translates to:
+  /// **'You are a board member of this club. Are you sure you want to unfollow it?'**
+  String get boardMemberUnfollowBody;
+
+  /// No description provided for @boardMemberUnfollowTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Unfollow {clubName}?'**
+  String boardMemberUnfollowTitle(String clubName);
+
   /// No description provided for @boardMembersPublicHint.
   ///
   /// In en, this message translates to:
@@ -2747,7 +2759,7 @@ abstract class AppLocalizations {
   /// No description provided for @choose6DigitPinHint.
   ///
   /// In en, this message translates to:
-  /// **'Choose a 6-digit PIN — numbers only, no letters or symbols.'**
+  /// **'Choose an 8-digit PIN — numbers only, no letters or symbols.'**
   String get choose6DigitPinHint;
 
   /// No description provided for @chooseFromLibraryOption.
@@ -3991,6 +4003,12 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'{n}m ago'**
   String minutesAgoSuffix(int n);
+
+  /// No description provided for @monthsAgoSuffix.
+  ///
+  /// In en, this message translates to:
+  /// **'{n}mo ago'**
+  String monthsAgoSuffix(int n);
 
   /// No description provided for @minutesShort.
   ///
@@ -5773,6 +5791,12 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'You unfollowed {name}.'**
   String unfollowedPerson(String name);
+
+  /// No description provided for @unfollowClubAction.
+  ///
+  /// In en, this message translates to:
+  /// **'Unfollow'**
+  String get unfollowClubAction;
 
   /// No description provided for @universityEmailLabel.
   ///

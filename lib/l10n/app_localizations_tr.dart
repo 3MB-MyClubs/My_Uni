@@ -1383,6 +1383,15 @@ class AppLocalizationsTr extends AppLocalizations {
   String get boardMemberLabel => 'Kurul Üyesi';
 
   @override
+  String get boardMemberUnfollowBody =>
+      'Bu kulübün yönetim kurulu üyesisin. Kulübü takipten çıkarmak istediğinden emin misin?';
+
+  @override
+  String boardMemberUnfollowTitle(String clubName) {
+    return '$clubName takipten çıkarılsın mı?';
+  }
+
+  @override
   String get boardMembersPublicHint =>
       'Buraya eklenen takipçiler Kurul sekmesinde herkese açık şekilde gösterilir.';
 
@@ -1580,7 +1589,7 @@ class AppLocalizationsTr extends AppLocalizations {
 
   @override
   String get choose6DigitPinHint =>
-      '6 haneli bir PIN seç — sadece rakam, harf ya da sembol kullanma.';
+      '8 haneli bir PIN seç — sadece rakam, harf ya da sembol kullanma.';
 
   @override
   String get chooseFromLibraryOption => 'Kütüphaneden seç';
@@ -2423,6 +2432,11 @@ class AppLocalizationsTr extends AppLocalizations {
   @override
   String minutesAgoSuffix(int n) {
     return '$n dk önce';
+  }
+
+  @override
+  String monthsAgoSuffix(int n) {
+    return '$n ay önce';
   }
 
   @override
@@ -3515,6 +3529,9 @@ class AppLocalizationsTr extends AppLocalizations {
   String unfollowedPerson(String name) {
     return '$name adlı kişiyi takipten çıkardın.';
   }
+
+  @override
+  String get unfollowClubAction => 'Takibi bırak';
 
   @override
   String get universityEmailLabel => 'Üniversite e-postası';

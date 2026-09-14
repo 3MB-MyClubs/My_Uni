@@ -10,30 +10,31 @@ void main() {
       expect(authService.isValidStudentPassword('123579'), isTrue);
     });
 
-    test('rejects non-numeric or non-six-digit values', () {
+    test('rejects non-numeric or unsupported lengths', () {
       expect(authService.isValidStudentPassword('13579'), isFalse);
       expect(authService.isValidStudentPassword('13579a'), isFalse);
+      expect(authService.isValidStudentPassword('1357902'), isFalse);
     });
   });
 
   group('new student password validation', () {
-    test('accepts exactly six non-adjacent numeric digits', () {
-      expect(authService.isValidNewStudentPassword('135790'), isTrue);
+    test('accepts exactly eight non-adjacent numeric digits', () {
+      expect(authService.isValidNewStudentPassword('13579024'), isTrue);
     });
 
     test('rejects adjacent repeated digits', () {
-      expect(authService.isValidNewStudentPassword('113579'), isFalse);
-      expect(authService.isValidNewStudentPassword('135779'), isFalse);
+      expect(authService.isValidNewStudentPassword('11357902'), isFalse);
+      expect(authService.isValidNewStudentPassword('13577902'), isFalse);
     });
 
     test('rejects adjacent sequential digits in either direction', () {
-      expect(authService.isValidNewStudentPassword('123579'), isFalse);
-      expect(authService.isValidNewStudentPassword('975310'), isFalse);
+      expect(authService.isValidNewStudentPassword('12357902'), isFalse);
+      expect(authService.isValidNewStudentPassword('97531024'), isFalse);
     });
 
     test('still rejects non-numeric or non-six-digit values', () {
-      expect(authService.isValidNewStudentPassword('13579'), isFalse);
-      expect(authService.isValidNewStudentPassword('13579a'), isFalse);
+      expect(authService.isValidNewStudentPassword('1357902'), isFalse);
+      expect(authService.isValidNewStudentPassword('1357902a'), isFalse);
     });
   });
 }

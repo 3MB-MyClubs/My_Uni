@@ -12,7 +12,7 @@ import '../services/chat_store.dart';
 import '../services/guest_world.dart' show kGuestIdPrefix;
 import '../services/checkin_store.dart';
 import '../services/club_role_localization.dart';
-import '../services/lazy_content_loader.dart';
+import '../services/supabase_content_service.dart';
 import '../services/mock_data.dart';
 import '../services/moderation_service.dart';
 import '../services/people_service.dart';
@@ -144,7 +144,7 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
     try {
       // Profile visits should reuse the shared 30-second engagement snapshot.
       // Pull-to-refresh remains the explicit force-refresh path.
-      await lazyContentLoader.ensureCountsLoaded();
+      await supabaseContentService.loadProfileClubs(widget.user.id);
       if (mounted) setState(() {});
     } catch (_) {
       // Keep the last successful aggregate snapshot while offline.
@@ -168,7 +168,7 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
     final request = ++_clubContentRequest;
     unawaited(() async {
       try {
-        await lazyContentLoader.ensureContentLoaded();
+        await supabaseContentService.loadProfileClubs(widget.user.id);
       } catch (_) {
         // Keep any previously loaded directory visible when offline.
       }

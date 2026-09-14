@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'performance_metrics.dart';
 import 'dart:developer' as developer;
 
 import 'package:package_info_plus/package_info_plus.dart';
@@ -50,6 +51,13 @@ class StartupLog {
     Object? error,
     int? durationMs,
   }) {
+    if (result != 'begin') {
+      performanceMetrics.record(
+        'startup.$stage',
+        Duration(milliseconds: durationMs ?? _processClock.elapsedMilliseconds),
+        failed: error != null,
+      );
+    }
     final fields = <String>[
       '[STARTUP]',
       stage,

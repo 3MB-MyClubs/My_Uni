@@ -1,45 +1,20 @@
 <?xml version="1.0" encoding="UTF-8"?>
+<!-- Source of truth: ClubUp-Desings, APP ICON board, frame "ClubUp İcon New" (404:4, x=0 y=44600). -->
 <svg xmlns="http://www.w3.org/2000/svg"
      width="1024"
      height="1024"
      viewBox="0 0 1024 1024">
-  <title>ClubUp Android adaptive icon foreground</title>
-  <desc>The ClubUp location and community mark, inset for Android adaptive icon masks.</desc>
-  <defs>
-    <mask id="clubup-adaptive-mark" maskUnits="userSpaceOnUse" x="0" y="0" width="1024" height="1024">
-      <rect width="1024" height="1024" fill="black"/>
-      <!-- Scale about the canvas centre so all important artwork remains in
-           Android's adaptive-icon safe zone. -->
-      <g transform="translate(143.36 143.36) scale(0.72)">
-        <path fill="white" d="
-          M 512 124
-          C 319 124 190 258 190 424
-          C 190 619 336 763 484 917
-          C 499 933 525 933 540 917
-          C 688 763 834 619 834 424
-          C 834 258 705 124 512 124
-          Z"/>
-        <circle cx="512" cy="426" r="210" fill="black"/>
-        <circle cx="512" cy="304" r="61" fill="white"/>
-        <circle cx="379" cy="515" r="61" fill="white"/>
-        <circle cx="645" cy="515" r="61" fill="white"/>
-        <path d="M 358 420 A 166 166 0 0 1 435 333"
-              fill="none"
-              stroke="white"
-              stroke-width="24"
-              stroke-linecap="butt"/>
-        <path d="M 589 333 A 166 166 0 0 1 666 420"
-              fill="none"
-              stroke="white"
-              stroke-width="24"
-              stroke-linecap="butt"/>
-        <path d="M 423 572 Q 512 638 601 572"
-              fill="none"
-              stroke="white"
-              stroke-width="24"
-              stroke-linecap="butt"/>
-      </g>
-    </mask>
-  </defs>
-  <rect width="1024" height="1024" fill="white" mask="url(#clubup-adaptive-mark)"/>
+  <title>ClubUp mark</title>
+  <desc>The ClubUp location and community mark alone, white on transparent. Also the in-app splash logo.</desc>
+  <!-- Full-bleed geometry, matching clubup_app_icon.svg and the 1024 PNG beside it.
+       Android adaptive foregrounds and web maskable icons inset this same art with
+       transform="translate(184.32 174.42) scale(0.64)" — 0.64 of the canvas, centred
+       at (0.5, 0.4766) so the mark clears every adaptive mask. -->
+  <g fill="#ffffff">
+    <path d="M512 192C652.28 192 766 305.72 766 446C766 509.998 742.33 568.467 703.269 613.133H703.312L512 832.081L320.688 613.133H320.731C281.67 568.467 258 509.998 258 446C258 305.72 371.72 192 512 192ZM512 276.836C418.573 276.836 342.836 352.573 342.836 446C342.836 539.427 418.573 615.164 512 615.164C605.427 615.164 681.164 539.427 681.164 446C681.164 352.573 605.427 276.836 512 276.836Z"/>
+    <path d="M627.722 446C627.722 509.911 575.912 561.722 512 561.722C448.088 561.722 396.278 509.911 396.278 446C396.278 382.088 448.088 330.277 512 330.277C575.912 330.277 627.722 382.088 627.722 446ZM409.793 446C409.793 502.447 455.553 548.207 512 548.207C568.447 548.207 614.207 502.447 614.207 446C614.207 389.552 568.447 343.793 512 343.793C455.553 343.793 409.793 389.552 409.793 446Z"/>
+    <circle cx="512.029" cy="338.08" r="37.5"/>
+    <circle cx="605.516" cy="500.005" r="37.5"/>
+    <circle cx="418.541" cy="500.005" r="37.5"/>
+  </g>
 </svg>

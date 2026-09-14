@@ -1,3 +1,5 @@
+import 'supabase_content_service.dart';
+import 'content_visibility.dart';
 import 'package:flutter/material.dart';
 
 import '../models/notification.dart';
@@ -88,9 +90,8 @@ Future<bool> openNotificationTarget(
       return false;
     case 'post':
       if (id == null) return false;
-      final index = newsPosts.indexWhere((post) => post.id == id);
-      if (index < 0 || !context.mounted) return false;
-      final post = newsPosts[index];
+      final post = await supabaseContentService.fetchPostById(id);
+      if (post == null || !context.mounted || !canViewPost(post)) return false;
       await Navigator.of(context).push(
         MaterialPageRoute<void>(
           builder: (_) =>
@@ -100,9 +101,10 @@ Future<bool> openNotificationTarget(
       return true;
     case 'event':
       if (id == null) return false;
-      final index = events.indexWhere((event) => event.id == id);
-      if (index < 0 || !context.mounted) return false;
-      final event = events[index];
+      final event = await supabaseContentService.fetchEventById(id);
+      if (event == null || !context.mounted || !canViewEvent(event)) {
+        return false;
+      }
       await Navigator.of(context).push(
         MaterialPageRoute<void>(
           builder: (_) =>
@@ -112,7 +114,8 @@ Future<bool> openNotificationTarget(
       return true;
     case 'club':
       if (id == null) return false;
-      final club = clubForId(id);
+      final club =
+          clubForId(id) ?? await supabaseContentService.fetchClubById(id);
       if (club == null || !context.mounted) return false;
       await Navigator.of(context).push(
         MaterialPageRoute<void>(

@@ -1,10 +1,9 @@
-import 'dart:async' show unawaited;
-
 import 'package:flutter/material.dart';
 
 import '../l10n/app_localizations.dart';
 import '../models/club.dart';
 import '../services/app_strings.dart';
+import '../services/supabase_club_service.dart';
 import '../services/user_prefs_service.dart';
 import '../services/user_state.dart';
 import '../widgets/club_profile_design.dart';
@@ -17,9 +16,8 @@ import '../widgets/club_settings_design.dart';
 /// because that is what the frame draws. Search-or-create at the top,
 /// SUGGESTED pills below it, then ADDED pills that remove on tap.
 ///
-/// Same storage as the sheet it replaces: `club.categoryName` is a
-/// comma-separated string and `userPrefsService.saveClubCategory` persists it.
-/// Nothing new is written.
+/// `club.categoryName` remains the comma-separated display value while the
+/// selected list is persisted to Supabase for discovery by every user.
 class ClubEditCategoryScreen extends StatefulWidget {
   const ClubEditCategoryScreen({
     super.key,
@@ -48,6 +46,7 @@ class _ClubEditCategoryScreenState extends State<ClubEditCategoryScreen> {
   late final List<String> _added = _parse(widget.club.categoryName);
   late final List<String> _initial = List<String>.from(_added);
   String _query = '';
+  bool _saving = false;
 
   @override
   void dispose() {
@@ -114,16 +113,33 @@ class _ClubEditCategoryScreenState extends State<ClubEditCategoryScreen> {
     });
   }
 
-  void _save() {
+  Future<void> _save() async {
+    if (_saving) return;
     final next = _added.join(', ');
-    widget.club.categoryName = next.isEmpty ? null : next;
-    userState.bumpClubInfo();
-    unawaited(
-      userPrefsService
-          .saveClubCategory(widget.club.id, widget.club.categoryName)
-          .catchError((_) {}),
-    );
-    Navigator.of(context).pop();
+    setState(() => _saving = true);
+    try {
+      await supabaseClubService.updateClubCategories(
+        club: widget.club,
+        categories: _added,
+      );
+      widget.club.categoryName = next.isEmpty ? null : next;
+      userState.bumpClubInfo();
+      await userPrefsService.saveClubCategory(
+        widget.club.id,
+        widget.club.categoryName,
+      );
+      if (mounted) Navigator.of(context).pop();
+    } catch (_) {
+      if (!mounted) return;
+      setState(() => _saving = false);
+      ScaffoldMessenger.of(context)
+        ..hideCurrentSnackBar()
+        ..showSnackBar(
+          SnackBar(
+            content: Text(AppLocalizations.of(context)!.couldNotSaveChanges),
+          ),
+        );
+    }
   }
 
   @override
@@ -146,7 +162,7 @@ class _ClubEditCategoryScreenState extends State<ClubEditCategoryScreen> {
               actions: [
                 ClubSettingsSaveAction(
                   label: l10n.save,
-                  enabled: _dirty,
+                  enabled: _dirty && !_saving,
                   onTap: _save,
                 ),
               ],

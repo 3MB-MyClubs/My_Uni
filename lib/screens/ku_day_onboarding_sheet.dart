@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../services/app_colors.dart';
 import '../services/auth_service.dart';
+import '../services/club_follow_helper.dart';
 import '../services/mock_data.dart';
 import '../services/club_follow_service.dart';
 import '../services/personalization_service.dart';
@@ -12,6 +13,8 @@ import '../l10n/app_localizations.dart';
 /// Lightweight onboarding bottom sheet: interests → major → times → clubs.
 /// Call via [showKuDayOnboarding].
 Future<void> showKuDayOnboarding(BuildContext context) async {
+  if (!canCurrentSessionFollowClubs) return;
+
   await showModalBottomSheet<void>(
     context: context,
     isScrollControlled: true,
@@ -86,15 +89,17 @@ class _OnboardingSheetState extends State<_OnboardingSheet> {
       _times,
       _selectedMajor,
     );
-    for (final clubId in _followedInOnboarding) {
-      if (!userState.followedClubIds.contains(clubId)) {
-        userState.toggleFollow(clubId);
+    if (canCurrentSessionFollowClubs) {
+      for (final clubId in _followedInOnboarding) {
+        if (!userState.followedClubIds.contains(clubId)) {
+          userState.toggleFollow(clubId);
+        }
       }
+      await clubFollowService.setFollowedClubIds(
+        userId: uid,
+        clubIds: userState.followedClubIds,
+      );
     }
-    await clubFollowService.setFollowedClubIds(
-      userId: uid,
-      clubIds: userState.followedClubIds,
-    );
     await userPrefsService.save(uid);
     if (mounted) Navigator.pop(context);
   }

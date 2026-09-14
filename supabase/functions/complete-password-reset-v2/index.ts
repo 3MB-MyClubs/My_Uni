@@ -53,8 +53,8 @@ Deno.serve(async (req) => {
     if (!normalizedEmail || !isValidEmail(normalizedEmail)) {
       return json({ error: "Enter a valid email address." }, 400);
     }
-    if (!normalizedPassword || !/^\d{6,}$/.test(normalizedPassword)) {
-      return json({ error: "Password must be at least 6 numbers." }, 400);
+    if (!normalizedPassword || !/^\d{8,}$/.test(normalizedPassword)) {
+      return json({ error: "Password must be at least 8 numbers." }, 400);
     }
     if (!normalizedCapability) {
       return json({ error: "Reset verification is required." }, 403);

@@ -16,6 +16,7 @@ import '../services/image_aspect_ratio.dart';
 import '../services/mock_data.dart';
 import '../services/moderation_service.dart';
 import '../services/post_like_helper.dart';
+import '../services/post_timestamp_formatter.dart';
 import '../services/theme_service.dart';
 import '../services/user_prefs_service.dart';
 import '../services/user_state.dart';
@@ -64,7 +65,7 @@ class HomeFeedHeader extends StatelessWidget {
 
   final String greetingName;
 
-  /// 0 = Following, 1 = For You — the same tabs the old pill switched.
+  /// 0 = Following, 1 = All Clubs — the same tabs the old pill switched.
   final int feedTab;
   final ValueChanged<int> onSelectFeedTab;
   final int unreadCount;
@@ -82,7 +83,7 @@ class HomeFeedHeader extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final label = feedTab == 0 ? S.following : S.forYou;
+    final label = feedTab == 0 ? S.following : S.allClubs;
     final showControls = atTop || controlsVisible;
     return AnimatedContainer(
       key: const ValueKey('home-header-surface'),
@@ -190,7 +191,7 @@ class HomeFeedHeader extends StatelessWidget {
   }
 
   /// `greeting-text` — the feed-scope dropdown that replaced the segmented
-  /// Following / For You pill.
+  /// Following / All Clubs pill.
   Widget _scopeDropdown(String label) {
     return KeyedSubtree(
       key: scopeAnchorKey ?? const ValueKey('home-feed-scope-anchor'),
@@ -209,7 +210,7 @@ class HomeFeedHeader extends StatelessWidget {
         onSelected: onSelectFeedTab,
         itemBuilder: (_) => [
           _scopeItem(0, S.following),
-          _scopeItem(1, S.forYou),
+          _scopeItem(1, S.allClubs),
         ],
         child: SizedBox(
           width: _homeScopeMenuWidth,
@@ -471,11 +472,7 @@ class _HomeFeedPostCardState extends State<HomeFeedPostCard>
   }
 
   String _timeAgo(DateTime dt) {
-    final l10n = AppLocalizations.of(context)!;
-    final diff = DateTime.now().difference(dt);
-    if (diff.inMinutes < 60) return l10n.minutesAgoSuffix(diff.inMinutes);
-    if (diff.inHours < 24) return l10n.hoursAgoSuffix(diff.inHours);
-    return l10n.daysAgoSuffix(diff.inDays);
+    return formatPostTimestamp(AppLocalizations.of(context)!, dt);
   }
 
   void _openClub() {
@@ -813,7 +810,7 @@ class _HomeFeedPostCardState extends State<HomeFeedPostCard>
               ],
             ),
           ),
-          if (!widget.clubContext) ...[
+          if (!widget.clubContext && canCurrentSessionFollowClubs) ...[
             const SizedBox(width: 8),
             _FollowText(
               clubId: widget.post.clubId,

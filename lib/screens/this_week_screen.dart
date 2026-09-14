@@ -11,7 +11,10 @@ import '../services/app_colors.dart';
 import '../services/auth_service.dart';
 import '../services/content_store.dart';
 import '../services/event_attendee_visibility.dart';
-import '../services/lazy_content_loader.dart';
+import '../services/focused_read_service.dart';
+import '../services/paged_controller.dart';
+import '../services/supabase_content_service.dart';
+import '../services/account_switcher_service.dart';
 import '../services/mock_data.dart';
 import '../services/people_service.dart';
 import '../services/moderation_service.dart';
@@ -109,6 +112,48 @@ class _ThisWeekScreenState extends State<ThisWeekScreen> {
   /// Selected category chip. Empty string is the design's "All" chip.
   String _category = '';
   String _query = '';
+  final _pages = PagedController<Map<String, dynamic>>(
+    idOf: (row) => row['id'].toString(),
+  );
+  final _pageScroll = ScrollController();
+  int _appliedRevision = -1;
+  List<String> _remoteCategories = [];
+  bool get _remoteEvents => focusedReadService.available;
+
+  void _pageChanged() {
+    if (!mounted) return;
+    if (_appliedRevision != _pages.revision) {
+      _appliedRevision = _pages.revision;
+      final loaded = supabaseContentService.mergeEventRows(_pages.changedItems);
+      rsvpStore.seedAll(loaded, _viewerId);
+    }
+    setState(() {});
+  }
+
+  void _pageScrolled() {
+    if (_remoteEvents &&
+        _pageScroll.hasClients &&
+        _pageScroll.position.extentAfter < 400) {
+      unawaited(_pages.loadMore());
+    }
+  }
+
+  void _accountChanged() {
+    _pages.reset();
+    _remoteCategories = [];
+    unawaited(_loadEventContent());
+  }
+
+  void _changeQuery(String value) {
+    setState(() => _query = value);
+    unawaited(_loadEventContent(debounce: true));
+  }
+
+  void _changeCategory(String value) {
+    setState(() => _category = value);
+    unawaited(_loadEventContent());
+  }
+
   final _searchController = TextEditingController();
 
   /// Saving an event writes the same `userState.savedPostIds` set the feed and
@@ -127,6 +172,9 @@ class _ThisWeekScreenState extends State<ThisWeekScreen> {
   @override
   void initState() {
     super.initState();
+    _pages.addListener(_pageChanged);
+    _pageScroll.addListener(_pageScrolled);
+    accountSwitcherService.addListener(_accountChanged);
     _loadEventContent();
     localeService.addListener(_onLocaleChanged);
     themeService.addListener(_onLocaleChanged);
@@ -144,6 +192,9 @@ class _ThisWeekScreenState extends State<ThisWeekScreen> {
 
   @override
   void dispose() {
+    _pages.dispose();
+    _pageScroll.dispose();
+    accountSwitcherService.removeListener(_accountChanged);
     _searchController.dispose();
     localeService.removeListener(_onLocaleChanged);
     themeService.removeListener(_onLocaleChanged);
@@ -159,13 +210,54 @@ class _ThisWeekScreenState extends State<ThisWeekScreen> {
     if (mounted) setState(() {});
   }
 
-  Future<void> _loadEventContent() async {
-    try {
-      await lazyContentLoader.ensureContentLoaded();
-      if (mounted) setState(() {});
-    } catch (_) {
-      // Keep local seed events visible if Supabase content is unreachable.
+  Future<void> _loadEventContent({
+    bool debounce = false,
+    bool force = false,
+  }) async {
+    if (!_remoteEvents) return;
+    final params = <String, dynamic>{
+      'p_kind': 'events',
+      'p_from': _today.toUtc().toIso8601String(),
+      'p_until': DateTime(
+        _today.year + 2,
+        _today.month,
+        _today.day + 1,
+      ).toUtc().toIso8601String(),
+      'p_query': _query.trim(),
+      'p_category': _category,
+      'p_limit': 25,
+    };
+    if (_remoteCategories.isEmpty || force) {
+      final scope = focusedReadService.scope;
+      unawaited(
+        focusedReadService
+            .read<List<dynamic>>('get_event_categories_v1', {
+              'p_from': params['p_from'],
+              'p_until': params['p_until'],
+            }, force: force)
+            .then((values) {
+              if (mounted && focusedReadService.scope == scope) {
+                setState(
+                  () => _remoteCategories = values
+                      .map((v) => v.toString())
+                      .toList(),
+                );
+              }
+            })
+            .catchError((Object _) {}),
+      );
     }
+    await _pages.load(
+      (cursor) => focusedReadService.page(
+        'get_content_page_v1',
+        params,
+        cursor: cursor,
+        force: force,
+      ),
+      cached: focusedReadService.cached('get_content_page_v1', params),
+      preserveItems: force,
+      debounce: debounce ? const Duration(milliseconds: 250) : Duration.zero,
+    );
   }
 
   DateTime get _today {
@@ -181,9 +273,13 @@ class _ThisWeekScreenState extends State<ThisWeekScreen> {
       _today.month,
       _today.day + 1,
     );
+    final remoteIds = _remoteEvents
+        ? _pages.items.map((row) => row['id'].toString()).toSet()
+        : null;
     return events
         .where(
           (e) =>
+              (remoteIds == null || remoteIds.contains(e.id)) &&
               clubForId(e.clubId) != null &&
               canViewEvent(e) &&
               e.endTime.isAfter(now) &&
@@ -287,11 +383,13 @@ class _ThisWeekScreenState extends State<ThisWeekScreen> {
       _query = '';
       _searchController.clear();
     });
+    unawaited(_loadEventContent());
   }
 
   /// Category chips: the design's "All" plus every tag present on an event in
   /// the pool, so the row only ever offers categories that match something.
   List<String> get _categoryOptions {
+    if (_remoteEvents) return _remoteCategories;
     final seen = <String, String>{};
     for (final event in _eventPool) {
       for (final tag in event.tags) {
@@ -309,7 +407,7 @@ class _ThisWeekScreenState extends State<ThisWeekScreen> {
 
   // Pull-to-refresh: re-pull the event list (same gesture as the home feed).
   Future<void> _onRefresh() async {
-    await Future.delayed(const Duration(milliseconds: 600));
+    await _loadEventContent(force: true);
     if (mounted) setState(() {});
   }
 
@@ -330,6 +428,7 @@ class _ThisWeekScreenState extends State<ThisWeekScreen> {
             _header(l10n, newEventCount),
             Expanded(
               child: CustomScrollView(
+                controller: _pageScroll,
                 physics: const BouncingScrollPhysics(
                   parent: AlwaysScrollableScrollPhysics(),
                 ),
@@ -352,6 +451,19 @@ class _ThisWeekScreenState extends State<ThisWeekScreen> {
                   ),
                   if (categories.isNotEmpty)
                     SliverToBoxAdapter(child: _categoryRow(l10n, categories)),
+                  if (_remoteEvents && _pages.loading)
+                    const SliverToBoxAdapter(
+                      child: LinearProgressIndicator(minHeight: 2),
+                    ),
+                  if (_remoteEvents && _pages.error != null)
+                    SliverToBoxAdapter(
+                      child: Center(
+                        child: TextButton(
+                          onPressed: () => unawaited(_pages.retry()),
+                          child: Text(l10n.retry),
+                        ),
+                      ),
+                    ),
                   if (results.isEmpty)
                     SliverFillRemaining(
                       hasScrollBody: false,
@@ -395,6 +507,15 @@ class _ThisWeekScreenState extends State<ThisWeekScreen> {
                             ),
                           );
                         }, childCount: results.length),
+                      ),
+                    ),
+                  if (_remoteEvents && _pages.hasMore && !_pages.loading)
+                    SliverToBoxAdapter(
+                      child: Center(
+                        child: TextButton(
+                          onPressed: _pages.loadMore,
+                          child: const Icon(Icons.expand_more),
+                        ),
                       ),
                     ),
                   SliverToBoxAdapter(
@@ -484,7 +605,7 @@ class _ThisWeekScreenState extends State<ThisWeekScreen> {
           Expanded(
             child: TextField(
               controller: _searchController,
-              onChanged: (v) => setState(() => _query = v),
+              onChanged: _changeQuery,
               style: figtree(
                 size: 14,
                 weight: FontWeight.w400,
@@ -508,10 +629,10 @@ class _ThisWeekScreenState extends State<ThisWeekScreen> {
           ),
           if (_query.isNotEmpty)
             GestureDetector(
-              onTap: () => setState(() {
-                _query = '';
+              onTap: () {
                 _searchController.clear();
-              }),
+                _changeQuery('');
+              },
               child: Icon(
                 Icons.close_rounded,
                 size: 16,
@@ -557,19 +678,13 @@ class _ThisWeekScreenState extends State<ThisWeekScreen> {
       padding: const EdgeInsets.fromLTRB(16, 4, 8, 4),
       child: Row(
         children: [
-          chip(
-            l10n.all,
-            _category.isEmpty,
-            () => setState(() => _category = ''),
-          ),
+          chip(l10n.all, _category.isEmpty, () => _changeCategory('')),
           for (final tag in categories)
             chip(
               tag,
               _category.toLowerCase() == tag.toLowerCase(),
-              () => setState(
-                () => _category = _category.toLowerCase() == tag.toLowerCase()
-                    ? ''
-                    : tag,
+              () => _changeCategory(
+                _category.toLowerCase() == tag.toLowerCase() ? '' : tag,
               ),
             ),
         ],

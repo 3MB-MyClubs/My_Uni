@@ -147,7 +147,7 @@ List<OnboardingStep> studentOnboardingSteps() => <OnboardingStep>[
     targetKey: onboardingAnchors.keyFor(OnboardingAnchors.homeFeedToggle),
     tabIndex: 0,
     spotlightRadius: TutorialMetrics.radiusChip,
-    // Opens the Following / For You menu, which would cover the card.
+    // Opens the Following / All Clubs menu, which would cover the card.
     tapThrough: false,
   ),
   // `tut-events-filters` 388:1123 / 388:1279

@@ -127,7 +127,7 @@ void main() {
       find.byKey(const ValueKey('home-feed-scope-dropdown')),
       findsNothing,
     );
-    expect(find.text(S.forYou), findsNothing);
+    expect(find.text(S.allClubs), findsNothing);
     expect(find.text('${S.hiPrefix} @IES'), findsOneWidget);
     expect(
       find.byKey(const ValueKey('home-notifications-bell')),

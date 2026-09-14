@@ -90,9 +90,9 @@ Deno.serve(async (req) => {
       console.error("account lookup failed", profileError ?? adminError);
       return json({ error: "Could not check account status." }, 500);
     }
-    if (!profile && !appAdmin) {
-      return json({ error: "No account found for this email." }, 404);
-    }
+    // Keep account existence indistinguishable from an unknown/invalid reset
+    // request. The legacy success shape is retained for old clients.
+    if (!profile && !appAdmin) return json(legacySuccessResponse);
 
     const code = generateSixDigitCode();
     const codeHash = await legacyChallengeCodeHash(

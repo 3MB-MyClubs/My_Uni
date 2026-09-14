@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 
@@ -34,6 +35,14 @@ class ClubInsightsScreen extends StatefulWidget {
 }
 
 class _ClubInsightsScreenState extends State<ClubInsightsScreen> {
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) unawaited(_refresh());
+    });
+  }
+
   Color get _insightAccent => AppColors.primaryRed;
 
   Future<void> _refresh() async {
@@ -41,7 +50,11 @@ class _ClubInsightsScreenState extends State<ClubInsightsScreen> {
       if (mounted) setState(() {});
       return;
     }
-    await clubInsightsService.refreshRemote(widget.club);
+    try {
+      await clubInsightsService.refreshRemote(widget.club);
+    } catch (_) {
+      /* Keep previous analytics while offline. */
+    }
     if (mounted) setState(() {});
   }
 

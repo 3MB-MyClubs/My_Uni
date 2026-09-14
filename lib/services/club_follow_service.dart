@@ -26,6 +26,12 @@ class ClubFollowService {
   void _invalidateUser(String userId) {
     _followedClubRevisions[userId] = followedClubRevisionFor(userId) + 1;
     supabaseReadCache.invalidate(_cacheKey(userId));
+    supabaseReadCache.invalidateWhere(
+      (key) =>
+          key.startsWith('profile-clubs:') ||
+          key.startsWith('profile-club-counts:'),
+    );
+    lazyContentLoader.invalidateContent();
     supabaseReadCache.invalidate('people-profile-details:$userId');
   }
 

@@ -60,7 +60,12 @@ class _PlatformAdminAuthScreenState extends State<PlatformAdminAuthScreen> {
       _error = null;
     });
 
-    await appBootstrap.ready;
+    await appBootstrap.readyFor([
+      'preferences',
+      'content',
+      'personalization',
+      'audience',
+    ]);
     final result = await platformAdminAuthService.login(
       email: email,
       passcode: passcode,

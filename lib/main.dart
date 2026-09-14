@@ -2,6 +2,8 @@ import 'dart:async';
 import 'dart:ui' show PlatformDispatcher, PointerDeviceKind;
 
 import 'package:firebase_core/firebase_core.dart';
+import 'package:http/http.dart' as http;
+import 'services/performance_metrics.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter/foundation.dart' show kIsWeb, kReleaseMode;
 import 'package:flutter/material.dart';
@@ -67,6 +69,9 @@ void main() {
   runZonedGuarded(() {
     WidgetsFlutterBinding.ensureInitialized();
     StartupLog.event('S01_BINDING_READY');
+    startPerformanceFrameRecording(
+      () => PlatformDispatcher.instance.implicitView?.display.refreshRate ?? 60,
+    );
     FlutterError.onError = (details) {
       StartupLog.uncaught('FLUTTER', details.exception);
       if (!kReleaseMode) FlutterError.presentError(details);
@@ -92,6 +97,7 @@ const _localStartupTimeout = Duration(seconds: 3);
 bool _deferredLocalBootstrapStarted = false;
 bool _deferredLocalDataReady = false;
 bool _firebaseReady = false;
+bool _optionalStartupStarted = false;
 
 Future<bool> _guardStartupStage(
   String stage,
@@ -123,17 +129,6 @@ Future<void> _initializeAfterFirstFrame() async {
   }
 
   final results = await Future.wait<bool>([
-    if (PushNotificationService.isSupported)
-      _guardStartupStage('S02_FIREBASE_BEGIN', () async {
-        await Firebase.initializeApp(
-          options: DefaultFirebaseOptions.currentPlatform,
-        );
-        FirebaseMessaging.onBackgroundMessage(
-          firebaseMessagingBackgroundHandler,
-        );
-      })
-    else
-      Future.value(false),
     if (supabaseConfigured)
       _guardStartupStage('S04_SUPABASE_BEGIN', () async {
         await Supabase.initialize(
@@ -141,21 +136,15 @@ Future<void> _initializeAfterFirstFrame() async {
           anonKey: SupabaseConfig.clientKey,
           authOptions: const FlutterAuthClientOptions(autoRefreshToken: true),
           debug: false,
+          httpClient: MeasuredHttpClient(http.Client()),
         );
       })
     else
       Future.value(false),
     _guardStartupStage('S04_HIVE_BEGIN', hiveBootstrap.initialize),
-    _guardStartupStage(
-      'S01_BUILD_INFO',
-      StartupLog.loadBuildInfo,
-      timeout: _localStartupTimeout,
-    ),
   ]);
-  _firebaseReady = results[0];
-  StartupLog.event('S03_FIREBASE_END', result: results[0] ? 'ok' : 'fallback');
-  StartupLog.event('S05_SUPABASE_END', result: results[1] ? 'ok' : 'fallback');
-  final hiveReady = results[2];
+  StartupLog.event('S05_SUPABASE_END', result: results[0] ? 'ok' : 'fallback');
+  final hiveReady = results[1];
 
   if (hiveReady) {
     await Future.wait([
@@ -185,78 +174,101 @@ Future<void> _initializeAfterFirstFrame() async {
     appBootstrap.ready = Future.value();
   }
 
-  StartupLog.begin('S06_SESSION_RESTORE_BEGIN');
+  StartupLog.begin('session_restore');
   var restoredSession = false;
-  if (results[1]) {
+  if (results[0]) {
     restoredSession = await authService.restorePersistedSession();
   }
   StartupLog.end(
-    'S07_SESSION_RESTORE_END',
-    result: results[1]
+    'session_restore',
+    result: results[0]
         ? authService.lastSessionRestorationResult.name
         : 'supabase_unavailable',
   );
 
   if (restoredSession && termsAcceptanceService.hasAcceptedCurrentTerms) {
-    StartupLog.begin('S08_ACCOUNT_PREFS_BEGIN');
+    StartupLog.begin('account_preferences');
     try {
       await _loadAccountPreferences();
       StartupLog.end(
-        'S09_ACCOUNT_PREFS_END',
+        'account_preferences',
         result: accountPreferencesService.status.name,
         error: accountPreferencesService.lastError,
       );
     } catch (error) {
-      StartupLog.end('S09_ACCOUNT_PREFS_END', result: 'error', error: error);
+      StartupLog.end('account_preferences', result: 'error', error: error);
     }
   } else {
-    StartupLog.event('S09_ACCOUNT_PREFS_END', result: 'not_applicable');
+    StartupLog.event('account_preferences', result: 'not_applicable');
   }
 }
 
 void _startDeferredLocalBootstrap() {
   _deferredLocalBootstrapStarted = true;
-  Future<bool> guarded(Future<void> future) async {
-    try {
-      await future.timeout(_pluginStartupTimeout);
-      return true;
-    } catch (_) {
-      // Deferred caches are optional and must never surface an unhandled error.
-      return false;
-    }
-  }
-
   appBootstrap.ready =
       Future.wait([
-        guarded(userPrefsService.initialize()),
-        guarded(peopleService.initialize()),
-        guarded(contentStore.initialize()),
-        guarded(chatStore.initialize()),
-        guarded(clubChatPrefs.initialize()),
-        guarded(chatGroupPrefs.initialize()),
-        guarded(checkinStore.initialize()),
-        guarded(pollStore.initialize()),
-        guarded(contentAudienceStore.initialize()),
-        guarded(viewTracker.initialize()),
-        guarded(personalizationService.initialize()),
-        guarded(calendarSyncService.initialize()),
-        guarded(onboardingService.initialize()),
-        guarded(adminModerationService.initialize()),
+        appBootstrap.start('preferences', userPrefsService.initialize),
+        appBootstrap.start('people', peopleService.initialize),
+        appBootstrap.start('content', contentStore.initialize),
+        appBootstrap.start('chat', chatStore.initialize),
+        appBootstrap.start('clubChat', clubChatPrefs.initialize),
+        appBootstrap.start('groupChat', chatGroupPrefs.initialize),
+        appBootstrap.start('checkin', checkinStore.initialize),
+        appBootstrap.start('polls', pollStore.initialize),
+        appBootstrap.start('audience', contentAudienceStore.initialize),
+        appBootstrap.start('views', viewTracker.initialize),
+        appBootstrap.start(
+          'personalization',
+          personalizationService.initialize,
+        ),
+        appBootstrap.start('calendar', calendarSyncService.initialize),
+        appBootstrap.start('onboarding', onboardingService.initialize),
+        appBootstrap.start('moderation', adminModerationService.initialize),
       ]).then((results) {
         _deferredLocalDataReady = results.every((ready) => ready);
         appBootstrap.localDataReady = _deferredLocalDataReady;
-        if (_deferredLocalDataReady) userPrefsService.loadAllPhotos();
       });
+  unawaited(
+    appBootstrap.readyFor(['preferences']).then((ready) {
+      if (ready) userPrefsService.loadAllPhotos();
+    }),
+  );
+}
+
+void _startOptionalServices() {
+  if (_optionalStartupStarted) return;
+  _optionalStartupStarted = true;
+  unawaited(_guardStartupStage('build_info', StartupLog.loadBuildInfo));
+  if (!PushNotificationService.isSupported) return;
+  unawaited(
+    () async {
+      _firebaseReady = await _guardStartupStage('firebase', () async {
+        await Firebase.initializeApp(
+          options: DefaultFirebaseOptions.currentPlatform,
+        );
+        FirebaseMessaging.onBackgroundMessage(
+          firebaseMessagingBackgroundHandler,
+        );
+      });
+      if (!_firebaseReady) return;
+      await pushNotificationService.initialize();
+      if (!guestSession.isActive &&
+          termsAcceptanceService.hasAcceptedCurrentTerms &&
+          (authService.currentUser != null ||
+              authService.currentAdmin != null)) {
+        await pushNotificationService.activateForCurrentUser();
+      }
+    }().catchError(
+      (Object error) => StartupLog.uncaught('PUSH_STARTUP', error),
+    ),
+  );
 }
 
 void _hydrateDeferredLocalData() {
   if (!_deferredLocalBootstrapStarted) return;
   unawaited(
-    appBootstrap.ready.then((_) {
-      if (!_deferredLocalDataReady) return;
-      if (_firebaseReady) {
-        unawaited(pushNotificationService.initialize());
-      }
+    appBootstrap.readyFor(['content']).then((ready) {
+      if (!ready) return;
       contentStore.applyToLists();
       contentStore.loadBoardMemberIds();
       contentStore.loadBoardMemberTitles();
@@ -337,7 +349,7 @@ Future<void> _loadAccountPreferences() async {
 class MyApp extends StatefulWidget {
   const MyApp({
     super.key,
-    this.minimumLaunchDuration = const Duration(milliseconds: 2000),
+    this.minimumLaunchDuration = const Duration(milliseconds: 300),
     this.updateService,
     this.startupInitializer,
   });
@@ -380,6 +392,15 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
   ThemeData? _highContrastLightTheme;
   ThemeData? _highContrastDarkTheme;
 
+  // Page transitions live in the theme, and the theme is built above this
+  // MaterialApp's MediaQuery -- so the reduce-motion preference has to come
+  // from the platform dispatcher rather than from an inherited widget.
+  bool _reduceMotion = WidgetsBinding
+      .instance
+      .platformDispatcher
+      .accessibilityFeatures
+      .disableAnimations;
+
   @override
   void initState() {
     super.initState();
@@ -392,6 +413,7 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
       });
     }
     WidgetsBinding.instance.addPostFrameCallback((_) {
+      StartupLog.event('first_frame');
       unawaited(_completeStartup());
     });
   }
@@ -427,7 +449,30 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
   }
 
   @override
+  void didChangeAccessibilityFeatures() {
+    super.didChangeAccessibilityFeatures();
+    final reduceMotion = WidgetsBinding
+        .instance
+        .platformDispatcher
+        .accessibilityFeatures
+        .disableAnimations;
+    if (reduceMotion == _reduceMotion) return;
+    setState(() {
+      _reduceMotion = reduceMotion;
+      _lightTheme = null;
+      _darkTheme = null;
+      _highContrastLightTheme = null;
+      _highContrastDarkTheme = null;
+    });
+  }
+
+  @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed ||
+        state == AppLifecycleState.paused ||
+        state == AppLifecycleState.detached) {
+      chatStore.setForeground(state == AppLifecycleState.resumed);
+    }
     if (state == AppLifecycleState.resumed) {
       // Returning from the store is the important resume path: the update
       // requirement stays visible until the newly installed build is verified.
@@ -471,18 +516,21 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
     // App lifecycle events can arrive while the deferred Hive boxes are still
     // opening. In particular, ContentStore uses a late box and cannot be
     // flushed until the whole deferred bootstrap succeeds.
-    if (!appBootstrap.localDataReady) return;
     // Nothing from the joyride is written, including on app pause/detach.
     if (guestSession.isActive) return;
     final uid = authService.currentUser?.id ?? authService.currentAdmin?.id;
     if (uid != null) {
-      userPrefsService.save(uid);
-      personalizationService.save(uid);
+      if (appBootstrap.isReady('preferences')) userPrefsService.save(uid);
+      if (appBootstrap.isReady('personalization')) {
+        personalizationService.save(uid);
+      }
     }
     // saveAll rewrites every debounced kind, flushing any pending
     // scheduleSave along the way (pause/detach and logout both land here).
-    contentStore.saveAll(userState.dynamicNotifications);
-    chatStore.saveAll();
+    if (appBootstrap.isReady('content')) {
+      contentStore.saveAll(userState.dynamicNotifications);
+    }
+    if (appBootstrap.isReady('chat')) chatStore.saveAll();
   }
 
   void _onLogin() {
@@ -591,11 +639,30 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
       }
       unawaited(moderationService.activateForUser(currentUserId));
       unawaited(eventCleanupService.cleanupExpiredEvents());
-      if (appBootstrap.localDataReady) {
+      if (appBootstrap.isReady('preferences') &&
+          appBootstrap.isReady('personalization')) {
         _prefsLoadedForUserId = currentUserId;
         userPrefsService.load(currentUserId);
         personalizationService.load(currentUserId);
         unawaited(peopleService.hydrateFollowing(currentUserId));
+      } else {
+        unawaited(
+          appBootstrap.readyFor(['preferences', 'personalization']).then((
+            ready,
+          ) {
+            if (!mounted ||
+                !ready ||
+                !_termsPermitAuthenticatedAccess ||
+                (authService.currentUser?.id ?? authService.currentAdmin?.id) !=
+                    currentUserId) {
+              return;
+            }
+            _prefsLoadedForUserId = currentUserId;
+            userPrefsService.load(currentUserId);
+            personalizationService.load(currentUserId);
+            unawaited(peopleService.hydrateFollowing(currentUserId));
+          }),
+        );
       }
     }
   }
@@ -694,7 +761,8 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
           final isAdmin = isClubUpAdmin(authService.currentAdmin);
           final currentUserId =
               authService.currentUser?.id ?? authService.currentAdmin?.id;
-          if (appBootstrap.localDataReady &&
+          if (appBootstrap.isReady('preferences') &&
+              appBootstrap.isReady('personalization') &&
               currentUserId != null &&
               currentUserId != _prefsLoadedForUserId) {
             _prefsLoadedForUserId = currentUserId;
@@ -789,6 +857,11 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
           StartupLog.event('S11_INITIAL_ROUTE', result: destinationKey);
           WidgetsBinding.instance.addPostFrameCallback((_) {
             StartupLog.event('S12_FIRST_USABLE_FRAME', result: destinationKey);
+            if (mounted &&
+                widget.startupInitializer != null &&
+                _deferredLocalBootstrapStarted) {
+              _startOptionalServices();
+            }
           });
         }
         final visibleHome = AnimatedSwitcher(
@@ -862,13 +935,21 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
           debugShowCheckedModeBanner: false,
           title: 'ClubUp',
           themeMode: isDark ? ThemeMode.dark : ThemeMode.light,
-          theme: _lightTheme ??= AppTheme.build(AppThemeVariant.light),
-          darkTheme: _darkTheme ??= AppTheme.build(AppThemeVariant.dark),
+          theme: _lightTheme ??= AppTheme.build(
+            AppThemeVariant.light,
+            reduceMotion: _reduceMotion,
+          ),
+          darkTheme: _darkTheme ??= AppTheme.build(
+            AppThemeVariant.dark,
+            reduceMotion: _reduceMotion,
+          ),
           highContrastTheme: _highContrastLightTheme ??= AppTheme.build(
             AppThemeVariant.highContrastLight,
+            reduceMotion: _reduceMotion,
           ),
           highContrastDarkTheme: _highContrastDarkTheme ??= AppTheme.build(
             AppThemeVariant.highContrastDark,
+            reduceMotion: _reduceMotion,
           ),
           locale: Locale(localeService.languageCode),
           localizationsDelegates: const [

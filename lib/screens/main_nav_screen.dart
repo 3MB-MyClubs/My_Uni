@@ -133,8 +133,8 @@ class _MainNavScreenState extends ConsumerState<MainNavScreen>
     WidgetsBinding.instance.addPostFrameCallback((_) {
       unawaited(_startInitialExperience());
       unawaited(
-        appBootstrap.ready.then((_) {
-          if (!mounted || !appBootstrap.localDataReady) return;
+        appBootstrap.readyFor(['chat', 'clubChat', 'groupChat']).then((ready) {
+          if (!mounted || !ready) return;
           unawaited(chatStore.startChatV2Sync(_currentUserId));
         }),
       );
@@ -156,7 +156,12 @@ class _MainNavScreenState extends ConsumerState<MainNavScreen>
   Future<void> _openPushNotificationTarget(
     PushNotificationTarget target,
   ) async {
-    await appBootstrap.ready;
+    await appBootstrap.readyFor([
+      'preferences',
+      'chat',
+      'clubChat',
+      'groupChat',
+    ]);
     if (!mounted) return;
 
     // ClubUp uses this navigation position for moderation and has no chat tab.

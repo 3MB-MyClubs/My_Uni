@@ -1,3 +1,4 @@
+import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
@@ -20,10 +21,16 @@ enum AppThemeVariant {
 /// never reads ThemeService, so constructing an inactive theme cannot leak the
 /// currently selected theme's colors into it.
 abstract final class AppTheme {
-  static ThemeData build(AppThemeVariant variant) {
+  static ThemeData build(
+    AppThemeVariant variant, {
+    bool reduceMotion = false,
+  }) {
     final isDark = variant.brightness == Brightness.dark;
     final highContrast = variant.highContrast;
     final semantic = _semanticColors(variant);
+    final pageTransitions = _AppPageTransitionsBuilder(
+      reduceMotion: reduceMotion,
+    );
 
     final background = switch (variant) {
       AppThemeVariant.light => LightColors.background,
@@ -235,13 +242,13 @@ abstract final class AppTheme {
               states.contains(WidgetState.selected) ? semantic.brand : field,
         ),
       ),
-      pageTransitionsTheme: const PageTransitionsTheme(
+      pageTransitionsTheme: PageTransitionsTheme(
         builders: {
-          TargetPlatform.android: _AppPageTransitionsBuilder(),
-          TargetPlatform.iOS: _AppPageTransitionsBuilder(),
-          TargetPlatform.macOS: _AppPageTransitionsBuilder(),
-          TargetPlatform.windows: _AppPageTransitionsBuilder(),
-          TargetPlatform.linux: _AppPageTransitionsBuilder(),
+          TargetPlatform.android: pageTransitions,
+          TargetPlatform.iOS: pageTransitions,
+          TargetPlatform.macOS: pageTransitions,
+          TargetPlatform.windows: pageTransitions,
+          TargetPlatform.linux: pageTransitions,
         },
       ),
       splashFactory: InkRipple.splashFactory,
@@ -378,8 +385,50 @@ class AppSystemUiOverlay extends StatelessWidget {
   }
 }
 
+/// The app's page transition: the iOS horizontal slide, on every platform.
+///
+/// Delegating to [CupertinoRouteTransitionMixin.buildPageTransitions] is what
+/// gives every [MaterialPageRoute] its interactive leading-edge back gesture.
+/// The transition it returns wraps the page in Flutter's back-gesture detector
+/// -- a ~20pt strip down the leading edge -- so the page follows the user's
+/// finger and either pops or settles back depending on distance and velocity.
+///
+/// All three overrides carry weight:
+///
+///  * [transitionDuration] is read off this builder by
+///    [MaterialRouteTransitionMixin], so without it the Cupertino curve (tuned
+///    for 500ms) would run in the 300ms default and no longer match the chat
+///    routes, which get their duration from [CupertinoRouteTransitionMixin].
+///  * [delegatedTransition] drives the page *underneath* whenever the route on
+///    top is a different kind of route. Without it a [MaterialPageRoute] pushed
+///    over a ChatPageRoute would slide in over a frozen chat page instead of
+///    a parallaxing one.
 class _AppPageTransitionsBuilder extends PageTransitionsBuilder {
-  const _AppPageTransitionsBuilder();
+  const _AppPageTransitionsBuilder({required this.reduceMotion});
+
+  /// When set, pages arrive with no motion at all.
+  ///
+  /// It is the duration that goes to zero, not the animation: the route then
+  /// finishes in a single frame, which keeps the back gesture available
+  /// immediately -- [ModalRoute.popGestureEnabled] refuses to start while the
+  /// route's animation is still running. A drag already in progress is
+  /// unaffected, because dragging sets the route controller's value directly
+  /// and the release settles over its own fixed duration. Direct manipulation
+  /// keeps its physics; only the decorative motion disappears.
+  final bool reduceMotion;
+
+  @override
+  Duration get transitionDuration => reduceMotion
+      ? Duration.zero
+      : CupertinoRouteTransitionMixin.kTransitionDuration;
+
+  // This has to stay a static tear-off. ModalRoute compares delegated
+  // transitions with `!=` to decide whether the route below can animate itself
+  // out, and a fresh closure would never compare equal -- which would quietly
+  // push every transition down the proxied path.
+  @override
+  DelegatedTransitionBuilder? get delegatedTransition =>
+      CupertinoPageTransition.delegatedTransition;
 
   @override
   Widget buildTransitions<T>(
@@ -389,23 +438,12 @@ class _AppPageTransitionsBuilder extends PageTransitionsBuilder {
     Animation<double> secondaryAnimation,
     Widget child,
   ) {
-    final reduceMotion =
-        MediaQuery.maybeOf(context)?.disableAnimations ?? false;
-    if (route.isFirst || reduceMotion) return child;
-    final curved = CurvedAnimation(
-      parent: animation,
-      curve: Curves.easeOutCubic,
-      reverseCurve: Curves.easeInCubic,
-    );
-    return FadeTransition(
-      opacity: curved,
-      child: SlideTransition(
-        position: Tween<Offset>(
-          begin: const Offset(0.045, 0),
-          end: Offset.zero,
-        ).animate(curved),
-        child: child,
-      ),
+    return CupertinoRouteTransitionMixin.buildPageTransitions<T>(
+      route,
+      context,
+      animation,
+      secondaryAnimation,
+      child,
     );
   }
 }

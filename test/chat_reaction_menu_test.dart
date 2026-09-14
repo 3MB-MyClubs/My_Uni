@@ -11,7 +11,6 @@ import 'package:flutter_application_1/services/content_store.dart';
 import 'package:flutter_application_1/services/mock_data.dart';
 import 'package:flutter_application_1/services/people_service.dart';
 import 'package:flutter_application_1/services/theme_service.dart';
-import 'package:flutter_application_1/widgets/chats_design.dart';
 import 'package:hive/hive.dart';
 
 /// The long-press reaction menu: a pill that floats beside the bubble the way
@@ -105,17 +104,25 @@ void main() {
     final chip = find.byKey(ValueKey('chat-reaction-${message.id}-🎉'));
     expect(chip, findsOneWidget);
 
-    // No burgundy frame: your own reaction is a wash, with no border at all.
-    final decoration =
-        tester
-                .widgetList<Container>(
-                  find.descendant(of: chip, matching: find.byType(Container)),
-                )
-                .first
-                .decoration
-            as BoxDecoration;
-    expect(decoration.border, isNull);
-    expect(decoration.color, isNot(ChatsColors.accent));
+    // No pill behind it at all — not a wash, not a frame: the emoji is painted
+    // straight onto the thread as a mark on the bubble.
+    final chipBox = tester
+        .widgetList<Container>(
+          find.descendant(of: chip, matching: find.byType(Container)),
+        )
+        .first;
+    expect(chipBox.decoration, isNull);
+
+    // And it lands *on* the bubble's bottom edge: overlapping it, hanging
+    // below it, and inset from the leading corner rather than lining up with
+    // it the way a row of its own would.
+    final bubbleBox = tester.getRect(
+      find.byKey(ValueKey('chat-message-bubble-${message.id}')),
+    );
+    final chipRect = tester.getRect(chip);
+    expect(chipRect.top, lessThan(bubbleBox.bottom));
+    expect(chipRect.bottom, greaterThan(bubbleBox.bottom));
+    expect(chipRect.left, greaterThan(bubbleBox.left));
 
     // Let the store's one-second save debounce fire, or the test ends with a
     // pending timer. `saveAll()` is deliberately not called: it does not

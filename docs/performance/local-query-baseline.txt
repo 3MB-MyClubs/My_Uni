@@ -1,0 +1,107 @@
+BEGIN
+DROP INDEX
+DROP INDEX
+DROP INDEX
+INSERT 0 10001
+INSERT 0 10001
+INSERT 0 1
+INSERT 0 20000
+ANALYZE
+ANALYZE
+SET
+              set_config              
+--------------------------------------
+ f2100000-0000-0000-0000-000000000000
+(1 row)
+
+        benchmark        
+-------------------------
+ before: upcoming events
+(1 row)
+
+                                       QUERY PLAN                                        
+-----------------------------------------------------------------------------------------
+ Result  (cost=0.00..0.27 rows=1 width=32) (actual time=216.485..216.486 rows=1 loops=1)
+   Buffers: shared hit=61994
+ Planning Time: 0.013 ms
+ Execution Time: 216.494 ms
+(4 rows)
+
+     benchmark     
+-------------------
+ before: directory
+(1 row)
+
+                                      QUERY PLAN                                       
+---------------------------------------------------------------------------------------
+ Result  (cost=0.00..0.26 rows=1 width=32) (actual time=79.993..79.994 rows=1 loops=1)
+   Buffers: shared hit=20570
+ Planning Time: 0.010 ms
+ Execution Time: 80.000 ms
+(4 rows)
+
+      benchmark       
+----------------------
+ before: club history
+(1 row)
+
+                                       QUERY PLAN                                        
+-----------------------------------------------------------------------------------------
+ Result  (cost=0.00..0.26 rows=1 width=32) (actual time=185.994..185.995 rows=1 loops=1)
+   Buffers: shared hit=61208
+ Planning Time: 0.010 ms
+ Execution Time: 186.001 ms
+(4 rows)
+
+                     benchmark                     | page_25_bytes | old_500_events_bytes 
+---------------------------------------------------+---------------+----------------------
+ serialized payload comparison, no media downloads |         27909 |               431892
+(1 row)
+
+RESET
+CREATE INDEX
+CREATE INDEX
+CREATE INDEX
+ANALYZE
+ANALYZE
+SET
+       benchmark        
+------------------------
+ after: upcoming events
+(1 row)
+
+                                     QUERY PLAN                                      
+-------------------------------------------------------------------------------------
+ Result  (cost=0.00..0.27 rows=1 width=32) (actual time=1.382..1.382 rows=1 loops=1)
+   Buffers: shared hit=197 read=6
+ Planning Time: 0.010 ms
+ Execution Time: 1.388 ms
+(4 rows)
+
+    benchmark     
+------------------
+ after: directory
+(1 row)
+
+                                     QUERY PLAN                                      
+-------------------------------------------------------------------------------------
+ Result  (cost=0.00..0.26 rows=1 width=32) (actual time=0.739..0.739 rows=1 loops=1)
+   Buffers: shared hit=83 read=2
+ Planning Time: 0.006 ms
+ Execution Time: 0.742 ms
+(4 rows)
+
+      benchmark      
+---------------------
+ after: club history
+(1 row)
+
+                                       QUERY PLAN                                        
+-----------------------------------------------------------------------------------------
+ Result  (cost=0.00..0.26 rows=1 width=32) (actual time=219.783..219.784 rows=1 loops=1)
+   Buffers: shared hit=61208
+ Planning Time: 0.008 ms
+ Execution Time: 219.789 ms
+(4 rows)
+
+ROLLBACK

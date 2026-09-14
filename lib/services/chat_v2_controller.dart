@@ -9,6 +9,7 @@ import 'chat_v2_service.dart';
 class ChatHistoryStateV2 {
   const ChatHistoryStateV2({
     this.messages = const [],
+    this.revision = 0,
     this.nextCursor,
     this.syncCursor = 0,
     this.hasMore = true,
@@ -22,6 +23,7 @@ class ChatHistoryStateV2 {
   });
 
   final List<ChatMessage> messages;
+  final int revision;
   final ChatHistoryCursorV2? nextCursor;
   final int syncCursor;
   final bool hasMore;
@@ -51,6 +53,9 @@ class ChatHistoryStateV2 {
     bool clearReconcileError = false,
   }) => ChatHistoryStateV2(
     messages: messages ?? this.messages,
+    revision: messages != null && !identical(messages, this.messages)
+        ? revision + 1
+        : revision,
     nextCursor: clearNextCursor ? null : nextCursor ?? this.nextCursor,
     syncCursor: syncCursor ?? this.syncCursor,
     hasMore: hasMore ?? this.hasMore,
@@ -89,6 +94,17 @@ class ChatV2Controller extends ChangeNotifier {
   final Map<String, Future<void>> _reconcileTasks = {};
   Future<void>? _summaryTask;
   int _generation = 0;
+  int summaryRevision = 0;
+  List<ChatConversationSummaryV2>? _lastNotifiedSummaries;
+
+  @override
+  void notifyListeners() {
+    if (!identical(_lastNotifiedSummaries, _summaries)) {
+      summaryRevision++;
+      _lastNotifiedSummaries = _summaries;
+    }
+    super.notifyListeners();
+  }
 
   List<ChatConversationSummaryV2> get summaries => _summaries;
   bool get summariesLoaded => _summariesLoaded;

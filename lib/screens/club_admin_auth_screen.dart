@@ -74,7 +74,12 @@ class _ClubAdminAuthScreenState extends State<ClubAdminAuthScreen> {
 
     // Post-login screens read Hive boxes that open in the background after
     // first paint; by the time credentials are typed this is a no-op.
-    await appBootstrap.ready;
+    await appBootstrap.readyFor([
+      'preferences',
+      'content',
+      'personalization',
+      'audience',
+    ]);
     final result = await clubPasscodeAuthService.login(
       email: email,
       passcode: passcode,

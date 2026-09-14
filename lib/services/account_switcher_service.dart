@@ -4,7 +4,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../models/club.dart';
 import 'auth_service.dart';
-import 'lazy_content_loader.dart';
+import 'supabase_content_service.dart';
 import 'mock_data.dart';
 import 'supabase_config.dart';
 import 'guest_session.dart';
@@ -132,7 +132,7 @@ class AccountSwitcherService extends ChangeNotifier {
     _isLoading = true;
     try {
       try {
-        await lazyContentLoader.ensureContentLoaded();
+        await supabaseContentService.loadProfileClubs(userId);
       } catch (_) {
         // Cached/local clubs are still useful for mock mode and offline UI.
       }

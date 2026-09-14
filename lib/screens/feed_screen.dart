@@ -26,6 +26,7 @@ import '../services/user_state.dart';
 import '../services/user_prefs_service.dart';
 import '../services/personalization_service.dart';
 import '../services/post_like_helper.dart';
+import '../services/post_timestamp_formatter.dart';
 import '../services/view_tracker.dart';
 import '../onboarding/onboarding_anchors.dart';
 import '../widgets/content_audience_sheet.dart';
@@ -187,6 +188,7 @@ class _FeedScreenState extends State<FeedScreen> {
   int _appliedFeedV2Revision = -1;
   int _appliedFirstPageRevision = -1;
   final Set<String> _appliedFeedV2ItemIds = {};
+  final Set<String> _moderatorDeletingPostIds = {};
 
   _FeedCache? _feedCache;
 
@@ -247,15 +249,16 @@ class _FeedScreenState extends State<FeedScreen> {
     return cache.mixed!;
   }
 
-  /// What the Home list renders. The redesigned student Home (`home-feed-alt`
-  /// in ClubUp-Desings) is posts only, so the suggestion rails the mixed feed
-  /// injects are dropped there; club-admin sessions keep the full mix.
+  /// What the Home list renders. The redesigned Home (`home-feed-alt` in
+  /// ClubUp-Desings) is posts only, so the suggestion rails the mixed feed
+  /// injects are dropped for students, clubs and the platform moderator.
   List<dynamic> _homeFeedItems() {
     final mixed = _mixedFeed();
-    // CLUB HOME's `feed-scroller-content` is posts only as well, so both
-    // redesigned Homes drop the suggestion rails; the platform moderator's
-    // un-redesigned Home keeps the full mix.
-    if (!authService.isStudentSession && !_isClubSession) return mixed;
+    if (!authService.isStudentSession &&
+        !_isClubSession &&
+        !_isPlatformModerator) {
+      return mixed;
+    }
     return mixed.whereType<_FeedItem>().toList(growable: false);
   }
 
@@ -860,13 +863,13 @@ class _FeedScreenState extends State<FeedScreen> {
   /// The CLUB HOME point of view: the club-admin login and a student who has
   /// switched to their club account. Same condition the bottom nav uses to
   /// swap Search for the create button, so the two chromes always agree.
-  /// Platform moderators are deliberately excluded — their Home has no frame
-  /// in the handoff yet.
   bool get _isClubSession {
     if (accountSwitcherService.isClubAccountActive) return true;
     final admin = authService.currentAdmin;
     return admin != null && !isClubUpAdmin(admin);
   }
+
+  bool get _isPlatformModerator => isClubUpAdmin(authService.currentAdmin);
 
   /// The club a club session posts as.
   Club? get _sessionClub {
@@ -879,7 +882,9 @@ class _FeedScreenState extends State<FeedScreen> {
   @override
   Widget build(BuildContext context) {
     final designClubHome = _isClubSession;
-    final designHome = authService.isStudentSession && !designClubHome;
+    final designHome =
+        (authService.isStudentSession || _isPlatformModerator) &&
+        !designClubHome;
     final mixed = _homeFeedItems();
     final showFeedSkeleton =
         _pagingController.isInitialLoading && mixed.isEmpty;
@@ -1092,6 +1097,9 @@ class _FeedScreenState extends State<FeedScreen> {
                           key: ValueKey('home-design-card-${item.id}'),
                           post: post,
                           onChanged: () => setState(() {}),
+                          headerTrailing: _isPlatformModerator
+                              ? _buildModeratorPostMenu(post)
+                              : null,
                         ),
                       ),
                     );
@@ -1195,6 +1203,127 @@ class _FeedScreenState extends State<FeedScreen> {
         ),
       ),
     );
+  }
+
+  Widget _buildModeratorPostMenu(NewsPost post) {
+    if (_moderatorDeletingPostIds.contains(post.id)) {
+      return const SizedBox(
+        width: 32,
+        height: 32,
+        child: Padding(
+          padding: EdgeInsets.all(7),
+          child: CircularProgressIndicator(strokeWidth: 2),
+        ),
+      );
+    }
+
+    final l10n = AppLocalizations.of(context)!;
+    return PopupMenuButton<String>(
+      key: ValueKey('moderator-home-post-menu-${post.id}'),
+      padding: EdgeInsets.zero,
+      iconSize: 20,
+      tooltip: l10n.deletePostAction,
+      color: ClubUpColors.background,
+      icon: Icon(Icons.more_vert_rounded, size: 20, color: ClubUpColors.muted),
+      onSelected: (value) {
+        if (value == 'delete') unawaited(_deleteModeratorPost(post));
+      },
+      itemBuilder: (_) => [
+        PopupMenuItem<String>(
+          value: 'delete',
+          child: Row(
+            children: [
+              const Icon(Icons.delete_outline_rounded, color: Colors.red),
+              const SizedBox(width: 10),
+              Text(
+                l10n.deletePostMenuItem,
+                style: const TextStyle(
+                  color: Colors.red,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+
+  Future<void> _deleteModeratorPost(NewsPost post) async {
+    final activeAdmin = authService.currentAdmin;
+    if (!isClubUpAdmin(activeAdmin) ||
+        _moderatorDeletingPostIds.contains(post.id)) {
+      return;
+    }
+
+    final l10n = AppLocalizations.of(context)!;
+    final confirmed =
+        await showDialog<bool>(
+          context: context,
+          builder: (dialogContext) => AlertDialog(
+            backgroundColor: AppColors.card,
+            title: Text(
+              l10n.deletePost,
+              style: TextStyle(
+                color: AppColors.text,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+            content: Text(
+              l10n.deletePostMsg,
+              style: TextStyle(color: AppColors.secondaryText),
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(dialogContext, false),
+                child: Text(l10n.cancel),
+              ),
+              ElevatedButton(
+                onPressed: () => Navigator.pop(dialogContext, true),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: Colors.red,
+                  foregroundColor: Colors.white,
+                ),
+                child: Text(l10n.delete),
+              ),
+            ],
+          ),
+        ) ??
+        false;
+    if (!confirmed || !mounted) return;
+
+    final moderator = authService.currentAdmin;
+    if (!isClubUpAdmin(moderator)) return;
+
+    setState(() => _moderatorDeletingPostIds.add(post.id));
+    try {
+      await supabasePostService.deletePost(post);
+      final deleted = contentStore.deletePost(post.id, moderator!.id);
+      if (!deleted) throw StateError('Post could not be removed locally.');
+      if (!mounted) return;
+      ScaffoldMessenger.of(context)
+        ..hideCurrentSnackBar()
+        ..showSnackBar(
+          SnackBar(
+            content: Text(l10n.postDeletedConfirmation),
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+    } catch (_) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context)
+        ..hideCurrentSnackBar()
+        ..showSnackBar(
+          SnackBar(
+            content: Text(l10n.couldNotDeletePostSupabase),
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+    } finally {
+      if (mounted) {
+        setState(() => _moderatorDeletingPostIds.remove(post.id));
+      }
+    }
   }
 
   List<Widget> _buildFeedSkeletonSlivers() {
@@ -1630,9 +1759,9 @@ class _FeedScreenState extends State<FeedScreen> {
       );
     }
 
-    // tab 0 = Following, tab 1 = For You — pill segmented control with a sliding
-    // maroon thumb (300ms ease-out) behind the active label.
-    final labels = [S.following, S.forYou];
+    // tab 0 = Following, tab 1 = All Clubs — pill segmented control with a
+    // sliding maroon thumb (300ms ease-out) behind the active label.
+    final labels = [S.following, S.allClubs];
     return SliverToBoxAdapter(
       child: Padding(
         padding: const EdgeInsets.fromLTRB(20, 24, 20, 12),
@@ -3367,11 +3496,7 @@ Color _colorForClub(String clubId) {
 }
 
 String _timeAgo(BuildContext context, DateTime dt) {
-  final l10n = AppLocalizations.of(context)!;
-  final diff = DateTime.now().difference(dt);
-  if (diff.inMinutes < 60) return l10n.minutesAgoSuffix(diff.inMinutes);
-  if (diff.inHours < 24) return l10n.hoursAgoSuffix(diff.inHours);
-  return l10n.daysAgoSuffix(diff.inDays);
+  return formatPostTimestamp(AppLocalizations.of(context)!, dt);
 }
 
 /// Copies a deep link for the post/event to the clipboard and records the

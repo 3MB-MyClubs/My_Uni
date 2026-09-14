@@ -7,6 +7,8 @@ import 'checkin_store.dart';
 import 'mock_data.dart';
 import 'supabase_interaction_service.dart';
 import 'view_tracker.dart';
+import 'supabase_content_service.dart';
+import 'work_scheduler.dart';
 
 class EventAttendanceStat {
   final Event event;
@@ -127,20 +129,21 @@ class ClubInsightsService {
 
     // Ranked by reach, the way the Insights screen labels the list; likes then
     // recency break ties so the order never depends on list iteration order.
-    final postStats = [
-      for (final post in clubPosts)
-        PostStat(
-          post: post,
-          likes: postLikeCount(post.id),
-          views: viewTracker.viewCount(post.id),
-        ),
-    ]..sort((a, b) {
-      final byViews = b.views.compareTo(a.views);
-      if (byViews != 0) return byViews;
-      final byLikes = b.likes.compareTo(a.likes);
-      if (byLikes != 0) return byLikes;
-      return b.post.createdAt.compareTo(a.post.createdAt);
-    });
+    final postStats =
+        [
+          for (final post in clubPosts)
+            PostStat(
+              post: post,
+              likes: postLikeCount(post.id),
+              views: viewTracker.viewCount(post.id),
+            ),
+        ]..sort((a, b) {
+          final byViews = b.views.compareTo(a.views);
+          if (byViews != 0) return byViews;
+          final byLikes = b.likes.compareTo(a.likes);
+          if (byLikes != 0) return byLikes;
+          return b.post.createdAt.compareTo(a.post.createdAt);
+        });
 
     return ClubInsightsData(
       followers: clubMemberCount(club.id),
@@ -176,13 +179,14 @@ class ClubInsightsService {
   /// Pulls remote check-in counts into the local store so [compute] reflects
   /// scans made on other devices. Best-effort.
   Future<void> refreshRemote(Club club) async {
+    await supabaseContentService.loadClubHistoryForInsights(club.id);
     final ids = events
         .where((e) => e.clubId == club.id)
         .map((e) => e.id)
         .toList();
     if (ids.isEmpty) return;
     try {
-      await Future.wait([for (final id in ids) checkinStore.hydrate(id)]);
+      await runWithConcurrency(ids, checkinStore.hydrate);
       await supabaseInteractionService.fetchCheckinCounts(ids);
     } catch (error) {
       debugPrint('Insights remote refresh failed: $error');

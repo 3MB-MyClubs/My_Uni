@@ -1,5 +1,7 @@
 import 'dart:async';
 
+import 'package:supabase_flutter/supabase_flutter.dart';
+
 import '../models/content_audience.dart';
 import '../models/event.dart';
 import '../models/news_post.dart';
@@ -10,6 +12,8 @@ import 'content_store.dart';
 import 'mock_clubup_profile.dart';
 import 'mock_data.dart';
 import 'user_state.dart';
+import 'supabase_config.dart';
+import 'guest_session.dart';
 
 /// Whether the current session may see a given post or event.
 ///
@@ -99,6 +103,17 @@ bool canChooseAudienceForClub(String clubId) =>
 /// local write and nothing else here changes.
 Future<bool> updatePostAudience(NewsPost post, ContentAudience audience) async {
   if (!canChooseAudienceForClub(post.clubId)) return false;
+  if (SupabaseConfig.isConfigured && !guestSession.isActive) {
+    try {
+      final updated = await Supabase.instance.client.rpc<bool>(
+        'set_club_post_audience_v2',
+        params: {'p_post_id': post.id, 'p_audience': audience.wireValue},
+      );
+      if (updated != true) return false;
+    } catch (_) {
+      return false;
+    }
+  }
   await contentAudienceStore.setAudience(post.id, audience);
   final index = newsPosts.indexWhere((candidate) => candidate.id == post.id);
   if (index != -1) {
@@ -112,6 +127,17 @@ Future<bool> updatePostAudience(NewsPost post, ContentAudience audience) async {
 /// Retarget an already-published event. See [updatePostAudience].
 Future<bool> updateEventAudience(Event event, ContentAudience audience) async {
   if (!canChooseAudienceForClub(event.clubId)) return false;
+  if (SupabaseConfig.isConfigured && !guestSession.isActive) {
+    try {
+      final updated = await Supabase.instance.client.rpc<bool>(
+        'set_club_event_audience_v2',
+        params: {'p_event_id': event.id, 'p_audience': audience.wireValue},
+      );
+      if (updated != true) return false;
+    } catch (_) {
+      return false;
+    }
+  }
   await contentAudienceStore.setAudience(event.id, audience);
   final index = events.indexWhere((candidate) => candidate.id == event.id);
   if (index != -1) {

@@ -14,7 +14,22 @@ abstract interface class FeedPageV2Source {
   });
 }
 
-class SupabaseFeedV2Service implements FeedPageV2Source {
+abstract interface class CachedFeedPageV2Source {
+  FeedPageV2? cachedFirstPage({required int limit, required bool followedOnly});
+}
+
+class SupabaseFeedV2Service
+    implements FeedPageV2Source, CachedFeedPageV2Source {
+  String _firstKey(int limit, bool followedOnly) =>
+      'feed-v2:first:${_client?.auth.currentUser?.id ?? 'anonymous'}:$followedOnly:$limit';
+
+  @override
+  FeedPageV2? cachedFirstPage({
+    required int limit,
+    required bool followedOnly,
+  }) => supabaseReadCache.peek<FeedPageV2>(
+    _firstKey(limit.clamp(1, 50), followedOnly),
+  );
   SupabaseClient? get _client {
     // Guest mode reuses the unconfigured-backend path: with no client every
     // remote read/write in this service degrades to its existing local no-op.
@@ -46,10 +61,9 @@ class SupabaseFeedV2Service implements FeedPageV2Source {
     }
 
     return supabaseReadCache.getOrFetch<FeedPageV2>(
-      key: 'feed-v2:first:$followedOnly:$normalizedLimit',
+      key: _firstKey(normalizedLimit, followedOnly),
       ttl: firstPageTtl,
       force: force,
-      shouldCache: (page) => page.items.isNotEmpty,
       fetch: () =>
           _fetchRemote(limit: normalizedLimit, followedOnly: followedOnly),
     );

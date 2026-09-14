@@ -21,6 +21,62 @@ class NotificationInboxService extends ChangeNotifier {
   String? _activeUserId;
   Future<void>? _loading;
   bool _isLoading = false;
+  bool _hasMore = false;
+  Future<void>? _olderTask;
+  Map<String, dynamic>? _olderCursor;
+  int _generation = 0;
+  Object? pageError;
+  bool get hasMore => _hasMore;
+  bool get isLoadingOlder => _olderTask != null;
+  static const _columns =
+      'id,user_id,actor_user_id,type,title,body,target_id,target_type,created_at,read_at,localization_args,message_count,notification_group_key';
+
+  Future<void> loadOlder() {
+    if (_olderTask != null) return _olderTask!;
+    if (!_hasMore || _olderCursor == null || _isLoading) return Future.value();
+    final userId = _activeUserId;
+    if (userId == null || guestSession.isActive) return Future.value();
+    final generation = _generation;
+    final cursor = Map<String, dynamic>.from(_olderCursor!);
+    late final Future<void> task;
+    task =
+        (() async {
+          pageError = null;
+          try {
+            final time = cursor['created_at'];
+            final id = cursor['id'];
+            final page = await Supabase.instance.client
+                .from('notifications')
+                .select(_columns)
+                .eq('user_id', userId)
+                .or('created_at.lt.$time,and(created_at.eq.$time,id.lt.$id)')
+                .order('created_at', ascending: false)
+                .order('id', ascending: false)
+                .limit(26);
+            final rows = await _attachClubActors(
+              page
+                  .take(25)
+                  .map((row) => Map<String, dynamic>.from(row))
+                  .toList(),
+            );
+            if (_activeUserId != userId || generation != _generation) return;
+            final existing = _rows.map((row) => row['id']).toSet();
+            _rows.addAll(rows.where((row) => !existing.contains(row['id'])));
+            _hasMore = page.length > 25;
+            if (rows.isNotEmpty) _olderCursor = rows.last;
+          } catch (error) {
+            if (generation == _generation) pageError = error;
+          }
+        })().whenComplete(() {
+          if (identical(_olderTask, task)) {
+            _olderTask = null;
+            notifyListeners();
+          }
+        });
+    _olderTask = task;
+    notifyListeners();
+    return task;
+  }
 
   List<Map<String, dynamic>> get rows => List.unmodifiable(_rows);
 
@@ -51,6 +107,11 @@ class NotificationInboxService extends ChangeNotifier {
     final oldChannel = _channel;
     _channel = null;
     _activeUserId = userId;
+    _generation++;
+    _olderTask = null;
+    _loading = null;
+    _olderCursor = null;
+    _hasMore = false;
     _rows.clear();
     notifyListeners();
     if (oldChannel != null) {
@@ -71,24 +132,34 @@ class NotificationInboxService extends ChangeNotifier {
     if (!SupabaseConfig.isConfigured || userId.isEmpty) {
       return Future.value();
     }
-    return _loading ??= _load(userId).whenComplete(() => _loading = null);
+    if (_loading != null) return _loading!;
+    late final Future<void> task;
+    task = _load(userId).whenComplete(() {
+      if (identical(_loading, task)) _loading = null;
+    });
+    return _loading = task;
   }
 
   Future<void> _load(String userId) async {
+    final generation = ++_generation;
+    _olderTask = null;
     _isLoading = true;
     notifyListeners();
     try {
       final rows = await Supabase.instance.client
           .from('notifications')
-          .select()
+          .select(_columns)
           .eq('user_id', userId)
           .order('created_at', ascending: false)
-          .limit(100);
+          .order('id', ascending: false)
+          .limit(101);
       if (_activeUserId != userId) return;
       final hydratedRows = await _attachClubActors(
-        rows.map((row) => Map<String, dynamic>.from(row)).toList(),
+        rows.take(100).map((row) => Map<String, dynamic>.from(row)).toList(),
       );
-      if (_activeUserId != userId) return;
+      if (_activeUserId != userId || generation != _generation) return;
+      _hasMore = rows.length > 100;
+      _olderCursor = hydratedRows.isEmpty ? null : hydratedRows.last;
       _rows
         ..clear()
         ..addAll(hydratedRows);
@@ -96,7 +167,7 @@ class NotificationInboxService extends ChangeNotifier {
     } catch (_) {
       // The local/mock notification feed remains available offline.
     } finally {
-      if (_activeUserId == userId) {
+      if (_activeUserId == userId && generation == _generation) {
         _isLoading = false;
         notifyListeners();
       }
