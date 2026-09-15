@@ -1758,13 +1758,37 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
     final filePath = videoPath == null ? attachedFilePath : null;
     final hasMedia = photoPath != null || videoPath != null || filePath != null;
 
+    // A photo is the bubble, the way WhatsApp draws it: no inset frame of
+    // bubble colour around it. Anything sharing the bubble squares off the
+    // edge it touches, so the photo still reads as one piece with the caption
+    // or reply quote beside it.
+    final photoHasSomethingAbove =
+        m.replyToMessageId != null ||
+        (m.kind == ChatMessageKind.postShare && m.sharedPostId != null) ||
+        hasEventPreview;
+    final photoHasSomethingBelow =
+        hasText ||
+        videoPath != null ||
+        filePath != null ||
+        sharedUserLink != null;
+    final photoCorner = Radius.circular(
+      photoHasSomethingAbove ? 0 : kChatBubbleRadius,
+    );
+    // The tail corner: the shell squares that one off while the tail is out.
+    final tailCorner = Radius.circular(
+      photoHasSomethingBelow || showTail ? 0 : kChatBubbleRadius,
+    );
+    final photoBottomCorner = Radius.circular(
+      photoHasSomethingBelow ? 0 : kChatBubbleRadius,
+    );
+
     final bubble = ChatBubbleShell(
       key: ValueKey('chat-message-bubble-${m.id}'),
       mine: mine,
       showTail: showTail,
       maxWidth: _designBubbleMaxWidth(context, inset: showAvatar),
       padding: photoPath != null
-          ? const EdgeInsets.all(2)
+          ? EdgeInsets.zero
           : hasMedia
           ? const EdgeInsets.all(4)
           : const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
@@ -1777,7 +1801,18 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             if (m.replyToMessageId != null)
-              _designReplyQuote(m, mine: mine, hasBody: hasMedia || hasText),
+              Padding(
+                // The bubble gives a photo no padding of its own, so the quote
+                // keeps itself off the edge.
+                padding: photoPath != null
+                    ? const EdgeInsets.fromLTRB(3, 3, 3, 0)
+                    : EdgeInsets.zero,
+                child: _designReplyQuote(
+                  m,
+                  mine: mine,
+                  hasBody: hasMedia || hasText,
+                ),
+              ),
             if (m.kind == ChatMessageKind.postShare && m.sharedPostId != null)
               SharedPostMessageCard(
                 postId: m.sharedPostId!,
@@ -1789,17 +1824,29 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
                 onDarkBackground: mine,
               ),
             if (photoPath != null)
-              _photoAttachmentWithTime(m, mine: mine, designChat: true),
+              _photoAttachmentWithTime(
+                m,
+                mine: mine,
+                designChat: true,
+                borderRadius: BorderRadius.only(
+                  topLeft: photoCorner,
+                  topRight: photoCorner,
+                  bottomLeft: mine ? photoBottomCorner : tailCorner,
+                  bottomRight: mine ? tailCorner : photoBottomCorner,
+                ),
+              ),
             if (videoPath != null) _videoAttachment(videoPath),
             if (filePath != null) _fileAttachment(m, mine: mine),
             if (hasText)
               Padding(
-                padding: EdgeInsets.fromLTRB(
-                  hasMedia ? 10 : 0,
-                  hasMedia ? 8 : 0,
-                  hasMedia ? 10 : 0,
-                  hasMedia ? 4 : 0,
-                ),
+                padding: photoPath != null
+                    ? const EdgeInsets.fromLTRB(12, 8, 12, 6)
+                    : EdgeInsets.fromLTRB(
+                        hasMedia ? 10 : 0,
+                        hasMedia ? 8 : 0,
+                        hasMedia ? 10 : 0,
+                        hasMedia ? 4 : 0,
+                      ),
                 child: _designBubbleText(m, mine: mine),
               ),
             if (sharedUserLink != null)
@@ -2915,14 +2962,25 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
     final hasMedia = photoPath != null || videoPath != null || filePath != null;
     final hasPhoto = photoPath != null;
     final bubbleRadius = hasPhoto ? 16.0 : 20.0;
+    final photoHasSomethingAbove =
+        m.replyToMessageId != null ||
+        (m.kind == ChatMessageKind.postShare && m.sharedPostId != null) ||
+        hasEventPreview;
+    final photoHasSomethingBelow =
+        hasText ||
+        videoPath != null ||
+        filePath != null ||
+        sharedUserLink != null;
 
     final bubble = Container(
       key: ValueKey('chat-message-bubble-${m.id}'),
       constraints: BoxConstraints(
         maxWidth: MediaQuery.sizeOf(context).width * 0.76,
       ),
+      // A photo fills this bubble edge to edge — same rule as the student
+      // thread above: the picture *is* the bubble, with no frame around it.
       padding: hasPhoto
-          ? const EdgeInsets.all(1)
+          ? EdgeInsets.zero
           : hasMedia
           ? const EdgeInsets.all(5)
           : const EdgeInsets.symmetric(horizontal: 13, vertical: 9),
@@ -2945,11 +3003,10 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
           bottomLeft: Radius.circular(mine ? bubbleRadius : 6),
           bottomRight: Radius.circular(mine ? 6 : bubbleRadius),
         ),
+        // No hairline around a photo either — it read as a frame drawn on the
+        // picture's edge.
         border: hasPhoto
-            ? Border.all(
-                color: mine ? AppColors.primaryRed : AppColors.glassEdge,
-                width: 0.5,
-              )
+            ? null
             : mine
             ? null
             : Border.all(color: AppColors.glassEdge),
@@ -2973,7 +3030,12 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             if (m.replyToMessageId != null)
-              _messageReplyQuote(m, mine: mine, hasMedia: hasMedia),
+              Padding(
+                padding: hasPhoto
+                    ? const EdgeInsets.fromLTRB(3, 3, 3, 0)
+                    : EdgeInsets.zero,
+                child: _messageReplyQuote(m, mine: mine, hasMedia: hasMedia),
+              ),
             if (m.kind == ChatMessageKind.postShare && m.sharedPostId != null)
               SharedPostMessageCard(
                 postId: m.sharedPostId!,
@@ -2985,17 +3047,35 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
                 onDarkBackground: mine,
               ),
             if (photoPath != null)
-              _photoAttachmentWithTime(m, mine: mine, designChat: false),
+              _photoAttachmentWithTime(
+                m,
+                mine: mine,
+                designChat: false,
+                // The bubble's own corners, so the picture ends exactly where
+                // the bubble does.
+                borderRadius: BorderRadius.only(
+                  topLeft: Radius.circular(photoHasSomethingAbove ? 0 : 16),
+                  topRight: Radius.circular(photoHasSomethingAbove ? 0 : 16),
+                  bottomLeft: Radius.circular(
+                    photoHasSomethingBelow ? 0 : (mine ? 16 : 6),
+                  ),
+                  bottomRight: Radius.circular(
+                    photoHasSomethingBelow ? 0 : (mine ? 6 : 16),
+                  ),
+                ),
+              ),
             if (videoPath != null) _videoAttachment(videoPath),
             if (filePath != null) _fileAttachment(m, mine: mine),
             if (hasText)
               Padding(
-                padding: EdgeInsets.fromLTRB(
-                  hasMedia ? 8 : 0,
-                  hasMedia ? 7 : 0,
-                  hasMedia ? 8 : 0,
-                  hasMedia ? 3 : 0,
-                ),
+                padding: hasPhoto
+                    ? const EdgeInsets.fromLTRB(11, 7, 11, 5)
+                    : EdgeInsets.fromLTRB(
+                        hasMedia ? 8 : 0,
+                        hasMedia ? 7 : 0,
+                        hasMedia ? 8 : 0,
+                        hasMedia ? 3 : 0,
+                      ),
                 child: UserProfileLinkText(
                   key: ValueKey('chat-message-text-${m.id}'),
                   text: m.content,
@@ -3343,10 +3423,11 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
     ChatMessage message, {
     required bool mine,
     required bool designChat,
+    required BorderRadius borderRadius,
   }) {
     return Stack(
       children: [
-        _photoAttachment(message),
+        _photoAttachment(message, borderRadius: borderRadius),
         Positioned(
           right: 7,
           bottom: 7,
@@ -3361,7 +3442,15 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
     );
   }
 
-  Widget _photoAttachment(ChatMessage message) {
+  /// The photo fills its bubble — no inset frame of bubble colour around it,
+  /// which is what WhatsApp draws and what the user asked for. [borderRadius]
+  /// therefore has to be the *bubble's* own corners: square where another part
+  /// of the message continues (a caption below, a reply quote above) and
+  /// square on the tail corner, where the bubble itself is not round.
+  Widget _photoAttachment(
+    ChatMessage message, {
+    BorderRadius borderRadius = const BorderRadius.all(Radius.circular(15)),
+  }) {
     final path = message.attachmentPath!;
     final isPrivateReference = path.startsWith('chat-attachment://');
     final isRemote =
@@ -3392,7 +3481,7 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
             )
           : null,
       child: ClipRRect(
-        borderRadius: BorderRadius.circular(15),
+        borderRadius: borderRadius,
         child: SizedBox(
           width: _chatPhotoWidth,
           child: AspectRatio(

@@ -330,13 +330,13 @@ void main() {
     await themeService.setDark(true);
     await pumpScreen(tester);
 
-    expect(ClubProfileColors.page, const Color(0xFF0A0A0A));
-    expect(ClubProfileColors.card, const Color(0xFF121212));
-    expect(ClubProfileColors.field, const Color(0xFF1E1E1E));
+    expect(ClubProfileColors.page, const Color(0xFF121212));
+    expect(ClubProfileColors.card, const Color(0xFF1E1E1E));
+    expect(ClubProfileColors.field, const Color(0xFF2A2A2A));
 
     // The frame draws every accent `#1DA1F2`; the screen uses the section's.
     final scaffold = tester.widget<Scaffold>(find.byType(Scaffold).first);
-    expect(scaffold.backgroundColor, const Color(0xFF0A0A0A));
+    expect(scaffold.backgroundColor, const Color(0xFF121212));
     expect(ClubProfileColors.accent, const Color(0xFF800020));
     expect(ClubProfileColors.accentText, const Color(0xFFFA526B));
     expect(ClubProfileColors.danger, const Color(0xFFDC2626));

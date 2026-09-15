@@ -38,18 +38,26 @@ class ClubProfileColors {
 
   static bool get _dark => themeService.isDark;
 
-  /// Page background — `#FAF9F6` / `#0A0A0A`.
+  /// Page background — `#FAF9F6` / `#121212`.
+  ///
+  /// `Club profile new` 729:5 / 729:113 draws the dark page on zinc-950
+  /// (`#09090B` over `#18181B` cards), but the user chose the Events colours
+  /// instead: `this_week_screen`, Chats, Search, Club Home and both student
+  /// profiles all paint `#121212`, so the frames' set would have made this the
+  /// only near-black screen left. The whole ramp moved together — a page that
+  /// lifts while its cards stay put is how you get two blacks on one screen.
   static Color get page =>
-      _dark ? const Color(0xFF0A0A0A) : const Color(0xFFFAF9F6);
+      _dark ? const Color(0xFF121212) : const Color(0xFFFAF9F6);
 
-  /// Every card on these frames — identity, stat cell, post, event, member
-  /// row, metric tile — `#FFFFFF` / `#121212`.
-  static Color get card => _dark ? const Color(0xFF121212) : Colors.white;
+  /// Every card on these frames — post, event, member row, metric tile —
+  /// `#FFFFFF` / `#1E1E1E`.
+  static Color get card =>
+      _dark ? const Color(0xFF1E1E1E) : const Color(0xFFFFFFFF);
 
-  /// Card hairline and the rule under a section header — `#E4E4E7` /
-  /// `#27272A`.
+  /// Card hairline, the rule under a section header and the tab track's
+  /// baseline — `#E4E4E7` / `#2D2D2D`.
   static Color get border =>
-      _dark ? const Color(0xFF27272A) : const Color(0xFFE4E4E7);
+      _dark ? const Color(0xFF2D2D2D) : const Color(0xFFE4E4E7);
 
   /// Primary text — `#18181B` / `#FAFAFA`.
   static Color get text =>
@@ -73,10 +81,11 @@ class ClubProfileColors {
       _dark ? const Color(0xFF2B191C) : const Color(0xFFF2E5E8);
 
   /// The filled inputs and the search-results dropdown on
-  /// `board-members` `413:7` — `#F4F4F5` / `#1E1E1E`. Sits *inside* a [card],
-  /// which is why it is a third step rather than the page colour.
+  /// `board-members` `413:7` — `#F4F4F5` / `#2A2A2A`. Sits *inside* a [card],
+  /// which is why it is a third step rather than the page colour; the dark
+  /// value stepped up with [card] so the two do not collapse into one.
   static Color get field =>
-      _dark ? const Color(0xFF1E1E1E) : const Color(0xFFF4F4F5);
+      _dark ? const Color(0xFF2A2A2A) : const Color(0xFFF4F4F5);
 
   /// Destructive: the remove control's icon and its tinted pill —
   /// `#DC2626` on `#FEF2F2` / `#220F0F`.
@@ -87,6 +96,15 @@ class ClubProfileColors {
 
 /// `profile-scroll` gutters: 16pt sides, 370pt of content on a 402pt frame.
 const double kClubProfileGutter = 16;
+
+/// `Club profile new` 729:5 sets its own content 24pt in — 354pt on a 402pt
+/// frame — and the identity block sits on the page rather than in a card now,
+/// so that gutter is what aligns the name, the tabs and the lists under them.
+///
+/// Deliberately a second constant: the settings, insights, board-members and
+/// edit screens were drawn on [kClubProfileGutter] and were not part of this
+/// pass, so widening theirs would move five screens nobody reviewed.
+const double kClubProfilePageGutter = 24;
 
 /// Vertical rhythm between the identity card, the stats row, the tabs and the
 /// stream below them.
@@ -164,19 +182,26 @@ class ClubProfileHeaderBar extends StatelessWidget {
   }
 }
 
-/// `insights-button` / `settings-button` — a 40pt circle on the card colour
-/// with the page's hairline around it.
-class ClubProfileCircleButton extends StatelessWidget {
-  const ClubProfileCircleButton({
+/// `insights-button` / `settings-button` `729:25` / `729:29` — the header's
+/// two club controls.
+///
+/// The frames draw each as a 40pt circle filled with the card colour and
+/// ringed by the page hairline; the user asked for the bare glyph the student
+/// profile's chrome pass settled on instead. The 40pt box stays, so the tap
+/// target and the header's spacing are unchanged.
+class ClubProfilePlainIconButton extends StatelessWidget {
+  const ClubProfilePlainIconButton({
     super.key,
     required this.icon,
     required this.onTap,
     required this.semanticLabel,
+    this.iconSize = 20,
   });
 
   final IconData icon;
   final VoidCallback onTap;
   final String semanticLabel;
+  final double iconSize;
 
   @override
   Widget build(BuildContext context) {
@@ -186,15 +211,12 @@ class ClubProfileCircleButton extends StatelessWidget {
       child: GestureDetector(
         behavior: HitTestBehavior.opaque,
         onTap: onTap,
-        child: Container(
+        child: SizedBox(
           width: 40,
           height: 40,
-          decoration: BoxDecoration(
-            color: ClubProfileColors.card,
-            shape: BoxShape.circle,
-            border: Border.all(color: ClubProfileColors.border),
+          child: Center(
+            child: Icon(icon, size: iconSize, color: ClubProfileColors.text),
           ),
-          child: Icon(icon, size: 20, color: ClubProfileColors.text),
         ),
       ),
     );
@@ -258,6 +280,17 @@ class ClubVerifiedBadge extends StatelessWidget {
 
   static const Color verificationColor = Color(0xFF800020);
 
+  /// How far to lift the tick so it sits in the middle of the seal by eye.
+  ///
+  /// Stacking the two glyphs box-on-box centres their *em squares*, not their
+  /// ink: `check_rounded` draws low in its box, so the tick rode below the
+  /// seal's centre. Measured off a 2x render of the club profile — the tick's
+  /// weighted ink centroid was 0.97px low on a 31px seal, i.e. 2.7% of the
+  /// badge. Horizontally the same measurement came back centred (0.23px left),
+  /// so only the vertical is corrected; the tick merely *reads* as leaning
+  /// right because its long arm rises that way.
+  static const double _checkOpticalRise = 0.027;
+
   final double size;
   final String? semanticLabel;
 
@@ -278,11 +311,14 @@ class ClubVerifiedBadge extends StatelessWidget {
           alignment: Alignment.center,
           children: [
             Icon(Icons.verified_rounded, size: size, color: verificationColor),
-            Icon(
-              Icons.check_rounded,
-              size: size * 0.58,
-              color: Colors.white,
-              weight: 800,
+            Transform.translate(
+              offset: Offset(0, -size * _checkOpticalRise),
+              child: Icon(
+                Icons.check_rounded,
+                size: size * 0.58,
+                color: Colors.white,
+                weight: 800,
+              ),
             ),
           ],
         ),
@@ -339,16 +375,34 @@ class ClubVerifiedName extends StatelessWidget {
   }
 }
 
-/// `club-identity-card` `337:30` — 64pt avatar, name, plain `@handle`, the
-/// description and the category chips.
-class ClubProfileIdentityCard extends StatelessWidget {
-  const ClubProfileIdentityCard({
+/// The club's portrait in the hero, held level with the student profiles'
+/// `kProfileHeroPortraitSize` so the two heroes keep reading as one system.
+const double kClubProfileHeroPortraitSize = 84;
+
+/// `club-identity-section` `729:33` / `729:141` — the club's name on the
+/// leading edge with its portrait opposite, its `@handle` as a small tinted
+/// chip beneath, then the description, the category chips, one line of counts
+/// and the viewer's two actions.
+///
+/// This is the same shape the student profile's `ProfilePeerHero` took, which
+/// is the point: the two profiles now read as one system. It replaces the
+/// bordered `club-identity-card` and the three `stats-row` cells the earlier
+/// club frames drew — the block sits directly on the page with no card around
+/// it, so [kClubProfilePageGutter] is what aligns it with the tabs and lists
+/// below.
+class ClubProfileHero extends StatelessWidget {
+  const ClubProfileHero({
     super.key,
     required this.avatar,
     required this.name,
     required this.handle,
     required this.description,
     required this.categories,
+    required this.postsLabel,
+    required this.membersLabel,
+    required this.eventsLabel,
+    this.onStatsTap,
+    this.onLongPress,
     this.actions,
   });
 
@@ -357,46 +411,70 @@ class ClubProfileIdentityCard extends StatelessWidget {
   final String name;
   final String handle;
   final String description;
+
+  /// `chips` — dropped by the frame, kept at the user's request. They are the
+  /// only place a club's categories appear on its own profile.
   final List<String> categories;
 
-  /// Viewer actions under the chips. Null on the club's own profile — the
-  /// frame is an admin looking at their own club, so it draws none. A student
-  /// browsing the club gets Follow + Club Chat here.
+  /// `47 posts  ·  342 members  ·  12 events` `729:41`. The frame bolds the
+  /// middle segment and paints it in the text colour while the other two stay
+  /// muted, so the three arrive separately rather than as one string.
+  final String postsLabel;
+  final String membersLabel;
+  final String eventsLabel;
+
+  /// The whole line opens the member directory. The frame draws plain text
+  /// where three tappable stat cells used to be, and Members was the only one
+  /// of the three that ever had a destination.
+  final VoidCallback? onStatsTap;
+
+  /// Report & Block for a student browsing the club — the frame draws no
+  /// overflow control, so it hangs off a long press as this area's board rows
+  /// and event cards already do.
+  final VoidCallback? onLongPress;
+
+  /// Viewer actions. Null on the club's own profile: Join and Message are
+  /// things a visitor does, and the frame draws them for the visitor state.
   final Widget? actions;
 
   @override
   Widget build(BuildContext context) {
-    return ClubProfileCard(
-      key: const ValueKey('club-profile-identity-card'),
-      radius: 16,
-      padding: const EdgeInsets.all(14),
+    final muted = figtree(
+      size: 13,
+      weight: FontWeight.w400,
+      color: ClubProfileColors.muted,
+      height: 1.25,
+    );
+
+    return GestureDetector(
+      key: const ValueKey('club-profile-hero'),
+      behavior: HitTestBehavior.opaque,
+      onLongPress: onLongPress,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Row(
             children: [
-              Container(
-                width: 64,
-                height: 64,
-                decoration: BoxDecoration(
-                  shape: BoxShape.circle,
-                  border: Border.all(color: ClubProfileColors.accent, width: 2),
-                ),
-                padding: const EdgeInsets.all(2),
-                child: ClipOval(child: SizedBox.expand(child: avatar)),
-              ),
-              const SizedBox(width: 12),
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    ClubVerifiedName(
-                      name: name,
-                      badgeSize: 17,
+                    // The official-club mark is *not* pinned to the end of
+                    // the name here: the user asked for it to sit level with
+                    // the middle of the club's portrait, just to its left, so
+                    // it is a sibling further down this Row instead. The name
+                    // carries the combined announcement so a screen reader
+                    // still hears "<club>, Verified club" in one breath.
+                    Text(
+                      name,
                       maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                      semanticsLabel:
+                          '$name, '
+                          '${AppLocalizations.of(context)?.officialClubLabel ?? 'Verified club'}',
                       style: figtree(
-                        size: 20,
+                        size: 24,
                         weight: FontWeight.w800,
                         color: ClubProfileColors.text,
                         height: 1.15,
@@ -404,58 +482,107 @@ class ClubProfileIdentityCard extends StatelessWidget {
                       ),
                     ),
                     const SizedBox(height: 6),
+                    // `tag-badge` 729:37 draws the initials on a tinted wash;
+                    // the user asked for the writing on its own, so the pill
+                    // and the accent colour are both gone. 13pt rather than
+                    // the frame's 11 — with no pill around it, an 11pt line
+                    // under a 24pt name reads as a stray fleck.
                     Text(
                       '@$handle',
                       key: const ValueKey('club-profile-handle'),
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                       style: figtree(
-                        size: 14,
-                        weight: FontWeight.w600,
-                        color: themeService.isDark
-                            ? Colors.white
-                            : ClubProfileColors.text,
+                        size: 13,
+                        weight: FontWeight.w700,
+                        color: ClubProfileColors.text,
                         height: 1.2,
                       ),
                     ),
                   ],
                 ),
               ),
+              const SizedBox(width: 12),
+              // Row centres its children, so the badge lands on the portrait's
+              // vertical middle — the tallest thing in the row — rather than
+              // on the name's line. The narrower gap on its right groups it
+              // with the picture it marks.
+              const ExcludeSemantics(child: ClubVerifiedBadge(size: 18)),
+              const SizedBox(width: 10),
+              // `club-avatar` 729:39 rings the portrait with a 2pt stroke;
+              // the user had the same ring taken off the student profiles and
+              // asked for this one to go too, so the picture fills the whole
+              // 72pt box instead of being inset by the border.
+              SizedBox(
+                width: kClubProfileHeroPortraitSize,
+                height: kClubProfileHeroPortraitSize,
+                child: ClipOval(child: SizedBox.expand(child: avatar)),
+              ),
             ],
           ),
           if (description.trim().isNotEmpty) ...[
-            const SizedBox(height: 12),
+            const SizedBox(height: 14),
             Text(
-              description,
+              description.trim(),
               style: figtree(
-                size: 13,
+                size: 14,
                 weight: FontWeight.w400,
                 color: ClubProfileColors.muted,
-                height: 1.45,
+                height: 1.5,
               ),
             ),
           ],
           if (categories.isNotEmpty) ...[
-            const SizedBox(height: 12),
+            const SizedBox(height: 14),
             Wrap(
               spacing: 8,
               runSpacing: 8,
               children: [
                 for (final category in categories)
-                  ClubProfileChip(label: category),
+                  ClubProfileCategoryLabel(label: category),
               ],
             ),
           ],
-          if (actions != null) ...[const SizedBox(height: 12), actions!],
+          const SizedBox(height: 14),
+          Semantics(
+            button: onStatsTap != null,
+            child: GestureDetector(
+              key: const ValueKey('club-profile-stats'),
+              behavior: HitTestBehavior.opaque,
+              onTap: onStatsTap,
+              child: Text.rich(
+                TextSpan(
+                  children: [
+                    TextSpan(text: postsLabel),
+                    const TextSpan(text: '  ·  '),
+                    TextSpan(
+                      text: membersLabel,
+                      style: figtree(
+                        size: 13,
+                        weight: FontWeight.w700,
+                        color: ClubProfileColors.text,
+                        height: 1.25,
+                      ),
+                    ),
+                    const TextSpan(text: '  ·  '),
+                    TextSpan(text: eventsLabel),
+                  ],
+                ),
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
+                style: muted,
+              ),
+            ),
+          ),
+          if (actions != null) ...[const SizedBox(height: 14), actions!],
         ],
       ),
     );
   }
 }
 
-/// A viewer action under the identity card's chips — geometry borrowed from the
-/// student profile's Follow/Message pair (46pt tall, radius 14, 15/w700) so the
-/// two peer-view screens read the same, painted in [ClubProfileColors].
+/// `btn-join` / `btn-message` `729:43` / `729:45` — the visitor's pair under
+/// the stats line: 42pt tall, radius 12, label 14/w700, 10pt apart.
 class ClubProfileActionButton extends StatelessWidget {
   const ClubProfileActionButton({
     super.key,
@@ -477,11 +604,11 @@ class ClubProfileActionButton extends StatelessWidget {
       onTap: onTap,
       behavior: HitTestBehavior.opaque,
       child: Container(
-        height: 46,
+        height: 42,
         alignment: Alignment.center,
         decoration: BoxDecoration(
           color: filled ? ClubProfileColors.accent : Colors.transparent,
-          borderRadius: const BorderRadius.all(Radius.circular(14)),
+          borderRadius: const BorderRadius.all(Radius.circular(12)),
           border: filled ? null : Border.all(color: ClubProfileColors.border),
         ),
         child: Row(
@@ -499,7 +626,7 @@ class ClubProfileActionButton extends StatelessWidget {
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
                 style: figtree(
-                  size: 15,
+                  size: 14,
                   weight: FontWeight.w700,
                   color: foreground,
                 ),
@@ -512,7 +639,11 @@ class ClubProfileActionButton extends StatelessWidget {
   }
 }
 
-/// `tag-badge` / `chip-music` — accent text on the accent tint, fully rounded.
+/// `status-chip` `343:*` — accent text on the accent tint, fully rounded.
+///
+/// Only the Events tab draws one now (the "Happening now" / "Past" marker on
+/// `ClubProfileEventCard`); those frames were not part of the `Club profile
+/// new` pass, so the pill stays as drawn there.
 class ClubProfileChip extends StatelessWidget {
   const ClubProfileChip({super.key, required this.label});
 
@@ -539,68 +670,123 @@ class ClubProfileChip extends StatelessWidget {
   }
 }
 
-/// `stats-row` `337:39` — three compact equal cells with 8pt between them.
-class ClubProfileStatsRow extends StatelessWidget {
-  const ClubProfileStatsRow({super.key, required this.cells});
+/// `chip-music` `729:*` — one of the club's categories.
+///
+/// The frame draws each on a rounded accent tint. The user asked twice here:
+/// first for the writing on its own, then for the pill back around it — so
+/// the shape returned and the burgundy did not. The word stays in
+/// [ClubProfileColors.text] on the card colour with the page's hairline, the
+/// same pair the member rows below it are built from, which is what makes the
+/// pill legible on both grounds without reintroducing an accent.
+///
+/// Deliberately not [ClubProfileChip]: that one is the Events tab's accent
+/// status marker and its frames were not part of this pass.
+class ClubProfileCategoryLabel extends StatelessWidget {
+  const ClubProfileCategoryLabel({super.key, required this.label});
 
-  final List<ClubProfileStat> cells;
+  final String label;
 
   @override
   Widget build(BuildContext context) {
-    return Row(
-      key: const ValueKey('club-profile-stats'),
-      children: [
-        for (var i = 0; i < cells.length; i++) ...[
-          if (i > 0) const SizedBox(width: 8),
-          Expanded(child: _cell(cells[i])),
-        ],
-      ],
-    );
-  }
-
-  Widget _cell(ClubProfileStat stat) {
-    return ClubProfileCard(
-      radius: 12,
-      onTap: stat.onTap,
-      child: SizedBox(
-        height: 56,
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Text(
-              stat.value,
-              style: figtree(
-                size: 19,
-                weight: FontWeight.w800,
-                color: ClubProfileColors.text,
-                height: 1.1,
-              ),
-            ),
-            const SizedBox(height: 3),
-            Text(
-              stat.label,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: figtree(
-                size: 11.5,
-                weight: FontWeight.w500,
-                color: ClubProfileColors.muted,
-                height: 1.1,
-              ),
-            ),
-          ],
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 5),
+      decoration: BoxDecoration(
+        color: ClubProfileColors.card,
+        borderRadius: BorderRadius.circular(999),
+        border: Border.all(color: ClubProfileColors.border),
+      ),
+      child: Text(
+        label,
+        style: figtree(
+          size: 12,
+          weight: FontWeight.w600,
+          color: ClubProfileColors.text,
+          height: 1.2,
         ),
       ),
     );
   }
 }
 
-class ClubProfileStat {
-  const ClubProfileStat({required this.value, required this.label, this.onTap});
+/// `tabs` `729:47` / `729:155` — three labels spread across the width, the
+/// selected one in ExtraBold over a 2pt underline, all standing on the
+/// section's hairline.
+///
+/// A second widget rather than a restyle of [ClubProfileSegmentedTabs]: that
+/// pill track is still what the connections directory draws, and what the
+/// Events tab's own Upcoming / Past switch draws one level below this one.
+class ClubProfileUnderlineTabs extends StatelessWidget {
+  const ClubProfileUnderlineTabs({
+    super.key,
+    required this.labels,
+    required this.index,
+    required this.onChanged,
+    this.keyPrefix = 'club-profile-tab',
+  });
 
-  final String value;
-  final String label;
-  final VoidCallback? onTap;
+  final List<String> labels;
+  final int index;
+  final ValueChanged<int> onChanged;
+  final String keyPrefix;
+
+  /// `Frame` `729:49` is 80 wide with the label centred in it. Kept as a
+  /// minimum rather than a fixed width so a longer Turkish label grows its own
+  /// cell instead of ellipsising inside an English-sized one.
+  static const double _minCellWidth = 80;
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            for (var i = 0; i < labels.length; i++)
+              Flexible(
+                child: GestureDetector(
+                  key: ValueKey('$keyPrefix-$i'),
+                  behavior: HitTestBehavior.opaque,
+                  onTap: () => onChanged(i),
+                  child: Container(
+                    constraints: const BoxConstraints(minWidth: _minCellWidth),
+                    padding: const EdgeInsets.only(bottom: 8),
+                    decoration: BoxDecoration(
+                      border: Border(
+                        bottom: BorderSide(
+                          color: i == index
+                              ? ClubProfileColors.text
+                              : Colors.transparent,
+                          width: 2,
+                        ),
+                      ),
+                    ),
+                    child: Text(
+                      labels[i],
+                      textAlign: TextAlign.center,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: figtree(
+                        size: 14,
+                        weight: i == index
+                            ? FontWeight.w800
+                            : FontWeight.w500,
+                        color: i == index
+                            ? ClubProfileColors.text
+                            : ClubProfileColors.muted,
+                        height: 1.2,
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+          ],
+        ),
+        Container(height: 1, color: ClubProfileColors.border),
+      ],
+    );
+  }
 }
 
 /// `segmented-tabs` `337:49` — a 38pt track with a 30pt accent pill.
@@ -1064,6 +1250,7 @@ class ClubProfileMemberRow extends StatelessWidget {
     this.onTap,
     this.onLongPress,
     this.showChevron = false,
+    this.radius = 14,
   });
 
   final Widget avatar;
@@ -1076,10 +1263,15 @@ class ClubProfileMemberRow extends StatelessWidget {
   final VoidCallback? onLongPress;
   final bool showChevron;
 
+  /// `member-row` `729:63` rounds to 20 on the club profile's Board tab. The
+  /// default stays 14 for `board-members-all` and the joined-member directory,
+  /// whose own frames were not part of that pass.
+  final double radius;
+
   @override
   Widget build(BuildContext context) {
     return ClubProfileCard(
-      radius: 14,
+      radius: radius,
       onTap: onTap,
       onLongPress: onLongPress,
       padding: const EdgeInsets.all(12),

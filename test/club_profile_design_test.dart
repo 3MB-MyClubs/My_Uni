@@ -19,7 +19,9 @@ import 'package:flutter_application_1/services/locale_service.dart';
 import 'package:flutter_application_1/services/mock_data.dart';
 import 'package:flutter_application_1/services/theme_service.dart';
 import 'package:flutter_application_1/services/user_state.dart';
+import 'package:flutter_application_1/widgets/club_avatar.dart';
 import 'package:flutter_application_1/widgets/club_profile_design.dart';
+import 'package:flutter_application_1/widgets/profile_design.dart';
 import 'package:flutter_application_1/widgets/event_cover_image.dart';
 import 'package:flutter_application_1/widgets/home_design.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -191,18 +193,18 @@ void main() {
     await tester.pump(const Duration(milliseconds: 400));
   }
 
-  testWidgets('the club sees the frame header, identity card and stat cells', (
+  testWidgets('the club sees the frame header, hero and one stats line', (
     tester,
   ) async {
     signInClubAdmin();
     await pumpProfile(tester);
 
-    // `chat-header` 332:2208 — the frame titles the screen, not the club.
+    // `chat-header` 729:19 — the frame titles the screen, not the club.
     expect(find.text(S.clubProfileTitle), findsOneWidget);
-    final identityCard = find.byType(ClubProfileIdentityCard);
-    expect(identityCard, findsOneWidget);
+    final hero = find.byType(ClubProfileHero);
+    expect(hero, findsOneWidget);
     final identityBadge = find.descendant(
-      of: identityCard,
+      of: hero,
       matching: find.byType(ClubVerifiedBadge),
     );
     expect(identityBadge, findsOneWidget);
@@ -218,40 +220,79 @@ void main() {
     expect(badgeIcons[1].color, Colors.white);
     expect(find.text('Rooftop Collective'), findsWidgets);
     expect(find.text('@RC'), findsOneWidget);
+    // `tag-badge` 729:37 draws the initials on a tinted wash and `chip-music`
+    // draws the categories on another; the user asked for the writing alone,
+    // so neither has a pill behind it and both take the page's text colour.
     final handle = tester.widget<Text>(
       find.byKey(const ValueKey('club-profile-handle')),
     );
     expect(handle.style?.color, ClubProfileColors.text);
     expect(
-      find.ancestor(
-        of: find.byKey(const ValueKey('club-profile-handle')),
+      find.byKey(const ValueKey('club-profile-handle-chip')),
+      findsNothing,
+    );
+
+    // `categories-row` 426:20 splits the club's comma-separated categories.
+    // 729:33 draws none; they were kept at the user's request — as bare words.
+    expect(find.text('Music'), findsOneWidget);
+    expect(find.text('Arts'), findsOneWidget);
+    expect(find.byType(ClubProfileCategoryLabel), findsNWidgets(2));
+    expect(
+      tester
+          .widget<Text>(
+            find.descendant(
+              of: find.byType(ClubProfileCategoryLabel).first,
+              matching: find.byType(Text),
+            ),
+          )
+          .style
+          ?.color,
+      ClubProfileColors.text,
+    );
+    // The categories kept their pill; only its burgundy went. The initials
+    // beside them did not get one back.
+    final categoryPill =
+        tester
+                .widget<Container>(
+                  find.descendant(
+                    of: find.byType(ClubProfileCategoryLabel).first,
+                    matching: find.byType(Container),
+                  ),
+                )
+                .decoration
+            as BoxDecoration;
+    expect(categoryPill.color, ClubProfileColors.card);
+    expect(categoryPill.border, isNotNull);
+    expect(
+      find.descendant(
+        of: find.byType(ClubProfileHero),
         matching: find.byType(ClubProfileChip),
       ),
       findsNothing,
     );
 
-    // `categories-row` 426:20 splits the club's comma-separated categories.
-    expect(find.text('Music'), findsOneWidget);
-    expect(find.text('Arts'), findsOneWidget);
-
-    // `stats-row` 337:39 — Timeline / Members / Events.
-    final identity = find.byType(ClubProfileIdentityCard);
-    expect(tester.getSize(identity).height, lessThan(210));
-    final stats = find.byType(ClubProfileStatsRow);
+    // `club-identity-section` 729:41 — one line of counts where `stats-row`
+    // 337:39 drew three cells, so none of the cell labels survive.
+    final stats = find.byKey(const ValueKey('club-profile-stats'));
     expect(stats, findsOneWidget);
-    // The 56pt cells plus the card's 1pt hairline on each side.
-    expect(tester.getSize(stats).height, 58);
-    expect(find.byType(ClubProfileSegmentedTabs), findsWidgets);
-    expect(find.text(S.clubProfileTimeline), findsNWidgets(2));
+    expect(find.byType(ClubProfileUnderlineTabs), findsOneWidget);
+    // Timeline is a tab label and nothing else now — it used to name a stat
+    // cell as well.
+    expect(find.text(S.clubProfileTimeline), findsOneWidget);
+    final l10n = AppLocalizations.of(tester.element(stats))!;
+    expect(find.text(l10n.posts), findsNothing);
+    expect(find.text(l10n.members), findsNothing);
+    final statsLine = tester.widget<Text>(
+      find.descendant(of: stats, matching: find.byType(Text)),
+    );
+    expect(statsLine.textSpan!.toPlainText().split('·'), hasLength(3));
+    // `tabs` 729:47: a 2pt underline on the section hairline, not a pill.
     expect(
-      find.text(AppLocalizations.of(tester.element(stats))!.posts),
+      find.byWidgetPredicate(
+        (widget) => widget is ClubProfileSegmentedTabs && !widget.compact,
+      ),
       findsNothing,
     );
-    final primaryTabs = find.byWidgetPredicate(
-      (widget) => widget is ClubProfileSegmentedTabs && !widget.compact,
-    );
-    expect(primaryTabs, findsOneWidget);
-    expect(tester.getSize(primaryTabs).height, 38);
 
     // Stripped to the frame: no Club Chat shortcut.
     expect(find.text(S.clubChat), findsNothing);
@@ -285,12 +326,9 @@ void main() {
     signInClubAdmin();
     await pumpProfile(tester);
 
-    final stats = find.byType(ClubProfileStatsRow);
-    final membersLabel = find.descendant(
-      of: stats,
-      matching: find.text(AppLocalizations.of(tester.element(stats))!.members),
-    );
-    await tester.tap(membersLabel);
+    // Members was the only stat cell with a destination; the line that
+    // replaced the three cells carries it whole.
+    await tester.tap(find.byKey(const ValueKey('club-profile-stats')));
     await tester.pumpAndSettle();
 
     expect(find.byType(ClubProfileMembersScreen), findsOneWidget);
@@ -319,7 +357,7 @@ void main() {
     await pumpProfile(tester);
 
     expect(find.text(S.clubProfileTitle), findsNothing);
-    expect(find.byType(ClubProfileIdentityCard), findsNothing);
+    expect(find.byType(ClubProfileHero), findsNothing);
     expect(find.byType(ClubVerifiedBadge), findsOneWidget);
     expect(find.byType(TabBar), findsOneWidget);
     expect(find.text(S.clubProfileTimeline.toUpperCase()), findsOneWidget);
@@ -337,9 +375,9 @@ void main() {
 
     // Same chrome as the club sees.
     expect(find.text(S.clubProfileTitle), findsOneWidget);
-    expect(find.byType(ClubProfileIdentityCard), findsOneWidget);
-    expect(find.byType(ClubProfileStatsRow), findsOneWidget);
-    expect(find.byType(ClubProfileSegmentedTabs), findsWidgets);
+    expect(find.byType(ClubProfileHero), findsOneWidget);
+    expect(find.byKey(const ValueKey('club-profile-stats')), findsOneWidget);
+    expect(find.byType(ClubProfileUnderlineTabs), findsOneWidget);
     expect(find.text('@RC'), findsOneWidget);
     expect(find.text('Music'), findsOneWidget);
 
@@ -357,13 +395,168 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
+  testWidgets('the verified tick sits in the middle of its seal', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      const MaterialApp(
+        localizationsDelegates: AppLocalizations.localizationsDelegates,
+        supportedLocales: AppLocalizations.supportedLocales,
+        home: Center(child: ClubVerifiedBadge(size: 72)),
+      ),
+    );
+
+    // Stacking the two glyphs box-on-box centres their em squares, not their
+    // ink: `check_rounded` draws low in its box, so the tick rode below the
+    // seal's middle. Measured off a 2x render of the club profile — the tick's
+    // weighted ink centroid was 0.97px low on a 31px seal.
+    final seal = tester.getRect(find.byIcon(Icons.verified_rounded));
+    final tick = tester.getRect(find.byIcon(Icons.check_rounded));
+    expect(seal.center.dx, tick.center.dx);
+    expect(seal.center.dy - tick.center.dy, closeTo(72 * 0.027, 0.01));
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('the hero leads with the name and puts the portrait opposite', (
+    tester,
+  ) async {
+    signInClubAdmin();
+    await pumpProfile(tester);
+
+    // `identity-top` 729:34 turns the old card around: name and handle on the
+    // leading edge, the portrait opposite — the same shape the student
+    // profile's hero took.
+    final hero = find.byType(ClubProfileHero);
+    final name = find.descendant(
+      of: hero,
+      matching: find.text('Rooftop Collective'),
+    );
+    final avatar = find.descendant(of: hero, matching: find.byType(ClubAvatar));
+    expect(
+      tester.getRect(name).left,
+      lessThan(tester.getRect(avatar).left),
+    );
+    // The frame's 2pt accent ring is gone at the user's request, so the
+    // The frame's 72pt box with its 2pt accent ring is gone at the user's
+    // request; the picture fills a larger bare circle, level with the student
+    // profiles' portrait.
+    expect(
+      tester.getRect(avatar).size,
+      const Size(kClubProfileHeroPortraitSize, kClubProfileHeroPortraitSize),
+    );
+    expect(kClubProfileHeroPortraitSize, kProfileHeroPortraitSize);
+    expect(
+      find.descendant(
+        of: find.byType(ClubProfileHero),
+        matching: find.byWidgetPredicate(
+          (widget) =>
+              widget is Container &&
+              widget.decoration is BoxDecoration &&
+              (widget.decoration as BoxDecoration).shape == BoxShape.circle,
+        ),
+      ),
+      findsNothing,
+    );
+
+    // It stands on the page now, with the frame's 24pt gutters.
+    expect(
+      find.ancestor(of: hero, matching: find.byType(ClubProfileCard)),
+      findsNothing,
+    );
+    final heroRect = tester.getRect(hero);
+    expect(heroRect.left, kClubProfilePageGutter);
+    expect(heroRect.right, 402 - kClubProfilePageGutter);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('the official mark sits beside the portrait, not the name', (
+    tester,
+  ) async {
+    signInClubAdmin();
+    await pumpProfile(tester);
+
+    final hero = find.byType(ClubProfileHero);
+    final badge = tester.getRect(
+      find.descendant(of: hero, matching: find.byType(ClubVerifiedBadge)),
+    );
+    final name = tester.getRect(
+      find.descendant(of: hero, matching: find.text('Rooftop Collective')),
+    );
+    final portrait = tester.getRect(
+      find.descendant(of: hero, matching: find.byType(ClubAvatar)),
+    );
+
+    // In the gap between the two, and level with the middle of the picture
+    // rather than with the name's line.
+    expect(badge.left, greaterThan(name.right));
+    expect(badge.right, lessThan(portrait.left));
+    expect(badge.center.dy, closeTo(portrait.center.dy, 0.5));
+    expect(badge.center.dy, greaterThan(name.center.dy));
+
+    // The club is still announced as verified, in one breath with its name.
+    // findsWidgets, not findsOneWidget: the hero's own long-press detector
+    // republishes the label it wraps.
+    expect(find.bySemanticsLabel(RegExp('Rooftop Collective, ')), findsWidgets);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('the underline tabs mark the active pane and switch it', (
+    tester,
+  ) async {
+    signInClubAdmin();
+    await pumpProfile(tester);
+
+    Text labelOf(int i) => tester.widget<Text>(
+      find.descendant(
+        of: find.byKey(ValueKey('club-profile-tab-$i')),
+        matching: find.byType(Text),
+      ),
+    );
+
+    expect(labelOf(2).style?.fontWeight, FontWeight.w500);
+    expect(labelOf(2).style?.color, ClubProfileColors.muted);
+
+    await tester.tap(find.byKey(const ValueKey('club-profile-tab-2')));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 400));
+
+    expect(labelOf(2).style?.fontWeight, FontWeight.w800);
+    expect(labelOf(2).style?.color, ClubProfileColors.text);
+    expect(labelOf(0).style?.fontWeight, FontWeight.w500);
+    expect(find.byKey(const ValueKey('club-profile-board')), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('board rows round to 20 and the header icons lose their rings', (
+    tester,
+  ) async {
+    signInClubAdmin();
+    await pumpProfile(tester, initialTabIndex: 2);
+
+    // `member-row` 729:63.
+    final row = tester.widget<ClubProfileMemberRow>(
+      find.byType(ClubProfileMemberRow).first,
+    );
+    expect(row.radius, 20);
+
+    // The frames draw both header controls as bordered circles; the user
+    // asked for the student profile's bare glyph instead.
+    final insights = find.byKey(const ValueKey('club-profile-insights'));
+    expect(tester.widget(insights), isA<ClubProfilePlainIconButton>());
+    expect(
+      find.descendant(of: insights, matching: find.byType(DecoratedBox)),
+      findsNothing,
+    );
+    expect(tester.takeException(), isNull);
+  });
+
   testWidgets('the Follow button reflects and flips with followed state', (
     tester,
   ) async {
     signInStudent();
     await pumpProfile(tester);
     final l10n = AppLocalizations.of(
-      tester.element(find.byType(ClubProfileIdentityCard)),
+      tester.element(find.byType(ClubProfileHero)),
     )!;
 
     ClubProfileActionButton followButton() =>
@@ -385,14 +578,12 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
-  testWidgets('long-pressing the identity card offers Report & Block', (
-    tester,
-  ) async {
+  testWidgets('long-pressing the hero offers Report & Block', (tester) async {
     signInStudent();
     await pumpProfile(tester);
 
     // The frame draws no overflow, so this is the student's moderation route.
-    await tester.longPress(find.byType(ClubProfileIdentityCard));
+    await tester.longPress(find.byType(ClubProfileHero));
     await tester.pumpAndSettle();
 
     expect(find.byKey(const ValueKey('club-profile-report')), findsOneWidget);
@@ -400,13 +591,11 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
-  testWidgets('a club long-press on the identity card does nothing', (
-    tester,
-  ) async {
+  testWidgets('a club long-press on the hero does nothing', (tester) async {
     signInClubAdmin();
     await pumpProfile(tester);
 
-    await tester.longPress(find.byType(ClubProfileIdentityCard));
+    await tester.longPress(find.byType(ClubProfileHero));
     await tester.pumpAndSettle();
 
     expect(find.byKey(const ValueKey('club-profile-report')), findsNothing);
@@ -419,11 +608,7 @@ void main() {
     signInStudent();
     await pumpProfile(tester);
 
-    final stats = find.byType(ClubProfileStatsRow);
-    final l10n = AppLocalizations.of(tester.element(stats))!;
-    await tester.tap(
-      find.descendant(of: stats, matching: find.text(l10n.members)),
-    );
+    await tester.tap(find.byKey(const ValueKey('club-profile-stats')));
     await tester.pumpAndSettle();
 
     expect(find.byType(ClubProfileMembersScreen), findsOneWidget);
@@ -463,7 +648,7 @@ void main() {
     expect(
       find.text(
         AppLocalizations.of(
-          tester.element(find.byType(ClubProfileStatsRow)),
+          tester.element(find.byType(ClubProfileHero)),
         )!.pinToTop,
       ),
       findsOneWidget,
@@ -756,23 +941,32 @@ void main() {
     signInClubAdmin();
     await pumpProfile(tester);
 
-    expect(ClubProfileColors.page, const Color(0xFF0A0A0A));
-    expect(ClubProfileColors.card, const Color(0xFF121212));
+    // `Club profile new` 729:113 paints zinc-950, but the user chose the
+    // Events colours the rest of the app already runs on.
+    expect(ClubProfileColors.page, const Color(0xFF121212));
+    expect(ClubProfileColors.card, const Color(0xFF1E1E1E));
+    expect(ClubProfileColors.border, const Color(0xFF2D2D2D));
     expect(ClubProfileColors.accent, const Color(0xFF800020));
     expect(ClubProfileColors.accentText, const Color(0xFFFA526B));
 
+    // The hero's own two strings are plain text now, so the lift shows on the
+    // section header's action instead — "View all" is the accent text left on
+    // this screen.
     final handle = tester.widget<Text>(
       find.byKey(const ValueKey('club-profile-handle')),
     );
-    expect(handle.style?.color, Colors.white);
+    expect(handle.style?.color, const Color(0xFFFAFAFA));
 
-    final chip = tester.widget<Text>(
+    await tester.tap(find.byKey(const ValueKey('club-profile-tab-2')));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 400));
+    final viewAll = tester.widget<Text>(
       find.descendant(
-        of: find.byType(ClubProfileChip).first,
+        of: find.byKey(const ValueKey('club-profile-section-action')),
         matching: find.byType(Text),
       ),
     );
-    expect(chip.style?.color, const Color(0xFFFA526B));
+    expect(viewAll.style?.color, const Color(0xFFFA526B));
     expect(tester.takeException(), isNull);
   });
 
@@ -785,7 +979,7 @@ void main() {
     // itself is 402x874, and `flutter_test`'s fallback font is wider than
     // Figtree, so this is the strictest fit the area gets before a simulator.
     await pumpProfile(tester, height: 874);
-    expect(find.text('Akış'), findsNWidgets(2));
+    expect(find.text('Akış'), findsOneWidget);
     expect(tester.takeException(), isNull);
 
     await tester.tap(find.byKey(const ValueKey('club-profile-tab-1')));

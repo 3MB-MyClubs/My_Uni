@@ -76,24 +76,26 @@ abstract final class SpecializedSemanticPalettes {
     darkSubtleSurface: const Color(0xFF2D2D2D),
   );
 
+  // Kept in step with `ProfileColors`, which moved off zinc-950 onto the
+  // app's `#121212` dark set so the profile family matches Events.
   static SpecializedSemanticPalette profiles(ThemeData theme) => _neutral(
     theme,
     lightBackground: const Color(0xFFFAF9F6),
-    darkBackground: const Color(0xFF09090B),
+    darkBackground: const Color(0xFF121212),
     lightSurface: const Color(0xFFFFFFFF),
-    darkSurface: const Color(0xFF18181B),
+    darkSurface: const Color(0xFF1E1E1E),
     lightSubtleSurface: const Color(0xFFF4F4F5),
-    darkSubtleSurface: const Color(0xFF27272A),
+    darkSubtleSurface: const Color(0xFF2D2D2D),
   );
 
   static SpecializedSemanticPalette clubProfiles(ThemeData theme) => _neutral(
     theme,
     lightBackground: const Color(0xFFFAF9F6),
-    darkBackground: const Color(0xFF0A0A0A),
+    darkBackground: const Color(0xFF121212),
     lightSurface: const Color(0xFFFFFFFF),
-    darkSurface: const Color(0xFF121212),
+    darkSurface: const Color(0xFF1E1E1E),
     lightSubtleSurface: const Color(0xFFF4F4F5),
-    darkSubtleSurface: const Color(0xFF1E1E1E),
+    darkSubtleSurface: const Color(0xFF2A2A2A),
     darkBrandForeground: const Color(0xFFFA526B),
   );
 
