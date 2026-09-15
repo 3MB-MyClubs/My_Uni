@@ -61,6 +61,55 @@ void main() {
     }
   });
 
+  testWidgets(
+    'own profile clubs panel caps at four and offers a "+N more" line',
+    (tester) async {
+      final many = [
+        for (var i = 0; i < 6; i++)
+          Club(
+            id: 'own-overflow-$i',
+            name: 'Overflow Club $i',
+            description: '',
+            adminUserIds: const [],
+          ),
+      ];
+
+      await tester.pumpWidget(
+        ProviderScope(
+          child: MaterialApp(
+            localizationsDelegates: AppLocalizations.localizationsDelegates,
+            supportedLocales: AppLocalizations.supportedLocales,
+            home: StudentProfileScreen(
+              onSettings: () {},
+              followedClubs: many,
+              data: const StudentProfileData(
+                userId: 'clubs-overflow-test',
+                initials: 'S',
+                name: 'Student',
+                graduation: '',
+                major: '',
+                year: '',
+                bio: '',
+                clubs: 6,
+                following: 0,
+                followers: 0,
+              ),
+            ),
+          ),
+        ),
+      );
+      await tester.pump();
+
+      // `clubs-scroller` stops after four so the section below stays reachable;
+      // the remaining two sit behind the trailing tile.
+      final list = tester.widget<ProfileClubList>(find.byType(ProfileClubList));
+      expect(list.entries, hasLength(kProfileClubsPreviewCount));
+      expect(list.remaining, 2);
+      expect(find.text(S.clubsMoreLine(2)), findsOneWidget);
+      expect(tester.takeException(), isNull);
+    },
+  );
+
   testWidgets('blank bios are omitted from student profiles', (tester) async {
     await tester.pumpWidget(
       ProviderScope(

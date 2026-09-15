@@ -1,6 +1,8 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:intl/intl.dart';
+
 import '../models/user.dart';
 import '../models/club.dart';
 import '../navigation/chat_page_route.dart';
@@ -9,7 +11,6 @@ import '../services/app_strings.dart';
 import '../l10n/app_localizations.dart';
 import '../services/auth_service.dart';
 import '../services/chat_store.dart';
-import '../services/guest_world.dart' show kGuestIdPrefix;
 import '../services/checkin_store.dart';
 import '../services/club_role_localization.dart';
 import '../services/supabase_content_service.dart';
@@ -369,11 +370,6 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
       listenable: userState,
       builder: (context, _) {
         final displayName = userState.displayNameFor(user.id, user.name);
-        // Guest-world people are fabricated demo accounts. Do not present a
-        // username for them as though it belonged to a real student.
-        final handle = user.id.startsWith(kGuestIdPrefix)
-            ? ''
-            : profileHandle(user.email);
         final isFollowingUser = userState.isFollowingUser(user.id);
         final isPending = userState.hasPendingRequest(user.id);
         final canAct = !_isOwnProfile && authService.isStudentSession;
@@ -384,12 +380,12 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
             bottom: false,
             child: Column(
               children: [
+                // `header` 725:119 carries no title — just the back circle
+                // and the trailing action. The `@handle` the old frame put
+                // here is gone from the redesign, and with it the guest-world
+                // suppression that kept a fabricated demo account from
+                // showing one: nothing renders a handle on this screen now.
                 ProfileBackHeader(
-                  title: _isOwnProfile
-                      ? l10n.myProfileTitle
-                      : handle.isEmpty
-                      ? displayName
-                      : handle,
                   onBack: () => Navigator.maybePop(context),
                   backTooltip: l10n.backTooltip,
                   trailing: _buildHeaderAction(context),
@@ -406,33 +402,16 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
                       bottomInset + kProfileNavClearance,
                     ),
                     children: [
-                      ProfileHero(
+                      ProfilePeerHero(
                         userId: user.id,
                         name: displayName,
-                        handle: handle,
                         bio: userState.bios[user.id] ?? '',
+                        statsLabel: _statsLabel(context),
+                        mutuals: _mutualFollowers,
+                        onStatsTap: _openFollowers,
                         badgeLabel: !_isOwnProfile && _userFollowsMe(user)
                             ? S.followsYou
                             : null,
-                        gap: 14,
-                        identityGap: 6,
-                        stats: [
-                          ProfileStat(
-                            value: '${_subscribedClubs.length}',
-                            label: l10n.clubs,
-                            onTap: _openClubs,
-                          ),
-                          ProfileStat(
-                            value: '${_following.length}',
-                            label: l10n.following,
-                            onTap: _openFollowing,
-                          ),
-                          ProfileStat(
-                            value: '${_followers.length}',
-                            label: l10n.followers,
-                            onTap: _openFollowers,
-                          ),
-                        ],
                         actions: canAct
                             ? Row(
                                 children: [
@@ -459,7 +438,6 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
                                     child: ProfileActionButton(
                                       label: S.message,
                                       icon: Icons.chat_bubble_outline_rounded,
-                                      iconSize: 19,
                                       filled: false,
                                       onTap: () => _openThread(user),
                                     ),
@@ -468,6 +446,12 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
                               )
                             : null,
                       ),
+                      const SizedBox(height: 22),
+                      // `tabs` 725:157 drew a Clubs/Events filter over this
+                      // hairline. The filter is gone at the user's request and
+                      // only the rule is kept, so both sections show at once
+                      // again — which is also how the frame itself draws them.
+                      Container(height: 1, color: ProfileColors.border),
                       const SizedBox(height: 22),
                       _buildClubsSection(context),
                       _buildEventsSection(context, user),
@@ -537,6 +521,8 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
         : theirClubs.where((club) => userState.isFollowing(club.id)).toList();
     final shown = mutual.isNotEmpty ? mutual : theirClubs;
     if (shown.isEmpty && !clubsLoading) return const SizedBox.shrink();
+    final visible = shown.take(kProfileClubsPreviewCount).toList();
+    final hiddenClubs = shown.length - visible.length;
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -558,27 +544,18 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
             backgroundColor: ProfileColors.border,
           )
         else
-          SingleChildScrollView(
-            scrollDirection: Axis.horizontal,
-            clipBehavior: Clip.none,
-            child: Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                for (var i = 0; i < shown.length; i++) ...[
-                  if (i > 0) const SizedBox(width: 12),
-                  ProfileClubCard(
-                    club: shown[i],
-                    color: _clubColor(shown[i]),
-                    detail: l10n.membersCountLabel(
-                      clubMemberCount(shown[i].id),
-                    ),
-                    width: 150,
-                    nameSize: 11,
-                    onTap: () => _openClub(shown[i]),
-                  ),
-                ],
-              ],
-            ),
+          ProfileClubList(
+            entries: [
+              for (final club in visible)
+                ProfileClubListEntry(
+                  club: club,
+                  color: _clubColor(club),
+                  detail: l10n.membersCountLabel(clubMemberCount(club.id)),
+                  onTap: () => _openClub(club),
+                ),
+            ],
+            remaining: hiddenClubs,
+            onSeeAll: _openClubs,
           ),
         const SizedBox(height: 22),
       ],
@@ -640,6 +617,9 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
                   shown[i].event.dateTime,
                   live: shown[i].isLive,
                 ),
+                // `event-card` 725:196 adds the hosting club under the date;
+                // the older `profile-menu` card showed the date alone.
+                clubName: shown[i].club?.name,
                 onTap: () => Navigator.push(
                   context,
                   MaterialPageRoute(
@@ -657,6 +637,35 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
     );
   }
 
+  // ── `New Profile` 725:109 hero data ────────────────────────────────────────
+
+  /// `stats` 725:147 — "1.2k followers · 340 following · 12 clubs" on one
+  /// line. The frame replaced the three tappable cells with plain text, so
+  /// these counts are no longer a way into the connections directory; Mutual
+  /// Clubs' "See All" is the only route left from this screen.
+  String _statsLabel(BuildContext context) {
+    final compact = NumberFormat.compact(
+      locale: Localizations.localeOf(context).toLanguageTag(),
+    );
+    return S.profileStatsLine(
+      compact.format(_followers.length),
+      compact.format(_following.length),
+      compact.format(_subscribedClubs.length),
+    );
+  }
+
+  /// `avatar-stack` 725:144 — people the viewer already follows who also
+  /// follow this student, capped at the two the frame draws. Empty on your own
+  /// profile and for any non-student session, where "people you follow" has no
+  /// meaning, and then the stats line closes up.
+  List<User> get _mutualFollowers {
+    if (_isOwnProfile || !authService.isStudentSession) return const [];
+    return _followers
+        .where((follower) => userState.isFollowingUser(follower.id))
+        .take(2)
+        .toList();
+  }
+
   /// The board role title this student holds at [club], or null if none.
   /// Empty stored titles fall back to a generic "Board Member" label.
   String? _roleTitleFor(Club club) {
@@ -665,9 +674,9 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
 
   void _openClubs() => _openConnections(StudentConnectionSection.clubs);
 
+  /// The hero's stats line. Lands on Followers — the segment the mini avatars
+  /// beside it depict — with Following and Clubs one tap away.
   void _openFollowers() => _openConnections(StudentConnectionSection.followers);
-
-  void _openFollowing() => _openConnections(StudentConnectionSection.following);
 
   void _openConnections(StudentConnectionSection initialSection) {
     final l10n = AppLocalizations.of(context)!;

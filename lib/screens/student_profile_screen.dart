@@ -253,27 +253,28 @@ class StudentProfileScreen extends StatelessWidget {
             child: ProfileSectionEmptyLine(label: S.noClubsYetLine),
           )
         else
-          // `clubs-scroller`: the frame's third card is clipped by the page
-          // edge, so the row scrolls and keeps that peek.
-          SingleChildScrollView(
-            scrollDirection: Axis.horizontal,
-            clipBehavior: Clip.none,
-            child: Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                for (var i = 0; i < entries.length; i++) ...[
-                  if (i > 0) const SizedBox(width: 12),
-                  ProfileClubCard(
-                    club: entries[i].club,
-                    color: entries[i].color,
-                    detail: entries[i].detail,
-                    onTap: onClubTap == null
-                        ? null
-                        : () => onClubTap!(entries[i].club),
-                  ),
+          // The frames' horizontal `clubs-scroller` is now one stacked panel
+          // capped at [kProfileClubsPreviewCount] — see [ProfileClubList] for
+          // why. The rest sit behind its trailing "+N more clubs" line.
+          Builder(
+            builder: (context) {
+              final visible = entries.take(kProfileClubsPreviewCount).toList();
+              return ProfileClubList(
+                entries: [
+                  for (final entry in visible)
+                    ProfileClubListEntry(
+                      club: entry.club,
+                      color: entry.color,
+                      detail: entry.detail,
+                      onTap: onClubTap == null
+                          ? null
+                          : () => onClubTap!(entry.club),
+                    ),
                 ],
-              ],
-            ),
+                remaining: entries.length - visible.length,
+                onSeeAll: onClubsTap ?? () => _openFollowedClubsScreen(context),
+              );
+            },
           ),
       ],
     );

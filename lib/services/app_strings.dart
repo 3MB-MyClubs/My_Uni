@@ -71,6 +71,7 @@ class S {
   static String get findPeople => _t('Find People', 'Kişileri Bul');
   static String get searchClubs => _t('Search…', 'Ara…');
   static String get searchPeople => _t('Search people…', 'Kişi ara…');
+
   /// The home feed's second scope — the tab beside Following.
   static String get allClubs => _t('All Clubs', 'Tüm Kulüpler');
   static String get exploreContentTab => _t('Events', 'Etkinlikler');
@@ -1120,6 +1121,24 @@ class S {
 
   /// The `badge` beside a peer's handle when they already follow you.
   static String get followsYou => _t('Follows you', 'Seni takip ediyor');
+
+  /// The subtitle on [ProfileClubOverflowCard] — the clubs the capped row is
+  /// not showing.
+  static String clubsMoreLine(int count) =>
+      _t('$count more clubs', '$count kulüp daha');
+
+  /// `stats` 725:147 on `New Profile` — the three counts collapsed onto one
+  /// line. The counts arrive pre-formatted (compact, so 1200 reads "1.2k" and
+  /// "1,2B" in Turkish) because `NumberFormat` is locale-aware and `_t` is
+  /// not.
+  static String profileStatsLine(
+    String followers,
+    String following,
+    String clubs,
+  ) => _t(
+    '$followers followers · $following following · $clubs clubs',
+    '$followers takipçi · $following takip · $clubs kulüp',
+  );
 
   /// Quiet placeholders — the frames have no empty state for these sections.
   static String get noClubsYetLine =>

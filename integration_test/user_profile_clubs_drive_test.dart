@@ -61,16 +61,14 @@ void main() {
     );
     await tester.pump(const Duration(milliseconds: 600));
 
-    // `mutual-clubs`: the rail is on screen without tapping anything, and the
+    // `mutual-clubs`: the panel is on screen without tapping anything, and the
     // board-role club still sorts to the front. The role badge the old campus
     // card carried is not part of the frame.
-    expect(find.byType(ProfileClubCard), findsWidgets);
+    expect(find.byType(ProfileClubList), findsOneWidget);
     expect(find.text(roleClub.name), findsOneWidget);
     expect(find.textContaining('Vice President'), findsNothing);
-    final firstCard = tester.widget<ProfileClubCard>(
-      find.byType(ProfileClubCard).first,
-    );
-    expect(firstCard.club.id, roleClub.id);
+    final list = tester.widget<ProfileClubList>(find.byType(ProfileClubList));
+    expect(list.entries.first.club.id, roleClub.id);
 
     await tester.pump(const Duration(milliseconds: 400));
 

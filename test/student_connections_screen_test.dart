@@ -9,6 +9,7 @@ import 'package:flutter_application_1/services/auth_service.dart';
 import 'package:flutter_application_1/services/mock_data.dart';
 import 'package:flutter_application_1/services/user_state.dart';
 import 'package:flutter_application_1/widgets/club_profile_design.dart';
+import 'package:flutter_application_1/widgets/profile_design.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -169,28 +170,26 @@ void main() {
     expect(opened, theatre);
   });
 
-  testWidgets('visited profile stats open three independent routes', (
+  testWidgets('visited profile stats line opens the Followers directory', (
     tester,
   ) async {
     await tester.pumpWidget(app(UserProfileScreen(user: alice)));
     await tester.pump();
 
-    await tester.tap(find.text('CLUBS'));
-    await tester.pumpAndSettle();
-    expect(find.byType(StudentConnectionsScreen), findsOneWidget);
-    expect(
-      tester
-          .widget<ClubProfileSegmentedTabs>(
-            find.byType(ClubProfileSegmentedTabs),
-          )
-          .index,
-      0,
-    );
-    Navigator.of(tester.element(find.byType(StudentConnectionsScreen))).pop();
+    // `stats` 725:147 collapsed the three tappable cells into one line, so the
+    // uppercase cell labels are gone...
+    expect(find.text('CLUBS'), findsNothing);
+    expect(find.text('FOLLOWING'), findsNothing);
+    expect(find.text('FOLLOWERS'), findsNothing);
+
+    // ...but the line as a whole is the way back into the directory. The mini
+    // avatars beside it are part of the same target, which is why they are
+    // wrapped in an IgnorePointer — `UserAvatar` would otherwise open its own
+    // photo viewer for anyone who has a photo.
+    final hero = tester.widget<ProfilePeerHero>(find.byType(ProfilePeerHero));
+    await tester.tap(find.text(hero.statsLabel));
     await tester.pumpAndSettle();
 
-    await tester.tap(find.text('FOLLOWING'));
-    await tester.pumpAndSettle();
     expect(find.byType(StudentConnectionsScreen), findsOneWidget);
     expect(
       tester
@@ -198,23 +197,8 @@ void main() {
             find.byType(ClubProfileSegmentedTabs),
           )
           .index,
-      2,
+      1, // Followers — what the mini avatars depict.
     );
-    Navigator.of(tester.element(find.byType(StudentConnectionsScreen))).pop();
-    await tester.pumpAndSettle();
-
-    await tester.tap(find.text('FOLLOWERS'));
-    await tester.pumpAndSettle();
-    expect(find.byType(StudentConnectionsScreen), findsOneWidget);
-    expect(
-      tester
-          .widget<ClubProfileSegmentedTabs>(
-            find.byType(ClubProfileSegmentedTabs),
-          )
-          .index,
-      1,
-    );
-    expect(find.text('Follow'), findsNothing);
   });
 
   testWidgets('own profile stats open the same three independent routes', (
