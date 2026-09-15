@@ -22,6 +22,7 @@ import '../services/student_activity_service.dart';
 import '../services/student_club_role_service.dart';
 import '../services/user_prefs_service.dart';
 import '../services/user_state.dart';
+import '../widgets/clubup_design.dart';
 import '../widgets/moderation_reason_sheet.dart';
 import '../widgets/profile_design.dart';
 import 'chat_thread_screen.dart';
@@ -130,6 +131,7 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
     _ensureClubContentForScope();
     _hydrateProfile();
     _refreshClubMemberCounts();
+    _hydrateActivity();
   }
 
   @override
@@ -138,7 +140,18 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
     if (oldWidget.user.id != widget.user.id) {
       _hydrateProfile();
       _refreshClubMemberCounts();
+      _hydrateActivity();
     }
+  }
+
+  /// Loads this student's own RSVP/check-in record so `Upcoming Events` has
+  /// something to draw. Without it the section can only see the RSVPs that
+  /// happen to be attached to the events already in the shared feed snapshot,
+  /// which is why a visited profile so often showed clubs and nothing else.
+  /// [StudentActivityService.hydrateForUser] caches per user, so revisiting a
+  /// profile does not re-query.
+  void _hydrateActivity() {
+    unawaited(studentActivityService.hydrateForUser(widget.user.id));
   }
 
   Future<void> _refreshClubMemberCounts() async {
@@ -364,7 +377,9 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
     _ensureClubContentForScope();
     final user = widget.user;
     final l10n = AppLocalizations.of(context)!;
-    final bottomInset = MediaQuery.paddingOf(context).bottom;
+    final viewPadding = MediaQuery.paddingOf(context);
+    final topInset = viewPadding.top;
+    final bottomInset = viewPadding.bottom;
 
     return ListenableBuilder(
       listenable: userState,
@@ -376,93 +391,111 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
 
         return Scaffold(
           backgroundColor: ProfileColors.background,
-          body: SafeArea(
-            bottom: false,
-            child: Column(
-              children: [
-                // `header` 725:119 carries no title — just the back circle
-                // and the trailing action. The `@handle` the old frame put
-                // here is gone from the redesign, and with it the guest-world
-                // suppression that kept a fabricated demo account from
-                // showing one: nothing renders a handle on this screen now.
-                ProfileBackHeader(
-                  onBack: () => Navigator.maybePop(context),
-                  backTooltip: l10n.backTooltip,
-                  trailing: _buildHeaderAction(context),
+          // The header floats over the list rather than sitting in a row above
+          // it: the profile then scrolls the full height of the screen, and
+          // the back arrow and the overflow glyph stay reachable all the way
+          // down instead of costing a permanent strip of page.
+          body: Stack(
+            children: [
+              ListView(
+                physics: const BouncingScrollPhysics(
+                  parent: AlwaysScrollableScrollPhysics(),
                 ),
-                Expanded(
-                  child: ListView(
-                    physics: const BouncingScrollPhysics(
-                      parent: AlwaysScrollableScrollPhysics(),
-                    ),
-                    padding: EdgeInsets.fromLTRB(
-                      kProfilePagePadding,
-                      16,
-                      kProfilePagePadding,
-                      bottomInset + kProfileNavClearance,
-                    ),
-                    children: [
-                      ProfilePeerHero(
-                        userId: user.id,
-                        name: displayName,
-                        bio: userState.bios[user.id] ?? '',
-                        statsLabel: _statsLabel(context),
-                        mutuals: _mutualFollowers,
-                        onStatsTap: _openFollowers,
-                        badgeLabel: !_isOwnProfile && _userFollowsMe(user)
-                            ? S.followsYou
-                            : null,
-                        actions: canAct
-                            ? Row(
-                                children: [
-                                  Expanded(
-                                    child: ProfileActionButton(
-                                      label: isPending
-                                          ? l10n.requestedLabel
-                                          : isFollowingUser
-                                          ? l10n.following
-                                          : _userFollowsMe(user)
-                                          ? l10n.followBack
-                                          : l10n.follow,
-                                      // `btn-follow` carries a plus only while
-                                      // following is still the action to take.
-                                      icon: isFollowingUser || isPending
-                                          ? null
-                                          : Icons.add_rounded,
-                                      filled: !isFollowingUser && !isPending,
-                                      onTap: _handleFollowTap,
-                                    ),
-                                  ),
-                                  const SizedBox(width: 10),
-                                  Expanded(
-                                    child: ProfileActionButton(
-                                      label: S.message,
-                                      icon: Icons.chat_bubble_outline_rounded,
-                                      filled: false,
-                                      onTap: () => _openThread(user),
-                                    ),
-                                  ),
-                                ],
-                              )
-                            : null,
-                      ),
-                      const SizedBox(height: 22),
-                      // `tabs` 725:157 drew a Clubs/Events filter over this
-                      // hairline. The filter is gone at the user's request and
-                      // only the rule is kept, so both sections show at once
-                      // again — which is also how the frame itself draws them.
-                      Container(height: 1, color: ProfileColors.border),
-                      const SizedBox(height: 22),
-                      _buildClubsSection(context),
-                      _buildEventsSection(context, user),
-                    ],
+                // Top padding clears the status bar and the floating header,
+                // so nothing starts life underneath the two glyphs — only
+                // scrolled content passes below them.
+                padding: EdgeInsets.fromLTRB(
+                  kProfilePagePadding,
+                  topInset + kProfileHeaderHeight,
+                  kProfilePagePadding,
+                  bottomInset + kProfileNavClearance,
+                ),
+                children: [
+                  ProfilePeerHero(
+                    userId: user.id,
+                    name: displayName,
+                    bio: userState.bios[user.id] ?? '',
+                    statsLabel: _statsLabel(context),
+                    mutuals: _mutualFollowers,
+                    onStatsTap: _openFollowers,
+                    badgeLabel: !_isOwnProfile && _userFollowsMe(user)
+                        ? S.followsYou
+                        : null,
+                    actions: canAct
+                        ? Row(
+                            children: [
+                              Expanded(
+                                child: ProfileActionButton(
+                                  label: isPending
+                                      ? l10n.requestedLabel
+                                      : isFollowingUser
+                                      ? l10n.following
+                                      : _userFollowsMe(user)
+                                      ? l10n.followBack
+                                      : l10n.follow,
+                                  // `btn-follow` carries a plus only while
+                                  // following is still the action to take.
+                                  icon: isFollowingUser || isPending
+                                      ? null
+                                      : Icons.add_rounded,
+                                  filled: !isFollowingUser && !isPending,
+                                  onTap: _handleFollowTap,
+                                ),
+                              ),
+                              const SizedBox(width: 10),
+                              Expanded(
+                                child: ProfileActionButton(
+                                  label: S.message,
+                                  icon: Icons.chat_bubble_outline_rounded,
+                                  filled: false,
+                                  onTap: () => _openThread(user),
+                                ),
+                              ),
+                            ],
+                          )
+                        : null,
                   ),
-                ),
-              ],
-            ),
+                  const SizedBox(height: 22),
+                  // `tabs` 725:157 drew a Clubs/Events filter over this
+                  // hairline. The filter is gone at the user's request and
+                  // only the rule is kept, so both sections show at once
+                  // again — which is also how the frame itself draws them.
+                  Container(height: 1, color: ProfileColors.border),
+                  const SizedBox(height: 22),
+                  _buildClubsSection(context),
+                  _buildEventsSection(context, user),
+                ],
+              ),
+              Positioned(
+                top: 0,
+                left: 0,
+                right: 0,
+                child: _buildFloatingHeader(context, l10n),
+              ),
+            ],
           ),
         );
       },
+    );
+  }
+
+  /// `header` 725:119 — no title, just the back arrow and the trailing action.
+  /// (The `@handle` the old frame put here is gone from the redesign, and with
+  /// it the guest-world suppression that kept a fabricated demo account from
+  /// showing one: nothing renders a handle on this screen now.)
+  ///
+  /// It is painted over the list, so it carries the page colour behind the
+  /// glyphs and fades out just past them — content scrolling underneath is
+  /// covered where the icons are and never meets a hard rule across the page.
+  /// Nothing here absorbs pointers apart from the two buttons themselves, so a
+  /// drag that starts in this strip still scrolls the profile.
+  Widget _buildFloatingHeader(BuildContext context, AppLocalizations l10n) {
+    return ProfileFloatingHeader(
+      child: ProfileBackHeader(
+        onBack: () => Navigator.maybePop(context),
+        backTooltip: l10n.backTooltip,
+        trailing: _buildHeaderAction(context),
+      ),
     );
   }
 
@@ -472,9 +505,8 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
   Widget _buildHeaderAction(BuildContext context) {
     final l10n = AppLocalizations.of(context)!;
     if (_isOwnProfile) {
-      return ProfileCircleButton(
+      return ProfilePlainIconButton(
         icon: Icons.bookmark_border_rounded,
-        iconSize: 19,
         tooltip: l10n.savedPostsTooltip,
         onTap: () => Navigator.push(
           context,
@@ -483,11 +515,13 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
       );
     }
     if (!authService.isStudentSession) return const SizedBox(width: 34);
-    return ProfileCircleButton(
+    // `btn-more` on a peer profile is the bare glyph, not [ProfileCircleButton]:
+    // the burgundy ring and its wash were cut, so the three dots carry the
+    // page's own text colour — near-black in light, near-white in dark. The
+    // 34px box stays so the tap target and the menu anchor do not move.
+    return ProfilePlainIconButton(
       key: _moreButtonKey,
       icon: Icons.more_vert_rounded,
-      iconSize: 20,
-      washed: true,
       tooltip: l10n.safetyOptions,
       onTap: _showSafetyMenu,
     );
@@ -578,23 +612,32 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
       ]),
       builder: (context, _) {
         final upcoming = studentActivityService.summaryFor(user.id).upcoming;
-        final hosting = upcoming
-            .where(
-              (entry) =>
-                  entry.club != null && _roleTitleFor(entry.club!) != null,
-            )
-            .toList();
-        final shown = (hosting.isNotEmpty ? hosting : upcoming)
-            .take(3)
-            .toList();
-        if (shown.isEmpty) return const SizedBox.shrink();
+        // Soonest first, whoever is running it. An earlier cut showed the
+        // events this student *hosts* and dropped the rest whenever there was
+        // one — so a board member's profile hid every event they were simply
+        // going to, which is the thing a visitor came here to see.
+        final shown = upcoming.take(3).toList();
+        final isHosted = <bool>[
+          for (final entry in shown)
+            entry.club != null && _roleTitleFor(entry.club!) != null,
+        ];
+        final loading =
+            studentActivityService.isHydratingUser(user.id) ||
+            !studentActivityService.hasAttemptedUser(user.id);
+        if (shown.isEmpty && !loading) {
+          return _buildEmptyEvents(context, l10n);
+        }
 
         return Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             ProfileSectionHeader(
-              title: hosting.isNotEmpty ? S.hostingNext : l10n.upcomingEvents,
-              actionLabel: l10n.seeAll,
+              // `Hosting Next` only when everything on show really is theirs
+              // to run; a mixed list is honestly just what is coming up.
+              title: isHosted.isNotEmpty && !isHosted.contains(false)
+                  ? S.hostingNext
+                  : l10n.upcomingEvents,
+              actionLabel: shown.isEmpty ? null : l10n.seeAll,
               onAction: () => Navigator.push(
                 context,
                 MaterialPageRoute(
@@ -607,6 +650,14 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
               ),
             ),
             const SizedBox(height: 14),
+            if (shown.isEmpty)
+              LinearProgressIndicator(
+                key: const ValueKey('visited-profile-events-loading'),
+                minHeight: 3,
+                borderRadius: const BorderRadius.all(Radius.circular(999)),
+                color: ProfileColors.accent,
+                backgroundColor: ProfileColors.border,
+              ),
             for (var i = 0; i < shown.length; i++) ...[
               if (i > 0) const SizedBox(height: 12),
               ProfileEventCard(
@@ -634,6 +685,27 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
           ],
         );
       },
+    );
+  }
+
+  /// The record loaded and this student has nothing coming up. Said out loud
+  /// rather than by drawing nothing: an empty section and a section that never
+  /// loaded look identical, and one of them is a bug worth seeing.
+  Widget _buildEmptyEvents(BuildContext context, AppLocalizations l10n) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        ProfileSectionHeader(title: l10n.upcomingEvents),
+        const SizedBox(height: 10),
+        Text(
+          S.noUpcomingEvents,
+          style: figtree(
+            size: 14,
+            weight: FontWeight.w400,
+            color: ProfileColors.muted,
+          ),
+        ),
+      ],
     );
   }
 

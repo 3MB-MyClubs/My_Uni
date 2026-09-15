@@ -28,13 +28,13 @@ class SettingsColors {
 
   static bool get _dark => themeService.isDark;
 
-  /// Page background — `#FAF9F6` / `#09090B`.
+  /// Page background — `#FAF9F6` / `#121212`, via [ProfileColors].
   static Color get background => ProfileColors.background;
 
-  /// Row card — `#FFFFFF` / `#18181B`.
+  /// Row card — `#FFFFFF` / `#1E1E1E`, via [ProfileColors].
   static Color get card => ProfileColors.card;
 
-  /// Card hairline — `#E4E4E7` / `#27272A`.
+  /// Card hairline — `#E4E4E7` / `#2D2D2D`, via [ProfileColors].
   static Color get border => ProfileColors.border;
 
   /// Row title and page title — `#18181B` / `#FAFAFA`.

@@ -15,6 +15,7 @@ import '../services/theme_service.dart';
 import '../theme/specialized_semantic_palettes.dart';
 import '../services/user_state.dart';
 import 'app_network_image.dart';
+import 'club_avatar.dart';
 import 'clubup_design.dart';
 import 'content_audience_sheet.dart';
 import 'event_cover_image.dart';
@@ -38,13 +39,18 @@ import 'user_avatar.dart';
 
 /// Palette for the profile frames.
 ///
-/// Light is identical to [ClubUpColors]. Dark is **not**: the profile frames
-/// (and, as it turns out, the HOME frames too) are painted on zinc-950 /
-/// zinc-900 / zinc-800 — `#09090B` page, `#18181B` card, `#27272A` hairline —
-/// whereas [ClubUpColors] carries the `#121212` / `#1E1E1E` / `#2D2D2D` set an
-/// earlier area approximated. Correcting [ClubUpColors] in place would restyle
-/// Search, Events and Home in dark mode, none of which was part of this pass,
-/// so the true handoff values live here until someone reconciles the two.
+/// Light and dark are both [ClubUpColors] now — `#FAF9F6`/`#121212` page,
+/// `#FFFFFF`/`#1E1E1E` card, `#E4E4E7`/`#2D2D2D` hairline.
+///
+/// Dark used to carry the frames' own zinc-950 set (`#09090B` / `#18181B` /
+/// `#27272A`), which is what the handoff draws. The user asked on 2026-09-15
+/// for the profile to match the **Events** area instead: in the built app
+/// Events, Chats, Search and Club Home all sit on `#121212`, so the profile
+/// family was the one place that read as near-black, and the frames lost that
+/// argument to the running product. Everything on this palette moved together
+/// — Settings ([SettingsColors] delegates here), the club settings sub-flow,
+/// board management, insights and the connections directory — because a
+/// half-moved palette is how you get two blacks on one screen.
 ///
 /// The other divergence: accent text stays `#800020` in dark on these frames.
 /// There is no lifted `#E8A1A6` anywhere in `profile-screen-dark` —
@@ -57,16 +63,16 @@ class ProfileColors {
 
   static bool get _dark => themeService.isDark;
 
-  /// Page background — `#FAF9F6` / `#09090B`.
+  /// Page background — `#FAF9F6` / `#121212`.
   static Color get background =>
-      _dark ? const Color(0xFF09090B) : const Color(0xFFFAF9F6);
+      _dark ? const Color(0xFF121212) : const Color(0xFFFAF9F6);
 
-  /// Card surface — `#FFFFFF` / `#18181B`.
-  static Color get card => _dark ? const Color(0xFF18181B) : Colors.white;
+  /// Card surface — `#FFFFFF` / `#1E1E1E`.
+  static Color get card => _dark ? const Color(0xFF1E1E1E) : Colors.white;
 
-  /// Hairline around cards, and the stats-row rules — `#E4E4E7` / `#27272A`.
+  /// Hairline around cards — `#E4E4E7` / `#2D2D2D`.
   static Color get border =>
-      _dark ? const Color(0xFF27272A) : const Color(0xFFE4E4E7);
+      _dark ? const Color(0xFF2D2D2D) : const Color(0xFFE4E4E7);
 
   /// Primary text — `#18181B` / `#FAFAFA`.
   static Color get text =>
@@ -129,6 +135,10 @@ const double kProfileNavClearance = 120;
 /// takes over the rest of the row.
 const int kProfileClubsPreviewCount = 4;
 
+/// Height of [ProfileBackHeader]. Exported because the visited profile floats
+/// that header over its list and has to pad the list by exactly this much.
+const double kProfileHeaderHeight = 64;
+
 /// The `@handle` line. Students have no handle field, so the local part of the
 /// KU address stands in for one — the same substitution the search area makes.
 String profileHandle(String email) {
@@ -168,18 +178,18 @@ String profileWhenLabel(
 
 // ── header chrome ────────────────────────────────────────────────────────────
 
-/// `btn-share` / `btn-back` / `btn-more`: a circular icon button. [washed]
-/// fills it with [ProfileColors.accentWash] the way `btn-more` is filled while
-/// its menu is open.
-class ProfileCircleButton extends StatelessWidget {
-  const ProfileCircleButton({
+/// `btn-back` / `btn-more` on `profile-menu` once the circles came off: the
+/// bare glyph in [ProfileColors.text] — near-black in light, near-white in
+/// dark — inside the same [size] box [ProfileCircleButton] occupies, so tap
+/// targets and menu anchors keep their geometry.
+class ProfilePlainIconButton extends StatelessWidget {
+  const ProfilePlainIconButton({
     super.key,
     required this.icon,
     required this.onTap,
     this.tooltip,
     this.size = 34,
-    this.iconSize = 18,
-    this.washed = false,
+    this.iconSize = 20,
   });
 
   final IconData icon;
@@ -187,23 +197,18 @@ class ProfileCircleButton extends StatelessWidget {
   final String? tooltip;
   final double size;
   final double iconSize;
-  final bool washed;
 
   @override
   Widget build(BuildContext context) {
     Widget button = GestureDetector(
       onTap: onTap,
       behavior: HitTestBehavior.opaque,
-      child: Container(
+      child: SizedBox(
         width: size,
         height: size,
-        alignment: Alignment.center,
-        decoration: BoxDecoration(
-          color: washed ? ProfileColors.accentWash : ProfileColors.card,
-          shape: BoxShape.circle,
-          border: Border.all(color: ProfileColors.accent, width: 1.5),
+        child: Center(
+          child: Icon(icon, size: iconSize, color: ProfileColors.text),
         ),
-        child: Icon(icon, size: iconSize, color: ProfileColors.accent),
       ),
     );
     if (tooltip != null) button = Tooltip(message: tooltip!, child: button);
@@ -211,36 +216,50 @@ class ProfileCircleButton extends StatelessWidget {
   }
 }
 
-/// `settings-button` — the neutral rounded square beside the share circle.
-class ProfileSquareButton extends StatelessWidget {
-  const ProfileSquareButton({
-    super.key,
-    required this.icon,
-    required this.onTap,
-    this.tooltip,
-  });
+/// A header painted **over** the page's scrolling list instead of above it, so
+/// a profile runs the full height of the screen.
+///
+/// The gradient is the page colour held solid behind the controls and faded
+/// out just past them: content scrolling underneath is covered where the
+/// glyphs are and never meets a hard rule across the page. A painted
+/// [BoxDecoration] answers hit tests for its whole rectangle, so the scrim
+/// opts out with [IgnorePointer] — without that, every drag beginning in the
+/// top strip is swallowed instead of scrolling the page. Pad the list it
+/// covers by `MediaQuery.paddingOf(context).top + kProfileHeaderHeight`.
+class ProfileFloatingHeader extends StatelessWidget {
+  const ProfileFloatingHeader({super.key, required this.child});
 
-  final IconData icon;
-  final VoidCallback? onTap;
-  final String? tooltip;
+  final Widget child;
 
   @override
   Widget build(BuildContext context) {
-    Widget button = GestureDetector(
-      onTap: onTap,
-      behavior: HitTestBehavior.opaque,
-      child: Container(
-        padding: const EdgeInsets.all(10),
-        decoration: BoxDecoration(
-          color: ProfileColors.card,
-          borderRadius: const BorderRadius.all(Radius.circular(20)),
-          border: Border.all(color: ProfileColors.border),
+    final background = ProfileColors.background;
+    return Stack(
+      children: [
+        Positioned.fill(
+          child: IgnorePointer(
+            child: DecoratedBox(
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  begin: Alignment.topCenter,
+                  end: Alignment.bottomCenter,
+                  colors: [
+                    background,
+                    background,
+                    background.withValues(alpha: 0),
+                  ],
+                  stops: const [0, 0.78, 1],
+                ),
+              ),
+            ),
+          ),
         ),
-        child: Icon(icon, size: 20, color: ProfileColors.text),
-      ),
+        Padding(
+          padding: EdgeInsets.only(top: MediaQuery.paddingOf(context).top),
+          child: child,
+        ),
+      ],
     );
-    if (tooltip != null) button = Tooltip(message: tooltip!, child: button);
-    return Semantics(button: true, label: tooltip, child: button);
   }
 }
 
@@ -261,7 +280,8 @@ class ProfileWordmarkHeader extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Padding(
+    return Container(
+      height: kProfileHeaderHeight,
       padding: const EdgeInsets.symmetric(
         horizontal: kProfilePagePadding,
         vertical: 12,
@@ -292,16 +312,18 @@ class ProfileWordmarkHeader extends StatelessWidget {
             ),
           ),
           const Spacer(),
-          ProfileCircleButton(
+          // Bare glyphs, like `btn-back` / `btn-more` on a visited profile —
+          // the burgundy circle and the neutral square both came off when the
+          // two student profiles were brought onto one design.
+          ProfilePlainIconButton(
             icon: Icons.ios_share_rounded,
-            iconSize: 18,
-            size: 36,
             tooltip: shareTooltip,
             onTap: onShare,
           ),
-          const SizedBox(width: 8),
-          ProfileSquareButton(
+          const SizedBox(width: 4),
+          ProfilePlainIconButton(
             icon: Icons.settings_outlined,
+            iconSize: 22,
             tooltip: settingsTooltip,
             onTap: onSettings,
           ),
@@ -332,16 +354,16 @@ class ProfileBackHeader extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      height: 64,
+      height: kProfileHeaderHeight,
       padding: const EdgeInsets.symmetric(
         horizontal: kProfilePagePadding,
         vertical: 12,
       ),
       child: Row(
         children: [
-          ProfileCircleButton(
+          ProfilePlainIconButton(
             icon: Icons.chevron_left_rounded,
-            iconSize: 22,
+            iconSize: 26,
             tooltip: backTooltip,
             onTap: onBack,
           ),
@@ -372,6 +394,19 @@ class ProfileBackHeader extends StatelessWidget {
 // ── hero ─────────────────────────────────────────────────────────────────────
 
 /// `avatar-wrapper` — a compact 74px circular portrait.
+///
+/// Bare on purpose: the peer hero once drew `avatar-wrapper`'s 2px accent ring
+/// from `New Profile` 725:140, but the burgundy circle was cut, so both heroes
+/// now show the portrait on its own.
+/// The portrait on both student profiles and, matched to it, on the club
+/// profile ([kClubProfileHeroPortraitSize]).
+///
+/// `avatar-wrapper` 725:140 and `club-avatar` 729:39 both draw 72; the user
+/// asked for a larger picture once the burgundy ring around it was gone, and
+/// the name column beside it is only ~51 tall, so the row grows with the
+/// portrait rather than the type.
+const double kProfileHeroPortraitSize = 84;
+
 class ProfileAvatarRing extends StatelessWidget {
   const ProfileAvatarRing({
     super.key,
@@ -379,8 +414,6 @@ class ProfileAvatarRing extends StatelessWidget {
     required this.name,
     this.size = 74,
     this.onTap,
-    this.ringColor,
-    this.ringWidth = 2,
   });
 
   final String userId;
@@ -388,243 +421,30 @@ class ProfileAvatarRing extends StatelessWidget {
   final double size;
   final VoidCallback? onTap;
 
-  /// `avatar-wrapper` on `New Profile` 725:140 carries a 2px accent ring.
-  /// Null — the default — keeps the bare portrait `profile-screen` draws, so
-  /// the own-profile hero is unaffected.
-  final Color? ringColor;
-  final double ringWidth;
-
   @override
   Widget build(BuildContext context) {
-    // Figma's stroke is inside the 72px box (`overflow-clip`), and Flutter's
-    // `Border` insets the child the same way — so the portrait shrinks by the
-    // stroke on both sides rather than the wrapper growing.
-    final inner = ringColor == null ? size : size - ringWidth * 2;
-    Widget portrait = ClipOval(
-      child: UserAvatar(
-        userId: userId,
-        name: name,
-        size: inner,
-        fontSize: inner / 2.9,
-      ),
-    );
-    if (ringColor != null) {
-      portrait = Container(
-        width: size,
-        height: size,
-        decoration: BoxDecoration(
-          shape: BoxShape.circle,
-          border: Border.all(color: ringColor!, width: ringWidth),
-        ),
-        child: portrait,
-      );
-    }
     return GestureDetector(
       onTap: onTap,
       behavior: HitTestBehavior.opaque,
-      child: portrait,
-    );
-  }
-}
-
-/// One cell of `stats-row`.
-class ProfileStat extends StatelessWidget {
-  const ProfileStat({
-    super.key,
-    required this.value,
-    required this.label,
-    this.onTap,
-  });
-
-  final String value;
-  final String label;
-  final VoidCallback? onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    return Expanded(
-      child: GestureDetector(
-        onTap: onTap,
-        behavior: HitTestBehavior.opaque,
-        child: Column(
-          children: [
-            Text(
-              value,
-              style: figtree(
-                size: 13,
-                weight: FontWeight.w800,
-                color: ProfileColors.text,
-              ),
-            ),
-            const SizedBox(height: 4),
-            Text(
-              label.toUpperCase(),
-              style: figtree(
-                size: 11,
-                weight: FontWeight.w500,
-                color: ProfileColors.muted,
-              ),
-            ),
-          ],
+      child: ClipOval(
+        child: UserAvatar(
+          userId: userId,
+          name: name,
+          size: size,
+          fontSize: size / 2.9,
         ),
       ),
     );
   }
 }
 
-/// `stats-row` — three equal cells between two hairlines.
-class ProfileStatsRow extends StatelessWidget {
-  const ProfileStatsRow({super.key, required this.stats});
+/// [ProfileStat], [ProfileStatsRow] and [ProfileHero] — the centred portrait
+/// over three tappable count cells — were removed on 2026-09-15 when the
+/// student's own Profile tab moved onto [ProfilePeerHero], the same hero a
+/// visited profile draws. The counts now read as one line
+/// (`S.profileStatsLine`) opening the connections directory, which carries
+/// followers, following and clubs as its own sections.
 
-  final List<ProfileStat> stats;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      decoration: BoxDecoration(
-        border: Border.symmetric(
-          horizontal: BorderSide(color: ProfileColors.border),
-        ),
-      ),
-      padding: const EdgeInsets.symmetric(vertical: 12),
-      child: Row(children: stats),
-    );
-  }
-}
-
-/// `profile-hero` — avatar, name, optional handle (+ optional badge), bio,
-/// stats and, on `profile-menu`, the Follow / Message pair.
-class ProfileHero extends StatelessWidget {
-  const ProfileHero({
-    super.key,
-    required this.userId,
-    required this.name,
-    required this.handle,
-    required this.bio,
-    required this.stats,
-    this.badgeLabel,
-    this.nameBadge,
-    this.gap = 16,
-    this.identityGap = 4,
-    this.actions,
-    this.onAvatarTap,
-  });
-
-  final String userId;
-  final String name;
-  final String handle;
-  final String bio;
-  final List<ProfileStat> stats;
-
-  /// `badge` beside the handle — "Follows you" on `profile-menu`. The signed-in
-  /// student's own profile supplies no handle, so this identity line collapses.
-  final String? badgeLabel;
-
-  /// `board-badge` — the capsule the frame centres between the name and the
-  /// bio. Only students who hold a board role anywhere carry one, so it is
-  /// null for everyone else and the hero closes the gap.
-  final Widget? nameBadge;
-
-  /// `gap-[16px]` on `profile-screen`, `gap-[14px]` on `profile-menu`.
-  final double gap;
-
-  /// `identity` gap: 4 on `profile-screen`, 6 on `profile-menu`.
-  final double identityGap;
-
-  final Widget? actions;
-  final VoidCallback? onAvatarTap;
-
-  @override
-  Widget build(BuildContext context) {
-    final hasIdentityLine = handle.trim().isNotEmpty || badgeLabel != null;
-    final handleStyle = figtree(
-      size: badgeLabel == null ? 14 : 13,
-      weight: badgeLabel == null ? FontWeight.w500 : FontWeight.w400,
-      color: ProfileColors.muted,
-    );
-
-    return Column(
-      children: [
-        ProfileAvatarRing(userId: userId, name: name, onTap: onAvatarTap),
-        SizedBox(height: gap),
-        Text(
-          name,
-          textAlign: TextAlign.center,
-          style: figtree(
-            size: 20,
-            weight: FontWeight.w800,
-            color: ProfileColors.text,
-          ),
-        ),
-        if (nameBadge != null) ...[
-          SizedBox(height: identityGap + 4),
-          nameBadge!,
-        ],
-        if (hasIdentityLine) ...[
-          SizedBox(height: identityGap),
-          if (badgeLabel == null)
-            Text(handle, textAlign: TextAlign.center, style: handleStyle)
-          else
-            Row(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                Flexible(
-                  child: Text(
-                    handle,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: handleStyle,
-                  ),
-                ),
-                const SizedBox(width: 8),
-                Container(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 9,
-                    vertical: 4,
-                  ),
-                  decoration: const BoxDecoration(
-                    color: ProfileColors.accentWash,
-                    borderRadius: BorderRadius.all(Radius.circular(999)),
-                  ),
-                  child: Text(
-                    badgeLabel!,
-                    style: figtree(
-                      size: 11,
-                      weight: FontWeight.w700,
-                      color: ProfileColors.accent,
-                    ),
-                  ),
-                ),
-              ],
-            ),
-        ],
-        if (bio.trim().isNotEmpty) ...[
-          SizedBox(height: gap),
-          Text(
-            bio.trim(),
-            textAlign: TextAlign.center,
-            style: figtree(
-              size: 14,
-              weight: FontWeight.w400,
-              color: ProfileColors.text,
-              height: 1.4,
-            ),
-          ),
-        ],
-        SizedBox(height: gap),
-        ProfileStatsRow(stats: stats),
-        if (actions != null) ...[SizedBox(height: gap), actions!],
-      ],
-    );
-  }
-}
-
-/// `board-badge` on `profile-screen`, and the trailing chip on every row of
-/// `board-memberships-overlay`.
-///
-/// One capsule serves both: the accent wash behind an accent hairline. The
-/// label is accent in light and the page's primary text in dark — sampling the
-/// frames, the dark capsule writes in near-white over the same wash, which is
 /// the only way `#800020` on `#09090B` stays readable at 11px.
 class ProfileRolePill extends StatelessWidget {
   const ProfileRolePill({
@@ -746,19 +566,23 @@ class ProfileClubListEntry {
   final VoidCallback? onTap;
 }
 
-/// `mutual-clubs` / `my-clubs-section` — the clubs as **one stacked panel**,
-/// a single bordered container with a hairline between rows.
+/// `mutual-clubs` / `my-clubs-section` — the clubs as **flat rows**, the way
+/// the Chats inbox lists people: avatar, name, one detail line, chevron, and a
+/// hairline between one row and the next. Nothing else — no card, no border
+/// around the group, no tinted background.
 ///
 /// This replaces the horizontal `clubs-scroller` of 140px photo cards the
 /// frames draw. The user's reason: side-by-side cards put some clubs on screen
 /// and pushed the rest off the edge, so a row never read as a complete list —
 /// they asked for "one window" with nothing split across lines. One club per
 /// row also means the name is never truncated, which the 140px card did
-/// constantly ("Rooftop Collecti…").
+/// constantly ("Rooftop Collecti…"). The bordered panel that first carried
+/// those rows is gone too: they asked for the Chats treatment, where the
+/// divider is the only thing separating two entries.
 ///
-/// Shaped to match [ProfileEventCard] — same padding, radius, thumbnail size
-/// and title ramp — so Clubs and the Events section below it read as one
-/// system.
+/// The rows sit inside the profile page's [kProfilePagePadding] gutter rather
+/// than bleeding to the screen edge, so the club names line up with the
+/// section header above them and with every other section on the page.
 class ProfileClubList extends StatelessWidget {
   const ProfileClubList({
     super.key,
@@ -769,7 +593,7 @@ class ProfileClubList extends StatelessWidget {
 
   final List<ProfileClubListEntry> entries;
 
-  /// Clubs beyond [kProfileClubsPreviewCount] that the panel is not showing.
+  /// Clubs beyond [kProfileClubsPreviewCount] that the list is not showing.
   /// Zero hides the trailing "+N more clubs" line entirely.
   final int remaining;
 
@@ -781,22 +605,15 @@ class ProfileClubList extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Container(
-          clipBehavior: Clip.antiAlias,
-          decoration: BoxDecoration(
-            color: ProfileColors.card,
-            borderRadius: const BorderRadius.all(Radius.circular(16)),
-            border: Border.all(color: ProfileColors.border),
+        for (var i = 0; i < entries.length; i++)
+          _ProfileClubListRow(
+            entry: entries[i],
+            // A hairline *between* rows, not under the last one: the Chats
+            // inbox runs to the bottom of the screen, but this list ends
+            // inside a page, where a trailing rule would read as a section
+            // divider rather than as part of the list.
+            divided: i < entries.length - 1,
           ),
-          child: Column(
-            children: [
-              for (var i = 0; i < entries.length; i++) ...[
-                if (i > 0) Container(height: 1, color: ProfileColors.border),
-                _ProfileClubListRow(entry: entries[i]),
-              ],
-            ],
-          ),
-        ),
         if (remaining > 0)
           GestureDetector(
             onTap: onSeeAll,
@@ -828,56 +645,94 @@ class ProfileClubList extends StatelessWidget {
   }
 }
 
+/// One club, shaped like a Chats inbox row: 64 tall, a 44pt round avatar, the
+/// name over its member count, and a chevron.
 class _ProfileClubListRow extends StatelessWidget {
-  const _ProfileClubListRow({required this.entry});
+  const _ProfileClubListRow({required this.entry, required this.divided});
 
   final ProfileClubListEntry entry;
 
+  /// Whether another row follows, and therefore whether this one carries the
+  /// hairline that separates the two.
+  final bool divided;
+
   @override
   Widget build(BuildContext context) {
-    return GestureDetector(
-      onTap: entry.onTap,
-      behavior: HitTestBehavior.opaque,
-      child: Padding(
-        padding: const EdgeInsets.all(12),
-        child: Row(
-          children: [
-            ProfileClubCover(
-              club: entry.club,
-              color: entry.color,
-              width: 56,
-              height: 56,
-            ),
-            const SizedBox(width: 12),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    entry.club.name,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: figtree(
-                      size: 14,
-                      weight: FontWeight.w700,
-                      color: ProfileColors.text,
-                    ),
-                  ),
-                  const SizedBox(height: 3),
-                  Text(
-                    entry.detail,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: figtree(
-                      size: 12,
-                      weight: FontWeight.w400,
-                      color: ProfileColors.muted,
-                    ),
-                  ),
-                ],
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        key: ValueKey('profile-club-row-${entry.club.id}'),
+        onTap: entry.onTap,
+        child: DecoratedBox(
+          decoration: BoxDecoration(
+            border: Border(
+              bottom: BorderSide(
+                color: divided ? ProfileColors.border : Colors.transparent,
               ),
             ),
-          ],
+          ),
+          child: SizedBox(
+            height: 64,
+            child: Row(
+              children: [
+                // [ClubAvatar] opens its own full-screen photo viewer when the
+                // club has a picture, which would swallow the row's tap for
+                // some clubs and not others. The row owns the gesture.
+                IgnorePointer(
+                  child: ClubAvatar(
+                    clubId: entry.club.id,
+                    clubName: entry.club.name,
+                    color: entry.color,
+                    imageUrl: entry.club.logoUrl,
+                    size: 44,
+                    fontSize: 17,
+                    shape: 'circle',
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        entry.club.name,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: figtree(
+                          size: 14,
+                          weight: FontWeight.w600,
+                          color: ProfileColors.text,
+                          letterSpacing: -0.1,
+                        ),
+                      ),
+                      if (entry.detail.trim().isNotEmpty) ...[
+                        const SizedBox(height: 4),
+                        Text(
+                          entry.detail,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: figtree(
+                            size: 13,
+                            weight: FontWeight.w400,
+                            color: ProfileColors.muted,
+                          ),
+                        ),
+                      ],
+                    ],
+                  ),
+                ),
+                if (entry.onTap != null) ...[
+                  const SizedBox(width: 12),
+                  Icon(
+                    Icons.chevron_right_rounded,
+                    size: 18,
+                    color: ProfileColors.muted,
+                  ),
+                ],
+              ],
+            ),
+          ),
         ),
       ),
     );
@@ -1408,6 +1263,7 @@ class ProfilePeerHero extends StatelessWidget {
     required this.bio,
     required this.statsLabel,
     this.badgeLabel,
+    this.nameBadge,
     this.mutuals = const [],
     this.actions,
     this.onAvatarTap,
@@ -1424,6 +1280,11 @@ class ProfilePeerHero extends StatelessWidget {
 
   /// `badge` 725:138 — "Follows you", or null when they do not.
   final String? badgeLabel;
+
+  /// A badge the caller builds instead of [badgeLabel]: the own-profile hero
+  /// puts its tappable board-memberships pill here. Both may be set; the
+  /// written badge comes first.
+  final Widget? nameBadge;
 
   /// `avatar-stack` 725:144: the people the viewer already follows who also
   /// follow this student. The frame draws two; anything past that is dropped
@@ -1490,6 +1351,10 @@ class ProfilePeerHero extends StatelessWidget {
                       ),
                     ),
                   ],
+                  if (nameBadge != null) ...[
+                    const SizedBox(height: 6),
+                    nameBadge!,
+                  ],
                 ],
               ),
             ),
@@ -1497,8 +1362,7 @@ class ProfilePeerHero extends StatelessWidget {
             ProfileAvatarRing(
               userId: userId,
               name: name,
-              size: 72,
-              ringColor: ProfileColors.accent,
+              size: kProfileHeroPortraitSize,
               onTap: onAvatarTap,
             ),
           ],

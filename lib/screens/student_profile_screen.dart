@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:intl/intl.dart';
 
 import '../l10n/app_localizations.dart';
 import '../models/club.dart';
@@ -132,94 +133,99 @@ class StudentProfileScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context)!;
-    final bottomInset = MediaQuery.paddingOf(context).bottom;
+    final viewPadding = MediaQuery.paddingOf(context);
     final boardMemberships = _boardMemberships;
 
     return Scaffold(
       backgroundColor: ProfileColors.background,
-      body: SafeArea(
-        bottom: false,
-        child: Column(
-          children: [
-            ProfileWordmarkHeader(
-              onShare: onShare,
-              onSettings: onSettings,
-              shareTooltip: l10n.shareProfileTooltip,
-              settingsTooltip: l10n.settings,
+      // Same shape as a visited profile: the list runs the full height of the
+      // screen and the wordmark header floats over it. See
+      // [ProfileFloatingHeader].
+      body: Stack(
+        children: [
+          ListView(
+            physics: const BouncingScrollPhysics(
+              parent: AlwaysScrollableScrollPhysics(),
             ),
-            Expanded(
-              child: ListView(
-                physics: const BouncingScrollPhysics(
-                  parent: AlwaysScrollableScrollPhysics(),
+            padding: EdgeInsets.fromLTRB(
+              kProfilePagePadding,
+              viewPadding.top + kProfileHeaderHeight,
+              kProfilePagePadding,
+              viewPadding.bottom + kProfileNavClearance,
+            ),
+            children: [
+              KeyedSubtree(
+                // `tut-profile-hero` 390:3
+                key: isTutorialHost
+                    ? onboardingAnchors.keyFor(OnboardingAnchors.profileHero)
+                    : null,
+                // The own profile and a visited one now draw the same hero:
+                // name and identity on the left, portrait on the trailing
+                // edge, and the counts as one line instead of three cells.
+                child: ProfilePeerHero(
+                  userId: data.userId,
+                  name: data.name,
+                  bio: data.bio,
+                  statsLabel: _statsLabel(context),
+                  nameBadge: boardMemberships.isEmpty
+                      ? null
+                      : ProfileRolePill(
+                          label: l10n.boardMemberLabel,
+                          semanticsLabel: l10n.boardMemberships,
+                          onTap: () => _showBoardMembershipsSheet(context),
+                        ),
+                  // One line, one destination — the directory it opens holds
+                  // followers, following and clubs as its own sections, so
+                  // nothing the three cells reached has become unreachable.
+                  onStatsTap:
+                      onFollowersTap ?? () => _openFollowedClubsScreen(context),
                 ),
-                padding: EdgeInsets.fromLTRB(
-                  kProfilePagePadding,
-                  12,
-                  kProfilePagePadding,
-                  bottomInset + kProfileNavClearance,
-                ),
-                children: [
-                  KeyedSubtree(
-                    // `tut-profile-hero` 390:3
-                    key: isTutorialHost
-                        ? onboardingAnchors.keyFor(
-                            OnboardingAnchors.profileHero,
-                          )
-                        : null,
-                    child: ProfileHero(
-                      userId: data.userId,
-                      name: data.name,
-                      handle: '',
-                      bio: data.bio,
-                      nameBadge: boardMemberships.isEmpty
-                          ? null
-                          : ProfileRolePill(
-                              label: l10n.boardMemberLabel,
-                              semanticsLabel: l10n.boardMemberships,
-                              onTap: () => _showBoardMembershipsSheet(context),
-                            ),
-                      stats: [
-                        ProfileStat(
-                          value: '${data.clubs}',
-                          label: l10n.clubs,
-                          onTap:
-                              onClubsTap ??
-                              () => _openFollowedClubsScreen(context),
-                        ),
-                        ProfileStat(
-                          value: '${data.following}',
-                          label: l10n.following,
-                          onTap: onFollowingTap,
-                        ),
-                        ProfileStat(
-                          value: '${data.followers}',
-                          label: l10n.followers,
-                          onTap: onFollowersTap,
-                        ),
-                      ],
-                    ),
-                  ),
-                  const SizedBox(height: 32),
-                  KeyedSubtree(
-                    // `tut-profile-clubs` 390:248
-                    key: isTutorialHost
-                        ? onboardingAnchors.keyFor(
-                            OnboardingAnchors.profileClubs,
-                          )
-                        : null,
-                    child: _buildClubsSection(context),
-                  ),
-                  const SizedBox(height: 28),
-                  _StudentActivityHydrator(
-                    userId: data.userId,
-                    child: _buildEventsSection(context),
-                  ),
-                ],
+              ),
+              const SizedBox(height: 22),
+              Container(height: 1, color: ProfileColors.border),
+              const SizedBox(height: 22),
+              KeyedSubtree(
+                // `tut-profile-clubs` 390:248
+                key: isTutorialHost
+                    ? onboardingAnchors.keyFor(OnboardingAnchors.profileClubs)
+                    : null,
+                child: _buildClubsSection(context),
+              ),
+              const SizedBox(height: 28),
+              _StudentActivityHydrator(
+                userId: data.userId,
+                child: _buildEventsSection(context),
+              ),
+            ],
+          ),
+          Positioned(
+            top: 0,
+            left: 0,
+            right: 0,
+            child: ProfileFloatingHeader(
+              child: ProfileWordmarkHeader(
+                onShare: onShare,
+                onSettings: onSettings,
+                shareTooltip: l10n.shareProfileTooltip,
+                settingsTooltip: l10n.settings,
               ),
             ),
-          ],
-        ),
+          ),
+        ],
       ),
+    );
+  }
+
+  /// `stats` — `1.2k followers · 340 following · 12 clubs`, the same one-line
+  /// form a visited profile draws.
+  String _statsLabel(BuildContext context) {
+    final compact = NumberFormat.compact(
+      locale: Localizations.localeOf(context).toLanguageTag(),
+    );
+    return S.profileStatsLine(
+      compact.format(data.followers),
+      compact.format(data.following),
+      compact.format(data.clubs),
     );
   }
 
@@ -253,9 +259,10 @@ class StudentProfileScreen extends StatelessWidget {
             child: ProfileSectionEmptyLine(label: S.noClubsYetLine),
           )
         else
-          // The frames' horizontal `clubs-scroller` is now one stacked panel
-          // capped at [kProfileClubsPreviewCount] — see [ProfileClubList] for
-          // why. The rest sit behind its trailing "+N more clubs" line.
+          // The frames' horizontal `clubs-scroller` is now a flat list of
+          // Chats-style rows capped at [kProfileClubsPreviewCount] — see
+          // [ProfileClubList] for why. The rest sit behind its trailing
+          // "+N more clubs" line.
           Builder(
             builder: (context) {
               final visible = entries.take(kProfileClubsPreviewCount).toList();

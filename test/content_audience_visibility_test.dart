@@ -95,7 +95,7 @@ void main() {
 
   String signInStudent(String slug) {
     expect(
-      authService.signUp('Student $slug', '$slug@ku.edu.tr', '135790'),
+      authService.signUp('Student $slug', '$slug@ku.edu.tr', '13579024'),
       isTrue,
     );
     return authService.currentUser!.id;

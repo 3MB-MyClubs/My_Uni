@@ -1676,6 +1676,18 @@ class S {
   /// `board-header` `332:2015` — opens the full `board-members-all` list.
   static String get clubProfileViewAll => _t('View all', 'Tümünü gör');
 
+  /// `club-identity-section` `729:41` — `47 posts · 342 members · 12 events`
+  /// in place of the three stat cells the older frames drew. Three pieces
+  /// rather than one line, because the frame bolds only the middle segment.
+  /// English needs the singular for a club with exactly one of something;
+  /// Turkish takes the bare noun after a number either way.
+  static String clubStatPosts(String count) =>
+      _t('$count ${count == '1' ? 'post' : 'posts'}', '$count gönderi');
+  static String clubStatMembers(String count) =>
+      _t('$count ${count == '1' ? 'member' : 'members'}', '$count üye');
+  static String clubStatEvents(String count) =>
+      _t('$count ${count == '1' ? 'event' : 'events'}', '$count etkinlik');
+
   /// `board-members-all` `346:24` / `346:30`.
   static String get clubProfileBoardMembersTitle =>
       _t('Board Members', 'Yönetim Kurulu');

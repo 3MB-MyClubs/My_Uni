@@ -5,6 +5,7 @@ import 'package:flutter_application_1/models/user.dart';
 import 'package:flutter_application_1/screens/profile_screen.dart';
 import 'package:flutter_application_1/screens/student_connections_screen.dart';
 import 'package:flutter_application_1/screens/user_profile_screen.dart';
+import 'package:flutter_application_1/services/app_strings.dart';
 import 'package:flutter_application_1/services/auth_service.dart';
 import 'package:flutter_application_1/services/mock_data.dart';
 import 'package:flutter_application_1/services/user_state.dart';
@@ -201,7 +202,7 @@ void main() {
     );
   });
 
-  testWidgets('own profile stats open the same three independent routes', (
+  testWidgets('own profile stats line opens the connections directory', (
     tester,
   ) async {
     final me = User(
@@ -260,44 +261,18 @@ void main() {
     await tester.pumpWidget(app(const ProfileScreen()));
     await tester.pump(const Duration(milliseconds: 100));
 
-    await tester.tap(find.text('CLUBS'));
-    await tester.pumpAndSettle();
-    expect(find.byType(StudentConnectionsScreen), findsOneWidget);
-    expect(
-      tester
-          .widget<ClubProfileSegmentedTabs>(
-            find.byType(ClubProfileSegmentedTabs),
-          )
-          .index,
-      0,
-    );
-    Navigator.of(tester.element(find.byType(StudentConnectionsScreen))).pop();
+    // The own profile draws the visited profile's hero now: one stats line in
+    // place of three count cells. It opens the directory on Followers, and the
+    // other two sections are a tab away rather than a separate route.
+    expect(find.text('CLUBS'), findsNothing);
+    await tester.tap(find.text(S.profileStatsLine('1', '1', '1')));
     await tester.pumpAndSettle();
 
-    await tester.tap(find.text('FOLLOWING'));
-    await tester.pumpAndSettle();
     expect(find.byType(StudentConnectionsScreen), findsOneWidget);
-    expect(
-      tester
-          .widget<ClubProfileSegmentedTabs>(
-            find.byType(ClubProfileSegmentedTabs),
-          )
-          .index,
-      2,
+    final tabs = tester.widget<ClubProfileSegmentedTabs>(
+      find.byType(ClubProfileSegmentedTabs),
     );
-    Navigator.of(tester.element(find.byType(StudentConnectionsScreen))).pop();
-    await tester.pumpAndSettle();
-
-    await tester.tap(find.text('FOLLOWERS'));
-    await tester.pumpAndSettle();
-    expect(find.byType(StudentConnectionsScreen), findsOneWidget);
-    expect(
-      tester
-          .widget<ClubProfileSegmentedTabs>(
-            find.byType(ClubProfileSegmentedTabs),
-          )
-          .index,
-      1,
-    );
+    expect(tabs.index, 1);
+    expect(tabs.labels.length, 3);
   });
 }

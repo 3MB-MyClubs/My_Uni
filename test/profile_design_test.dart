@@ -12,6 +12,7 @@ import 'package:flutter_application_1/services/mock_data.dart';
 import 'package:flutter_application_1/services/people_service.dart';
 import 'package:flutter_application_1/services/theme_service.dart';
 import 'package:flutter_application_1/services/user_state.dart';
+import 'package:flutter_application_1/widgets/club_avatar.dart';
 import 'package:flutter_application_1/widgets/profile_design.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -208,6 +209,84 @@ void main() {
     expect(list.entries, hasLength(1));
     expect(list.remaining, 0);
     expect(find.text(S.clubsMoreLine(1)), findsNothing);
+  });
+
+  testWidgets('the clubs list is flat Chats-style rows, divider only', (
+    tester,
+  ) async {
+    tester.view.devicePixelRatio = 1;
+    tester.view.physicalSize = const Size(393, 852);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    addTearDown(tester.view.resetPhysicalSize);
+
+    const secondId = 'profile-design-second-club';
+    clubs.add(
+      Club(
+        id: secondId,
+        name: 'KU Robotics',
+        description: '',
+        adminUserIds: const [],
+      ),
+    );
+    addTearDown(() => clubs.removeWhere((c) => c.id == secondId));
+
+    final allIds = [clubId, secondId];
+    peer = User(
+      id: peer.id,
+      name: peer.name,
+      email: peer.email,
+      password: '',
+      role: 'student',
+      subscribedClubIds: allIds,
+      followingUserIds: [myId],
+    );
+    peopleService.cacheRegisteredUser(peer);
+    userState.replaceFollowedClubs(allIds);
+
+    await pumpPeerProfile(tester);
+
+    final first = find.byKey(const ValueKey('profile-club-row-$clubId'));
+    final last = find.byKey(const ValueKey('profile-club-row-$secondId'));
+    expect(first, findsOneWidget);
+    expect(last, findsOneWidget);
+
+    // The Chats inbox row: 64 tall, and the full width of the page column.
+    // The bordered panel these rows used to sit in inset them by its own
+    // 1px border, so the exact content width is what proves it is gone.
+    expect(tester.getSize(first).height, 64);
+    expect(tester.getSize(first).width, 393 - 2 * kProfilePagePadding);
+    expect(tester.getSize(last).height, 64);
+
+    // A 44pt round avatar, held off its own photo viewer so the row keeps the
+    // tap — the same arrangement the Chats-style rows elsewhere use.
+    final avatar = tester.widget<ClubAvatar>(
+      find.descendant(of: first, matching: find.byType(ClubAvatar)),
+    );
+    expect(avatar.size, 44);
+    expect(avatar.shape, 'circle');
+    expect(
+      find.ancestor(
+        of: find.descendant(of: first, matching: find.byType(ClubAvatar)),
+        matching: find.byType(IgnorePointer),
+      ),
+      findsWidgets,
+    );
+
+    // A hairline between the two rows and nothing after the last one.
+    Border borderOf(Finder row) =>
+        (tester
+                    .widgetList<DecoratedBox>(
+                      find.descendant(of: row, matching: find.byType(DecoratedBox)),
+                    )
+                    .first
+                    .decoration
+                as BoxDecoration)
+            .border!
+            as Border;
+    expect(borderOf(first).bottom.color, ProfileColors.border);
+    expect(borderOf(last).bottom.color, Colors.transparent);
+
+    expect(tester.takeException(), isNull);
   });
 
   testWidgets('the mini avatars open the directory, not the photo viewer', (
