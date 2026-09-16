@@ -71,6 +71,7 @@ class S {
   static String get findPeople => _t('Find People', 'Kişileri Bul');
   static String get searchClubs => _t('Search…', 'Ara…');
   static String get searchPeople => _t('Search people…', 'Kişi ara…');
+
   /// The home feed's second scope — the tab beside Following.
   static String get allClubs => _t('All Clubs', 'Tüm Kulüpler');
   static String get exploreContentTab => _t('Events', 'Etkinlikler');
@@ -1121,6 +1122,24 @@ class S {
   /// The `badge` beside a peer's handle when they already follow you.
   static String get followsYou => _t('Follows you', 'Seni takip ediyor');
 
+  /// The subtitle on [ProfileClubOverflowCard] — the clubs the capped row is
+  /// not showing.
+  static String clubsMoreLine(int count) =>
+      _t('$count more clubs', '$count kulüp daha');
+
+  /// `stats` 725:147 on `New Profile` — the three counts collapsed onto one
+  /// line. The counts arrive pre-formatted (compact, so 1200 reads "1.2k" and
+  /// "1,2B" in Turkish) because `NumberFormat` is locale-aware and `_t` is
+  /// not.
+  static String profileStatsLine(
+    String followers,
+    String following,
+    String clubs,
+  ) => _t(
+    '$followers followers · $following following · $clubs clubs',
+    '$followers takipçi · $following takip · $clubs kulüp',
+  );
+
   /// Quiet placeholders — the frames have no empty state for these sections.
   static String get noClubsYetLine =>
       _t('No clubs yet. Find one to join!', 'Henüz kulüp yok. Birine katıl!');
@@ -1656,6 +1675,18 @@ class S {
 
   /// `board-header` `332:2015` — opens the full `board-members-all` list.
   static String get clubProfileViewAll => _t('View all', 'Tümünü gör');
+
+  /// `club-identity-section` `729:41` — `47 posts · 342 members · 12 events`
+  /// in place of the three stat cells the older frames drew. Three pieces
+  /// rather than one line, because the frame bolds only the middle segment.
+  /// English needs the singular for a club with exactly one of something;
+  /// Turkish takes the bare noun after a number either way.
+  static String clubStatPosts(String count) =>
+      _t('$count ${count == '1' ? 'post' : 'posts'}', '$count gönderi');
+  static String clubStatMembers(String count) =>
+      _t('$count ${count == '1' ? 'member' : 'members'}', '$count üye');
+  static String clubStatEvents(String count) =>
+      _t('$count ${count == '1' ? 'event' : 'events'}', '$count etkinlik');
 
   /// `board-members-all` `346:24` / `346:30`.
   static String get clubProfileBoardMembersTitle =>

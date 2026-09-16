@@ -61,6 +61,55 @@ void main() {
     }
   });
 
+  testWidgets(
+    'own profile clubs panel caps at four and offers a "+N more" line',
+    (tester) async {
+      final many = [
+        for (var i = 0; i < 6; i++)
+          Club(
+            id: 'own-overflow-$i',
+            name: 'Overflow Club $i',
+            description: '',
+            adminUserIds: const [],
+          ),
+      ];
+
+      await tester.pumpWidget(
+        ProviderScope(
+          child: MaterialApp(
+            localizationsDelegates: AppLocalizations.localizationsDelegates,
+            supportedLocales: AppLocalizations.supportedLocales,
+            home: StudentProfileScreen(
+              onSettings: () {},
+              followedClubs: many,
+              data: const StudentProfileData(
+                userId: 'clubs-overflow-test',
+                initials: 'S',
+                name: 'Student',
+                graduation: '',
+                major: '',
+                year: '',
+                bio: '',
+                clubs: 6,
+                following: 0,
+                followers: 0,
+              ),
+            ),
+          ),
+        ),
+      );
+      await tester.pump();
+
+      // `clubs-scroller` stops after four so the section below stays reachable;
+      // the remaining two sit behind the trailing tile.
+      final list = tester.widget<ProfileClubList>(find.byType(ProfileClubList));
+      expect(list.entries, hasLength(kProfileClubsPreviewCount));
+      expect(list.remaining, 2);
+      expect(find.text(S.clubsMoreLine(2)), findsOneWidget);
+      expect(tester.takeException(), isNull);
+    },
+  );
+
   testWidgets('blank bios are omitted from student profiles', (tester) async {
     await tester.pumpWidget(
       ProviderScope(
@@ -232,9 +281,12 @@ void main() {
         find.text('Robotics builder and occasional jazz listener.'),
         findsOneWidget,
       );
-      expect(find.text('CLUBS'), findsOneWidget);
-      expect(find.text('FOLLOWING'), findsOneWidget);
-      expect(find.text('FOLLOWERS'), findsOneWidget);
+      // The three count cells became the one-line `stats` a visited profile
+      // draws, so the own profile and a peer's read the same way.
+      expect(find.text(S.profileStatsLine('31', '12', '4')), findsOneWidget);
+      expect(find.text('CLUBS'), findsNothing);
+      expect(find.text('FOLLOWING'), findsNothing);
+      expect(find.text('FOLLOWERS'), findsNothing);
 
       // `my-clubs-section` + `events-section`.
       expect(find.text('My Clubs'), findsOneWidget);
@@ -491,6 +543,76 @@ void main() {
 
     expect(openedClub?.id, arts.id);
     expect(find.text('Board Memberships'), findsNothing);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('own profile draws the visited-profile hero and floats its '
+      'header', (tester) async {
+    tester.view.devicePixelRatio = 1;
+    tester.view.physicalSize = const Size(393, 852);
+    tester.view.padding = const FakeViewPadding(top: 47, bottom: 34);
+    tester.view.viewPadding = const FakeViewPadding(top: 47, bottom: 34);
+    addTearDown(tester.view.reset);
+
+    final robotics = Club(
+      id: 'own-hero-robotics',
+      name: 'KU Robotics',
+      description: '',
+      adminUserIds: const [],
+    );
+
+    await tester.pumpWidget(
+      ProviderScope(
+        child: MaterialApp(
+          localizationsDelegates: AppLocalizations.localizationsDelegates,
+          supportedLocales: AppLocalizations.supportedLocales,
+          home: StudentProfileScreen(
+            onSettings: () {},
+            onShare: () {},
+            data: const StudentProfileData(
+              userId: 'own-hero-student',
+              initials: 'HT',
+              name: 'Hakan Tuncay',
+              email: 'htuncay23@ku.edu.tr',
+              graduation: "Class of '27",
+              major: 'Computer Engineering',
+              year: "Class of '27",
+              bio: 'Robotics builder and occasional jazz listener.',
+              clubs: 4,
+              followers: 312,
+              following: 128,
+            ),
+            followedClubs: [robotics],
+          ),
+        ),
+      ),
+    );
+    await tester.pump();
+
+    // The same hero a visited profile draws: portrait on the trailing edge,
+    // name to its left, counts as one line.
+    expect(find.byType(ProfilePeerHero), findsOneWidget);
+    final portrait = tester.getRect(find.byType(ProfileAvatarRing));
+    final name = tester.getRect(find.text('Hakan Tuncay'));
+    expect(portrait.left, greaterThan(name.right));
+    expect(find.text(S.profileStatsLine('312', '128', '4')), findsOneWidget);
+
+    // Nothing starts under the header, and the header holds the top while the
+    // page scrolls beneath it.
+    final header = tester.getRect(find.byType(ProfileWordmarkHeader));
+    expect(
+      tester.getRect(find.byType(ProfilePeerHero)).top,
+      greaterThanOrEqualTo(header.bottom),
+    );
+
+    await tester.dragFrom(const Offset(196, 600), const Offset(0, -140));
+    await tester.pump();
+
+    expect(tester.getRect(find.byType(ProfileWordmarkHeader)), header);
+    expect(
+      tester.getRect(find.byType(ProfilePeerHero)).top,
+      lessThan(header.bottom),
+    );
     expect(tester.takeException(), isNull);
   });
 }

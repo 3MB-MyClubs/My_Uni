@@ -22,8 +22,9 @@ void main() {
     final source = File(
       '$root/lib/services/supabase_post_service.dart',
     ).readAsStringSync();
-    expect(source, contains("'create_club_post_transactional_v2'"));
+    expect(source, contains("'create_club_post_transactional_v3'"));
     expect(source, contains("'p_post_id': postId"));
+    expect(source, contains("'p_audience': audience.wireValue"));
     expect(source, contains(r"'club_posts/$clubId/$postId/cover.jpg'"));
     expect(source, isNot(contains("'create_poll_v2'")));
   });

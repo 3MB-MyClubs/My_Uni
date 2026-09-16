@@ -624,9 +624,9 @@ void main() {
       await pumpSettings(tester);
 
       final settings = tester.widget<Scaffold>(find.byType(Scaffold).first);
-      expect(settings.backgroundColor, const Color(0xFF0A0A0A));
-      expect(ClubProfileColors.card, const Color(0xFF121212));
-      expect(ClubProfileColors.field, const Color(0xFF1E1E1E));
+      expect(settings.backgroundColor, const Color(0xFF121212));
+      expect(ClubProfileColors.card, const Color(0xFF1E1E1E));
+      expect(ClubProfileColors.field, const Color(0xFF2A2A2A));
 
       // Burgundy everywhere the frame draws #1DA1F2.
       expect(ClubProfileColors.accent, const Color(0xFF800020));
@@ -635,8 +635,10 @@ void main() {
       await pump(tester, const BlockedAccountsScreen(), height: 900);
       final blocked = tester.widget<Scaffold>(find.byType(Scaffold).first);
       expect(blocked.backgroundColor, SettingsColors.background);
-      expect(SettingsColors.background, const Color(0xFF09090B));
-      expect(SettingsColors.card, const Color(0xFF18181B));
+      // The profile family moved off zinc-950 onto the app's dark set, the
+      // one Events/Chats/Search already used.
+      expect(SettingsColors.background, const Color(0xFF121212));
+      expect(SettingsColors.card, const Color(0xFF1E1E1E));
       expect(tester.takeException(), isNull);
     },
   );

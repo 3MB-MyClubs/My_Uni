@@ -468,14 +468,14 @@ class _ClubProfileScreenState extends State<ClubProfileScreen>
                     : null,
                 actions: [
                   if (isOwner)
-                    ClubProfileCircleButton(
+                    ClubProfilePlainIconButton(
                       key: const ValueKey('club-profile-insights'),
                       icon: Icons.bar_chart_rounded,
                       semanticLabel: S.clubInsightsTitle,
                       onTap: _openInsights,
                     ),
                   if (widget.onSettings != null)
-                    ClubProfileCircleButton(
+                    ClubProfilePlainIconButton(
                       // Same singleton guard as the legacy header: only the
                       // logged-in club's own Profile tab root may own the
                       // onboarding anchor's GlobalKey.
@@ -495,64 +495,51 @@ class _ClubProfileScreenState extends State<ClubProfileScreen>
               listenable: userState,
               builder: (context, _) => Padding(
                 padding: const EdgeInsets.fromLTRB(
-                  kClubProfileGutter,
-                  8,
-                  kClubProfileGutter,
-                  14,
+                  kClubProfilePageGutter,
+                  16,
+                  kClubProfilePageGutter,
+                  22,
                 ),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
-                    GestureDetector(
-                      // The frame draws no overflow, so Report & Block — a
-                      // student's only moderation route on this screen — hangs
-                      // off a long press, as this area's board rows and event
-                      // cards already do for controls the frames omit.
+                    ClubProfileHero(
+                      avatar: ClubAvatar(
+                        clubId: widget.club.id,
+                        clubName: widget.club.name,
+                        color: widget.color,
+                        imageUrl: widget.club.logoUrl,
+                        size: kClubProfileHeroPortraitSize,
+                        fontSize: kClubProfileHeroPortraitSize / 2.9,
+                        borderRadius: 999,
+                      ),
+                      name: widget.club.name,
+                      // Recalculate inside the UserState listener so an
+                      // initials edit made in Settings updates this visible
+                      // @handle without reopening the profile screen.
+                      handle: clubHandle(widget.club),
+                      description: widget.club.description,
+                      categories: _categoryTagsFor(widget.club),
+                      postsLabel: S.clubStatPosts(
+                        '${_remotePostCount ?? clubPosts.length}',
+                      ),
+                      membersLabel: S.clubStatMembers('$memberCount'),
+                      eventsLabel: S.clubStatEvents(
+                        '${_remoteEventCount ?? clubEvents.length}',
+                      ),
+                      // Members was the only one of the three stat cells with
+                      // a destination, and the line that replaced them keeps
+                      // it: the whole line opens the member directory.
+                      onStatsTap: _openMembersDirectory,
                       onLongPress: _isStudentViewer
                           ? _showStudentClubActions
                           : null,
-                      child: ClubProfileIdentityCard(
-                        avatar: ClubAvatar(
-                          clubId: widget.club.id,
-                          clubName: widget.club.name,
-                          color: widget.color,
-                          imageUrl: widget.club.logoUrl,
-                          size: 60,
-                          fontSize: 24,
-                          borderRadius: 999,
-                        ),
-                        name: widget.club.name,
-                        // Recalculate inside the UserState listener so an
-                        // initials edit made in Settings updates this visible
-                        // @handle without reopening the profile screen.
-                        handle: clubHandle(widget.club),
-                        description: widget.club.description,
-                        categories: _categoryTagsFor(widget.club),
-                        actions: _isStudentViewer
-                            ? _buildStudentActions()
-                            : null,
-                      ),
+                      actions: _isStudentViewer
+                          ? _buildStudentActions()
+                          : null,
                     ),
-                    const SizedBox(height: 14),
-                    ClubProfileStatsRow(
-                      cells: [
-                        ClubProfileStat(
-                          value: '${_remotePostCount ?? clubPosts.length}',
-                          label: S.clubProfileTimeline,
-                        ),
-                        ClubProfileStat(
-                          value: '$memberCount',
-                          label: l10n.members,
-                          onTap: _openMembersDirectory,
-                        ),
-                        ClubProfileStat(
-                          value: '${_remoteEventCount ?? clubEvents.length}',
-                          label: l10n.events,
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 14),
-                    ClubProfileSegmentedTabs(
+                    const SizedBox(height: 22),
+                    ClubProfileUnderlineTabs(
                       key: widget.onSettings != null
                           ? onboardingAnchors.keyFor(
                               OnboardingAnchors.clubProfileTabs,
@@ -1840,9 +1827,9 @@ class _EventsTabState extends State<_EventsTab> {
       children: [
         Padding(
           padding: const EdgeInsets.fromLTRB(
-            kClubProfileGutter,
+            kClubProfilePageGutter,
             0,
-            kClubProfileGutter,
+            kClubProfilePageGutter,
             12,
           ),
           child: ClubProfileSegmentedTabs(
@@ -1874,9 +1861,9 @@ class _EventsTabState extends State<_EventsTab> {
               : ListView.separated(
                   key: const ValueKey('club-profile-events'),
                   padding: const EdgeInsets.fromLTRB(
-                    kClubProfileGutter,
+                    kClubProfilePageGutter,
                     0,
-                    kClubProfileGutter,
+                    kClubProfilePageGutter,
                     96,
                   ),
                   itemCount: shown.length + (widget.isAdmin ? 1 : 0),
@@ -3313,9 +3300,9 @@ class _BoardTabState extends State<_BoardTab> {
     return ListView(
       key: const ValueKey('club-profile-board'),
       padding: const EdgeInsets.fromLTRB(
-        kClubProfileGutter,
+        kClubProfilePageGutter,
         0,
-        kClubProfileGutter,
+        kClubProfilePageGutter,
         96,
       ),
       children: [
@@ -3337,6 +3324,7 @@ class _BoardTabState extends State<_BoardTab> {
               padding: const EdgeInsets.only(bottom: 12),
               child: ClubProfileMemberRow(
                 key: ValueKey('club-board-row-${member.id}'),
+                radius: 20,
                 avatar: UserAvatar(
                   userId: member.id,
                   name: member.name,

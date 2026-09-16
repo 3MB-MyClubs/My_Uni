@@ -1339,14 +1339,23 @@ class _ExploreScreenState extends State<ExploreScreen> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            ClubAvatar(
-              clubId: club.id,
-              clubName: club.name,
-              color: _hueFor(clubOrdinal(club.id)),
-              imageUrl: club.logoUrl,
-              size: 40,
-              fontSize: 16,
-              borderRadius: 12,
+            // `UserAvatar`/`ClubAvatar` open the full-screen photo viewer
+            // from their own `GestureDetector`, but only for someone who has
+            // actually uploaded a picture — so without this the row's tap
+            // reached the profile for an initials avatar and the viewer for a
+            // photo, which read as a bug. The picture goes where the row goes.
+            // Neutralised locally; the shared widgets keep their viewer, which
+            // is still what the large portrait on a profile uses.
+            IgnorePointer(
+              child: ClubAvatar(
+                clubId: club.id,
+                clubName: club.name,
+                color: _hueFor(clubOrdinal(club.id)),
+                imageUrl: club.logoUrl,
+                size: 40,
+                fontSize: 16,
+                borderRadius: 12,
+              ),
             ),
             const SizedBox(height: 8),
             Text(
@@ -1392,14 +1401,16 @@ class _ExploreScreenState extends State<ExploreScreen> {
         ),
         child: Row(
           children: [
-            ClubAvatar(
-              clubId: club.id,
-              clubName: club.name,
-              color: _hueFor(clubOrdinal(club.id)),
-              imageUrl: club.logoUrl,
-              size: 44,
-              fontSize: 17,
-              shape: 'circle',
+            IgnorePointer(
+              child: ClubAvatar(
+                clubId: club.id,
+                clubName: club.name,
+                color: _hueFor(clubOrdinal(club.id)),
+                imageUrl: club.logoUrl,
+                size: 44,
+                fontSize: 17,
+                shape: 'circle',
+              ),
             ),
             const SizedBox(width: 12),
             Expanded(
@@ -1718,13 +1729,15 @@ class _PersonRowState extends State<_PersonRow> {
         ),
         child: Row(
           children: [
-            UserAvatar(
-              userId: widget.user.id,
-              name: widget.user.name,
-              size: 44,
-              fontSize: 16,
-              backgroundColor: widget.color.withValues(alpha: 0.14),
-              textColor: widget.color,
+            IgnorePointer(
+              child: UserAvatar(
+                userId: widget.user.id,
+                name: widget.user.name,
+                size: 44,
+                fontSize: 16,
+                backgroundColor: widget.color.withValues(alpha: 0.14),
+                textColor: widget.color,
+              ),
             ),
             const SizedBox(width: 12),
             Expanded(

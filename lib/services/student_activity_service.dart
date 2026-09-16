@@ -117,11 +117,23 @@ class StudentActivityService extends ChangeNotifier {
   final Map<String, Map<String, bool>> _localRsvpOverridesByUser = {};
   final Set<String> _hydratedUserIds = {};
   final Set<String> _hydratingUserIds = {};
+  final Set<String> _attemptedUserIds = {};
   int _historyGeneration = 0;
 
-  /// Hydrates the signed-in student's complete RSVP/check-in event record.
-  /// The global feed intentionally contains only a recent event window, so a
-  /// separate per-user cache keeps older profile history available.
+  /// A read for this student is in flight. Screens draw a loading state off
+  /// this rather than showing an empty record as if it were the answer.
+  bool isHydratingUser(String userId) =>
+      _hydratingUserIds.contains(userId.trim());
+
+  /// A read for this student has completed at least once — so an empty record
+  /// really does mean "nothing", not "not loaded yet".
+  bool hasAttemptedUser(String userId) =>
+      _attemptedUserIds.contains(userId.trim());
+
+  /// Hydrates one student's complete RSVP/check-in event record — their own
+  /// profile or a visited one. The global feed intentionally contains only a
+  /// recent event window, so a separate per-user cache keeps older profile
+  /// history available.
   Future<void> hydrateForUser(String userId, {bool force = false}) async {
     final normalizedUserId = userId.trim();
     if (normalizedUserId.isEmpty ||
@@ -133,7 +145,7 @@ class StudentActivityService extends ChangeNotifier {
     final requestGeneration = _historyGeneration;
     _hydratingUserIds.add(normalizedUserId);
     try {
-      final snapshot = await supabaseContentService.fetchOwnStudentEventHistory(
+      final snapshot = await supabaseContentService.fetchStudentEventHistory(
         normalizedUserId,
       );
       if (requestGeneration != _historyGeneration) return;
@@ -141,10 +153,21 @@ class StudentActivityService extends ChangeNotifier {
         normalizedUserId,
         snapshot,
       );
-      _hydratedUserIds.add(normalizedUserId);
+      // An empty answer is not cached as the final word: it is also what a
+      // read that never reached Supabase returns (no client yet, a dropped
+      // connection, RLS refusing one of the two participation tables), and
+      // caching that would leave the profile permanently blank for the rest
+      // of the session. Re-reading on the next visit costs one small query.
+      if (snapshot.events.isNotEmpty ||
+          snapshot.rsvpEventIds.isNotEmpty ||
+          snapshot.checkinEventIds.isNotEmpty) {
+        _hydratedUserIds.add(normalizedUserId);
+      }
+      _attemptedUserIds.add(normalizedUserId);
       notifyListeners();
     } finally {
       _hydratingUserIds.remove(normalizedUserId);
+      notifyListeners();
     }
   }
 
@@ -152,6 +175,7 @@ class StudentActivityService extends ChangeNotifier {
     _historyGeneration++;
     if (_remoteHistoryByUser.isEmpty &&
         _hydratedUserIds.isEmpty &&
+        _attemptedUserIds.isEmpty &&
         _localRsvpOverridesByUser.isEmpty) {
       return;
     }
@@ -159,6 +183,7 @@ class StudentActivityService extends ChangeNotifier {
     _localRsvpOverridesByUser.clear();
     _hydratedUserIds.clear();
     _hydratingUserIds.clear();
+    _attemptedUserIds.clear();
     notifyListeners();
   }
 

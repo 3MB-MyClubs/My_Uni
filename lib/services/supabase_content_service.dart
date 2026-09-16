@@ -500,9 +500,16 @@ class SupabaseContentService {
     }
   }
 
-  /// Fetches only events in the signed-in student's own RSVP/check-in record.
-  /// Other profiles continue to use the already-public in-memory activity data.
-  Future<StudentEventHistorySnapshot> fetchOwnStudentEventHistory(
+  /// Fetches only the events in [profileId]'s RSVP/check-in record.
+  ///
+  /// Runs for any student, not just the signed-in one: a visited profile shows
+  /// what that student is going to next, and the shared feed snapshot alone
+  /// cannot answer that — it is bounded by date and its attendee ids are
+  /// hydrated in a separate pass. The rows are the same `event_rsvps` the
+  /// attendee faces on an event already read, so a database that withholds
+  /// another student's participation simply returns nothing here and the
+  /// profile falls back to whatever the in-memory events carry.
+  Future<StudentEventHistorySnapshot> fetchStudentEventHistory(
     String profileId,
   ) async {
     final normalizedProfileId = profileId.trim();
@@ -512,9 +519,7 @@ class SupabaseContentService {
     // Without an authenticated Supabase client, the global in-memory events
     // already are the source of truth. Do not copy them into the remote cache,
     // which would otherwise outlive a local content refresh/test fixture.
-    if (client == null || client.auth.currentUser?.id != normalizedProfileId) {
-      return StudentEventHistorySnapshot.empty;
-    }
+    if (client == null) return StudentEventHistorySnapshot.empty;
 
     final participationRows = await Future.wait<List<dynamic>>([
       client

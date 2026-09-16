@@ -205,7 +205,7 @@ void main() {
     );
   });
 
-  testWidgets('sent and received photos use the same thin flat frame', (
+  testWidgets('sent and received photos fill the bubble with no frame', (
     tester,
   ) async {
     const currentEmail = 'photo-frame-sender@ku.edu.tr';
@@ -259,15 +259,16 @@ void main() {
     );
     await tester.pump();
 
-    // `chat-dm` 102:34 — a photo sits in a 2pt inset with no outline and no
-    // shadow, and the sent and received bubbles differ only in fill.
+    // The photo *is* the bubble — no inset frame of bubble colour, no outline
+    // and no shadow, the way WhatsApp draws a media message. Sent and received
+    // bubbles differ only in fill.
     for (final message in [sent, received]) {
       final bubble = tester.widget<ChatBubbleShell>(
         find.byKey(ValueKey('chat-message-bubble-${message.id}')),
       );
       final photo = find.byKey(ValueKey('chat-photo-${message.id}'));
       final timestamp = find.byKey(ValueKey('chat-message-time-${message.id}'));
-      expect(bubble.padding, const EdgeInsets.all(2));
+      expect(bubble.padding, EdgeInsets.zero);
       expect(bubble.mine, message.senderId == currentId);
       expect(timestamp, findsOneWidget);
       expect(
