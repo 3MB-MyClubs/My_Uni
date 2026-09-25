@@ -1,11 +1,13 @@
 import Flutter
 import EventKit
+import PassKit
 import UIKit
 import UserNotifications
 
 @main
 @objc class AppDelegate: FlutterAppDelegate, FlutterImplicitEngineDelegate {
   private let eventStore = EKEventStore()
+  private var previousTicketBrightness: CGFloat?
 
   override func application(
     _ application: UIApplication,
@@ -26,6 +28,44 @@ import UserNotifications
       if call.method == "openWeatherApp" {
         self.openWeatherApp(result: result)
       } else {
+        result(FlutterMethodNotImplemented)
+      }
+    }
+
+    let ticketBrightnessChannel = FlutterMethodChannel(
+      name: "ku_app/ticket_brightness",
+      binaryMessenger: messenger
+    )
+    ticketBrightnessChannel.setMethodCallHandler { call, result in
+      switch call.method {
+      case "maximize":
+        if self.previousTicketBrightness == nil {
+          self.previousTicketBrightness = UIScreen.main.brightness
+        }
+        UIScreen.main.brightness = 1.0
+        result(nil)
+      case "restore":
+        if let brightness = self.previousTicketBrightness {
+          UIScreen.main.brightness = brightness
+          self.previousTicketBrightness = nil
+        }
+        result(nil)
+      default:
+        result(FlutterMethodNotImplemented)
+      }
+    }
+
+    let appleWalletTicketChannel = FlutterMethodChannel(
+      name: "ku_app/apple_wallet_ticket",
+      binaryMessenger: messenger
+    )
+    appleWalletTicketChannel.setMethodCallHandler { call, result in
+      switch call.method {
+      case "canAddPasses":
+        result(PKAddPassesViewController.canAddPasses())
+      case "addPass":
+        self.addAppleWalletPass(call: call, result: result)
+      default:
         result(FlutterMethodNotImplemented)
       }
     }
@@ -60,6 +100,50 @@ import UserNotifications
       } else {
         result(FlutterMethodNotImplemented)
       }
+    }
+  }
+
+  private func addAppleWalletPass(call: FlutterMethodCall, result: @escaping FlutterResult) {
+    guard PKAddPassesViewController.canAddPasses() else {
+      result(FlutterError(code: "wallet_unavailable", message: "Apple Wallet is unavailable", details: nil))
+      return
+    }
+    guard let data = call.arguments as? FlutterStandardTypedData else {
+      result(FlutterError(code: "bad_pass", message: "Missing ticket pass", details: nil))
+      return
+    }
+    do {
+      let pass = try PKPass(data: data.data)
+      guard let controller = PKAddPassesViewController(pass: pass) else {
+        result(FlutterError(code: "wallet_unavailable", message: "Could not create Apple Wallet sheet", details: nil))
+        return
+      }
+      let root = UIApplication.shared.connectedScenes
+        .compactMap { $0 as? UIWindowScene }
+        .first(where: { $0.activationState == .foregroundActive })?
+        .keyWindow?.rootViewController
+      guard let root else {
+        result(FlutterError(code: "wallet_unavailable", message: "Could not find the active app window", details: nil))
+        return
+      }
+      var presenter = root
+      while let presented = presenter.presentedViewController {
+        presenter = presented
+      }
+      presenter.present(controller, animated: true) {
+        result(nil)
+      }
+    } catch {
+      let passError = error as NSError
+      result(FlutterError(
+        code: "bad_pass",
+        message: "Invalid Apple Wallet pass",
+        details: [
+          "domain": passError.domain,
+          "code": passError.code,
+          "reason": passError.localizedDescription
+        ]
+      ))
     }
   }
 

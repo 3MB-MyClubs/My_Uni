@@ -589,6 +589,7 @@ export type Database = {
       }
       club_posts: {
         Row: {
+          audience: string
           author_id: string | null
           club_id: string
           content: string
@@ -600,6 +601,7 @@ export type Database = {
           updated_at: string
         }
         Insert: {
+          audience?: string
           author_id?: string | null
           club_id: string
           content: string
@@ -611,6 +613,7 @@ export type Database = {
           updated_at?: string
         }
         Update: {
+          audience?: string
           author_id?: string | null
           club_id?: string
           content?: string
@@ -978,8 +981,63 @@ export type Database = {
           },
         ]
       }
+      event_tickets: {
+        Row: {
+          event_id: string
+          id: string
+          issued_at: string
+          issued_by: string | null
+          profile_id: string
+          revoked_at: string | null
+          revoked_by: string | null
+          token: string
+          used_at: string | null
+          used_by: string | null
+        }
+        Insert: {
+          event_id: string
+          id?: string
+          issued_at?: string
+          issued_by?: string | null
+          profile_id: string
+          revoked_at?: string | null
+          revoked_by?: string | null
+          token?: string
+          used_at?: string | null
+          used_by?: string | null
+        }
+        Update: {
+          event_id?: string
+          id?: string
+          issued_at?: string
+          issued_by?: string | null
+          profile_id?: string
+          revoked_at?: string | null
+          revoked_by?: string | null
+          token?: string
+          used_at?: string | null
+          used_by?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "event_tickets_event_id_fkey"
+            columns: ["event_id"]
+            isOneToOne: false
+            referencedRelation: "events"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "event_tickets_profile_id_fkey"
+            columns: ["profile_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       events: {
         Row: {
+          audience: string
           club_id: string
           created_at: string
           created_by_user_id: string | null
@@ -990,6 +1048,7 @@ export type Database = {
           image_path: string | null
           image_url: string | null
           is_public: boolean
+          is_ticketed: boolean
           location: string | null
           registration_url: string | null
           schedule: Json | null
@@ -1000,6 +1059,7 @@ export type Database = {
           updated_at: string
         }
         Insert: {
+          audience?: string
           club_id: string
           created_at?: string
           created_by_user_id?: string | null
@@ -1010,6 +1070,7 @@ export type Database = {
           image_path?: string | null
           image_url?: string | null
           is_public?: boolean
+          is_ticketed?: boolean
           location?: string | null
           registration_url?: string | null
           schedule?: Json | null
@@ -1020,6 +1081,7 @@ export type Database = {
           updated_at?: string
         }
         Update: {
+          audience?: string
           club_id?: string
           created_at?: string
           created_by_user_id?: string | null
@@ -1030,6 +1092,7 @@ export type Database = {
           image_path?: string | null
           image_url?: string | null
           is_public?: boolean
+          is_ticketed?: boolean
           location?: string | null
           registration_url?: string | null
           schedule?: Json | null
@@ -2354,6 +2417,10 @@ export type Database = {
       }
     }
     Functions: {
+      can_manage_event_tickets: {
+        Args: { p_event_id: string }
+        Returns: boolean
+      }
       cancel_password_reset_challenge_v2: {
         Args: { p_code_hash: string; p_email: string }
         Returns: undefined
@@ -2522,6 +2589,7 @@ export type Database = {
           p_title: string
         }
         Returns: {
+          audience: string
           club_id: string
           created_at: string
           created_by_user_id: string | null
@@ -2532,6 +2600,102 @@ export type Database = {
           image_path: string | null
           image_url: string | null
           is_public: boolean
+          is_ticketed: boolean
+          location: string | null
+          registration_url: string | null
+          schedule: Json | null
+          speakers: Json | null
+          starts_at: string
+          tags: string[]
+          title: string
+          updated_at: string
+        }
+        SetofOptions: {
+          from: "*"
+          to: "events"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
+      create_club_event_transactional_v3: {
+        Args: {
+          p_audience?: string
+          p_club_id: string
+          p_description: string
+          p_ends_at: string
+          p_event_date: string
+          p_event_id: string
+          p_image_path?: string
+          p_image_url?: string
+          p_location: string
+          p_registration_url?: string
+          p_schedule?: Json
+          p_speakers?: Json
+          p_starts_at: string
+          p_tags?: string[]
+          p_title: string
+        }
+        Returns: {
+          audience: string
+          club_id: string
+          created_at: string
+          created_by_user_id: string | null
+          description: string | null
+          ends_at: string | null
+          event_date: string
+          id: string
+          image_path: string | null
+          image_url: string | null
+          is_public: boolean
+          is_ticketed: boolean
+          location: string | null
+          registration_url: string | null
+          schedule: Json | null
+          speakers: Json | null
+          starts_at: string
+          tags: string[]
+          title: string
+          updated_at: string
+        }
+        SetofOptions: {
+          from: "*"
+          to: "events"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
+      create_club_event_transactional_v4: {
+        Args: {
+          p_audience?: string
+          p_club_id: string
+          p_description: string
+          p_ends_at: string
+          p_event_date: string
+          p_event_id: string
+          p_image_path?: string
+          p_image_url?: string
+          p_is_ticketed?: boolean
+          p_location: string
+          p_registration_url?: string
+          p_schedule?: Json
+          p_speakers?: Json
+          p_starts_at: string
+          p_tags?: string[]
+          p_title: string
+        }
+        Returns: {
+          audience: string
+          club_id: string
+          created_at: string
+          created_by_user_id: string | null
+          description: string | null
+          ends_at: string | null
+          event_date: string
+          id: string
+          image_path: string | null
+          image_url: string | null
+          is_public: boolean
+          is_ticketed: boolean
           location: string | null
           registration_url: string | null
           schedule: Json | null
@@ -2566,6 +2730,7 @@ export type Database = {
           p_title: string
         }
         Returns: {
+          audience: string
           club_id: string
           created_at: string
           created_by_user_id: string | null
@@ -2576,6 +2741,7 @@ export type Database = {
           image_path: string | null
           image_url: string | null
           is_public: boolean
+          is_ticketed: boolean
           location: string | null
           registration_url: string | null
           schedule: Json | null
@@ -2605,6 +2771,39 @@ export type Database = {
           p_post_id: string
         }
         Returns: {
+          audience: string
+          author_id: string | null
+          club_id: string
+          content: string
+          created_at: string
+          id: string
+          image_path: string | null
+          image_url: string | null
+          is_announcement: boolean
+          updated_at: string
+        }
+        SetofOptions: {
+          from: "*"
+          to: "club_posts"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
+      create_club_post_transactional_v3: {
+        Args: {
+          p_audience?: string
+          p_club_id: string
+          p_content: string
+          p_image_path?: string
+          p_image_url?: string
+          p_is_announcement?: boolean
+          p_mentioned_user_ids?: string[]
+          p_poll_options?: Json
+          p_poll_question?: string
+          p_post_id: string
+        }
+        Returns: {
+          audience: string
           author_id: string | null
           club_id: string
           content: string
@@ -2633,6 +2832,7 @@ export type Database = {
           p_mentioned_user_ids?: string[]
         }
         Returns: {
+          audience: string
           author_id: string | null
           club_id: string
           content: string
@@ -2784,6 +2984,27 @@ export type Database = {
         Args: { target_club_id: string }
         Returns: boolean
       }
+      issue_event_ticket: {
+        Args: { p_event_id: string; p_profile_id: string; p_reissue?: boolean }
+        Returns: {
+          event_id: string
+          id: string
+          issued_at: string
+          issued_by: string | null
+          profile_id: string
+          revoked_at: string | null
+          revoked_by: string | null
+          token: string
+          used_at: string | null
+          used_by: string | null
+        }
+        SetofOptions: {
+          from: "*"
+          to: "event_tickets"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
       issue_password_reset_challenge: {
         Args: { p_code_hash: string; p_email: string; p_expires_at: string }
         Returns: string
@@ -2838,7 +3059,15 @@ export type Database = {
       }
       remove_poll_vote_v2: { Args: { p_poll_id: string }; Returns: boolean }
       restrict_signup_to_ku: { Args: { event: Json }; Returns: Json }
+      revoke_event_ticket: {
+        Args: { p_event_id: string; p_ticket_id: string }
+        Returns: boolean
+      }
       revoke_user_sessions: { Args: { p_user_id: string }; Returns: number }
+      scan_event_ticket: {
+        Args: { p_event_id: string; p_token: string }
+        Returns: Json
+      }
       send_message_v2: {
         Args: {
           p_content: string
@@ -2850,6 +3079,14 @@ export type Database = {
           p_thread_id: string
         }
         Returns: Json
+      }
+      set_club_event_audience_v2: {
+        Args: { p_audience: string; p_event_id: string }
+        Returns: boolean
+      }
+      set_club_post_audience_v2: {
+        Args: { p_audience: string; p_post_id: string }
+        Returns: boolean
       }
       storage_cleanup_is_referenced_v2: {
         Args: { p_cleanup_id: string; p_lease_token: string }
@@ -2863,6 +3100,25 @@ export type Database = {
           p_event_id: string
           p_image_path: string
           p_image_url: string
+          p_location: string
+          p_registration_url: string
+          p_schedule: Json
+          p_speakers: Json
+          p_starts_at: string
+          p_tags: string[]
+          p_title: string
+        }
+        Returns: Json
+      }
+      update_club_event_transactional_v3: {
+        Args: {
+          p_description: string
+          p_ends_at: string
+          p_event_date: string
+          p_event_id: string
+          p_image_path: string
+          p_image_url: string
+          p_is_ticketed: boolean
           p_location: string
           p_registration_url: string
           p_schedule: Json
@@ -2959,12 +3215,12 @@ export type Tables<
   DefaultSchemaTableNameOrOptions extends
     | keyof (DefaultSchema["Tables"] & DefaultSchema["Views"])
     | { schema: keyof DatabaseWithoutInternals },
-  TableName extends DefaultSchemaTableNameOrOptions extends {
+  TableName extends (DefaultSchemaTableNameOrOptions extends {
     schema: keyof DatabaseWithoutInternals
   }
     ? keyof (DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"] &
         DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Views"])
-    : never = never,
+    : never) = never,
 > = DefaultSchemaTableNameOrOptions extends {
   schema: keyof DatabaseWithoutInternals
 }
@@ -2988,11 +3244,11 @@ export type TablesInsert<
   DefaultSchemaTableNameOrOptions extends
     | keyof DefaultSchema["Tables"]
     | { schema: keyof DatabaseWithoutInternals },
-  TableName extends DefaultSchemaTableNameOrOptions extends {
+  TableName extends (DefaultSchemaTableNameOrOptions extends {
     schema: keyof DatabaseWithoutInternals
   }
     ? keyof DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"]
-    : never = never,
+    : never) = never,
 > = DefaultSchemaTableNameOrOptions extends {
   schema: keyof DatabaseWithoutInternals
 }
@@ -3013,11 +3269,11 @@ export type TablesUpdate<
   DefaultSchemaTableNameOrOptions extends
     | keyof DefaultSchema["Tables"]
     | { schema: keyof DatabaseWithoutInternals },
-  TableName extends DefaultSchemaTableNameOrOptions extends {
+  TableName extends (DefaultSchemaTableNameOrOptions extends {
     schema: keyof DatabaseWithoutInternals
   }
     ? keyof DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"]
-    : never = never,
+    : never) = never,
 > = DefaultSchemaTableNameOrOptions extends {
   schema: keyof DatabaseWithoutInternals
 }
@@ -3038,11 +3294,11 @@ export type Enums<
   DefaultSchemaEnumNameOrOptions extends
     | keyof DefaultSchema["Enums"]
     | { schema: keyof DatabaseWithoutInternals },
-  EnumName extends DefaultSchemaEnumNameOrOptions extends {
+  EnumName extends (DefaultSchemaEnumNameOrOptions extends {
     schema: keyof DatabaseWithoutInternals
   }
     ? keyof DatabaseWithoutInternals[DefaultSchemaEnumNameOrOptions["schema"]]["Enums"]
-    : never = never,
+    : never) = never,
 > = DefaultSchemaEnumNameOrOptions extends {
   schema: keyof DatabaseWithoutInternals
 }
@@ -3055,11 +3311,11 @@ export type CompositeTypes<
   PublicCompositeTypeNameOrOptions extends
     | keyof DefaultSchema["CompositeTypes"]
     | { schema: keyof DatabaseWithoutInternals },
-  CompositeTypeName extends PublicCompositeTypeNameOrOptions extends {
+  CompositeTypeName extends (PublicCompositeTypeNameOrOptions extends {
     schema: keyof DatabaseWithoutInternals
   }
     ? keyof DatabaseWithoutInternals[PublicCompositeTypeNameOrOptions["schema"]]["CompositeTypes"]
-    : never = never,
+    : never) = never,
 > = PublicCompositeTypeNameOrOptions extends {
   schema: keyof DatabaseWithoutInternals
 }

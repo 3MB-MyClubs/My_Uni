@@ -113,6 +113,9 @@ class Event {
   /// tiers, defaulting to [ContentAudience.everyone].
   final ContentAudience audience;
 
+  /// Organizers manually issue free admission tickets when enabled.
+  final bool isTicketed;
+
   Event({
     required this.id,
     required this.clubId,
@@ -133,6 +136,7 @@ class Event {
     this.capacity,
     List<EventSpeaker>? speakers,
     this.audience = ContentAudience.everyone,
+    this.isTicketed = false,
   }) : rsvpTimestamps = rsvpTimestamps ?? {},
        tags = tags ?? [],
        speakers = speakers ?? const [];
@@ -157,6 +161,7 @@ class Event {
     'capacity': capacity,
     'speakers': speakers.map((s) => s.toMap()).toList(),
     'audience': audience.wireValue,
+    'isTicketed': isTicketed,
   };
 
   factory Event.fromMap(Map<String, dynamic> m) => Event(
@@ -194,6 +199,7 @@ class Event {
               .toList()
         : const [],
     audience: contentAudienceFromWire(m['audience']),
+    isTicketed: m['isTicketed'] == true,
   );
 
   /// Field-wise copy.
@@ -224,6 +230,7 @@ class Event {
     int? capacity,
     List<EventSpeaker>? speakers,
     ContentAudience? audience,
+    bool? isTicketed,
   }) => Event(
     id: id ?? this.id,
     clubId: clubId ?? this.clubId,
@@ -244,5 +251,6 @@ class Event {
     capacity: capacity ?? this.capacity,
     speakers: speakers ?? this.speakers,
     audience: audience ?? this.audience,
+    isTicketed: isTicketed ?? this.isTicketed,
   );
 }

@@ -43,6 +43,9 @@ jobs:
           test/upload_failure_classifier_test.dart
           test/media_delivery_contract_test.dart
           test/media_delivery_service_test.dart
+          test/event_ticket_service_test.dart
+          test/event_ticket_ui_test.dart
+          test/optional_event_tickets_test.dart
       - name: Compile web release
         run: flutter build web --release --no-pub
 
@@ -64,6 +67,8 @@ jobs:
         run: bash scripts/check-database-lint.sh
       - name: Run all pgTAP suites
         run: supabase test db supabase/tests/*.test.sql --local
+      - name: Test concurrent ticket issuance and scanning
+        run: python3 scripts/test-ticket-concurrency.py
       - name: Verify generated TypeScript database types
         run: |
           generated="$(mktemp)"

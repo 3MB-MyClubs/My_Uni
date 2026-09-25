@@ -269,6 +269,8 @@ class RsvpStore extends ChangeNotifier {
       registrationUrl: event.registrationUrl,
       capacity: event.capacity,
       speakers: List<EventSpeaker>.from(event.speakers),
+      audience: event.audience,
+      isTicketed: event.isTicketed,
     );
   }
 }

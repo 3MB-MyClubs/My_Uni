@@ -989,19 +989,19 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get publishErrorRlsPolicy =>
-      'Could not publish post. Check club_posts RLS policies for this club account.';
+      'Could not publish this post for your club. Please contact support if this seems wrong.';
 
   @override
   String get publishErrorMigration =>
-      'Could not publish post. Run the latest club_posts SQL migration.';
+      'Could not publish the post right now. Please contact support if this keeps happening.';
 
   @override
   String get publishErrorStorage =>
-      'Could not upload photo. Check the post-images bucket policies.';
+      'Could not upload the photo. Please try again or choose another photo.';
 
   @override
   String get publishErrorGeneric =>
-      'Could not publish post. Check Supabase settings.';
+      'Could not publish the post. Please try again later.';
 
   @override
   String get confirm => 'Confirm';
@@ -1030,7 +1030,7 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get clubLoginNotReady =>
-      'Club login is not ready. Check club_auth_accounts in Supabase.';
+      'Club sign-in is temporarily unavailable. Please try again later.';
 
   @override
   String get clubAdminLoginTitle => 'Club Admin Login';
@@ -1076,7 +1076,8 @@ class AppLocalizationsEn extends AppLocalizations {
   String get signInAsAdmin => 'Sign In as Admin';
 
   @override
-  String get supabaseNotConfigured => 'Supabase is not configured.';
+  String get supabaseNotConfigured =>
+      'This service is temporarily unavailable. Please try again later.';
 
   @override
   String get passwordResetRequestFailed => 'Password reset request failed.';
@@ -1708,11 +1709,11 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get couldNotDeleteEventSupabase =>
-      'Could not delete event from Supabase.';
+      'Could not delete the event. Please try again.';
 
   @override
   String get couldNotDeletePostSupabase =>
-      'Could not delete post from Supabase.';
+      'Could not delete the post. Please try again.';
 
   @override
   String get couldNotLoadConnections => 'Could not load connections.';
@@ -1726,7 +1727,7 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get couldNotLoadProfileOptions =>
-      'Could not load profile options from Supabase.';
+      'Could not load profile options. Please try again.';
 
   @override
   String get couldNotLoadProfileOptionsRetry =>
@@ -1758,11 +1759,12 @@ class AppLocalizationsEn extends AppLocalizations {
   String get couldNotSaveChanges => 'Could not save changes.';
 
   @override
-  String get couldNotSaveEventSupabase => 'Could not save event to Supabase.';
+  String get couldNotSaveEventSupabase =>
+      'Could not save the event. Please try again later.';
 
   @override
   String get couldNotSaveProfileSupabase =>
-      'Could not save profile to Supabase';
+      'Could not save your profile. Please try again.';
 
   @override
   String get couldNotUpdateBoardRole => 'Could not update board member role.';
@@ -2867,19 +2869,19 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get publishErrorGenericEvent =>
-      'Could not publish event. Check Supabase settings.';
+      'Could not publish the event. Please try again later.';
 
   @override
   String get publishErrorMigrationEvent =>
-      'Could not publish event. Run the latest events SQL migration.';
+      'Could not publish the event right now. Please contact support if this keeps happening.';
 
   @override
   String get publishErrorRlsPolicyEvent =>
-      'Could not publish event. Check events RLS policies for this club account.';
+      'Could not publish this event for your club. Please contact support if this seems wrong.';
 
   @override
   String get publishErrorStorageEvent =>
-      'Could not upload event image. Check the event-images bucket policies.';
+      'Could not upload the event image. Please try again or choose another image.';
 
   @override
   String get publishEventButton => 'Publish Event';
@@ -3113,7 +3115,7 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get signupServerNotConfigured =>
-      'Supabase is not configured. Start the app with SUPABASE_URL and SUPABASE_PUBLISHABLE_KEY.';
+      'Sign-up is temporarily unavailable. Please try again later.';
 
   @override
   String get signupUrlLabel => 'Sign-up URL';
@@ -4147,4 +4149,116 @@ class AppLocalizationsEn extends AppLocalizations {
     );
     return '$_temp0';
   }
+
+  @override
+  String get ticketTitle => 'Admission ticket';
+
+  @override
+  String get seeYourTicket => 'See your ticket';
+
+  @override
+  String get ticketRefresh => 'Refresh ticket';
+
+  @override
+  String get ticketNotIssued =>
+      'No ticket issued yet. The organizer issues tickets after RSVP.';
+
+  @override
+  String get ticketReady => 'Ready for admission';
+
+  @override
+  String get ticketPrivateHint => 'Show this QR at the door. Keep it private.';
+
+  @override
+  String get addToAppleWallet => 'Add to Apple Wallet';
+
+  @override
+  String get appleWalletTicketFailed =>
+      'Could not add this ticket to Apple Wallet. Please try again.';
+
+  @override
+  String get addToGoogleWallet => 'Add to Google Wallet';
+
+  @override
+  String get googleWalletTicketFailed =>
+      'Could not add this ticket to Google Wallet. Please try again.';
+
+  @override
+  String get ticketIssue => 'Issue ticket';
+
+  @override
+  String get ticketIssued => 'Issued';
+
+  @override
+  String get ticketRevoke => 'Revoke ticket';
+
+  @override
+  String get ticketReissue => 'Reissue ticket';
+
+  @override
+  String get ticketManage => 'Manage ticket';
+
+  @override
+  String get ticketScan => 'Scan tickets';
+
+  @override
+  String get ticketScanHint =>
+      'Online scanning only. Point the camera at an admission ticket QR.';
+
+  @override
+  String get ticketCheckedIn => 'Valid — checked in';
+
+  @override
+  String get ticketAlreadyUsed => 'Already used';
+
+  @override
+  String get ticketScanAlreadyCheckedIn => 'Already checked in';
+
+  @override
+  String get ticketScanCancelled => 'Ticket canceled';
+
+  @override
+  String get ticketCheckInTime => 'Check-in time';
+
+  @override
+  String get ticketRevoked => 'Ticket revoked';
+
+  @override
+  String get ticketWrongEvent => 'Wrong event';
+
+  @override
+  String get ticketInvalid => 'Invalid ticket';
+
+  @override
+  String get ticketScanNext => 'Scan next ticket';
+
+  @override
+  String get ticketUnauthorized =>
+      'You are not authorized to manage tickets for this event.';
+
+  @override
+  String get ticketOperationFailed =>
+      'Could not update ticket. Check your connection and refresh. An RSVP is required.';
+
+  @override
+  String get ticketConnectionFailed =>
+      'Could not confirm admission. Check your connection and scan again. The previous scan may have completed.';
+
+  @override
+  String get ticketCameraUnavailable =>
+      'Camera unavailable. Allow camera access in Settings, then reopen the scanner. Manual check-in is also available on the event page.';
+
+  @override
+  String get ticketCameraSettings => 'Camera settings';
+
+  @override
+  String get ticketedEventLabel => 'Ticketed event';
+
+  @override
+  String get ticketedEventHint =>
+      'Tickets are issued manually by organizers after RSVP. RSVPing does not issue a ticket.';
+
+  @override
+  String get ticketDisableWarning =>
+      'Turning this off revokes all issued tickets. Turning it back on will not restore them.';
 }

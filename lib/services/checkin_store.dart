@@ -6,10 +6,11 @@ import 'package:hive/hive.dart';
 import 'supabase_interaction_service.dart';
 import 'guest_session.dart';
 
-/// Central event check-in state store (QR Event Pass scans + manual toggles).
+/// Central event check-in read state and existing manual toggles.
+/// Admission QR scans use EventTicketService and hydrate only after server success.
 ///
 /// Mirrors RSVP behavior: optimistic local update first (persisted to Hive so
-/// door check-ins survive restarts offline), Supabase write in the background,
+/// manual check-in state survives restarts), Supabase write in the background,
 /// rollback on failure. Check-ins for seed events (non-UUID ids) stay local.
 class CheckinStore extends ChangeNotifier {
   static const _boxName = 'event_checkins_v1';
@@ -57,6 +58,11 @@ class CheckinStore extends ChangeNotifier {
 
   Set<String> checkedInIds(String eventId) =>
       Set.unmodifiable(_byEvent[eventId] ?? const {});
+
+  /// A successful staff ticket issue clears the current admission on the server.
+  void clearAfterTicketIssue(String eventId, String userId) {
+    if (isCheckedIn(eventId, userId)) _setLocal(eventId, userId, false);
+  }
 
   /// Merges remote check-ins for [eventId] (once per session; [force] refreshes).
   Future<void> hydrate(String eventId, {bool force = false}) async {

@@ -1829,25 +1829,25 @@ abstract class AppLocalizations {
   /// No description provided for @publishErrorRlsPolicy.
   ///
   /// In en, this message translates to:
-  /// **'Could not publish post. Check club_posts RLS policies for this club account.'**
+  /// **'Could not publish this post for your club. Please contact support if this seems wrong.'**
   String get publishErrorRlsPolicy;
 
   /// No description provided for @publishErrorMigration.
   ///
   /// In en, this message translates to:
-  /// **'Could not publish post. Run the latest club_posts SQL migration.'**
+  /// **'Could not publish the post right now. Please contact support if this keeps happening.'**
   String get publishErrorMigration;
 
   /// No description provided for @publishErrorStorage.
   ///
   /// In en, this message translates to:
-  /// **'Could not upload photo. Check the post-images bucket policies.'**
+  /// **'Could not upload the photo. Please try again or choose another photo.'**
   String get publishErrorStorage;
 
   /// No description provided for @publishErrorGeneric.
   ///
   /// In en, this message translates to:
-  /// **'Could not publish post. Check Supabase settings.'**
+  /// **'Could not publish the post. Please try again later.'**
   String get publishErrorGeneric;
 
   /// No description provided for @confirm.
@@ -1901,7 +1901,7 @@ abstract class AppLocalizations {
   /// No description provided for @clubLoginNotReady.
   ///
   /// In en, this message translates to:
-  /// **'Club login is not ready. Check club_auth_accounts in Supabase.'**
+  /// **'Club sign-in is temporarily unavailable. Please try again later.'**
   String get clubLoginNotReady;
 
   /// No description provided for @clubAdminLoginTitle.
@@ -1985,7 +1985,7 @@ abstract class AppLocalizations {
   /// No description provided for @supabaseNotConfigured.
   ///
   /// In en, this message translates to:
-  /// **'Supabase is not configured.'**
+  /// **'This service is temporarily unavailable. Please try again later.'**
   String get supabaseNotConfigured;
 
   /// No description provided for @passwordResetRequestFailed.
@@ -2921,13 +2921,13 @@ abstract class AppLocalizations {
   /// No description provided for @couldNotDeleteEventSupabase.
   ///
   /// In en, this message translates to:
-  /// **'Could not delete event from Supabase.'**
+  /// **'Could not delete the event. Please try again.'**
   String get couldNotDeleteEventSupabase;
 
   /// No description provided for @couldNotDeletePostSupabase.
   ///
   /// In en, this message translates to:
-  /// **'Could not delete post from Supabase.'**
+  /// **'Could not delete the post. Please try again.'**
   String get couldNotDeletePostSupabase;
 
   /// No description provided for @couldNotLoadConnections.
@@ -2951,7 +2951,7 @@ abstract class AppLocalizations {
   /// No description provided for @couldNotLoadProfileOptions.
   ///
   /// In en, this message translates to:
-  /// **'Could not load profile options from Supabase.'**
+  /// **'Could not load profile options. Please try again.'**
   String get couldNotLoadProfileOptions;
 
   /// No description provided for @couldNotLoadProfileOptionsRetry.
@@ -3005,13 +3005,13 @@ abstract class AppLocalizations {
   /// No description provided for @couldNotSaveEventSupabase.
   ///
   /// In en, this message translates to:
-  /// **'Could not save event to Supabase.'**
+  /// **'Could not save the event. Please try again later.'**
   String get couldNotSaveEventSupabase;
 
   /// No description provided for @couldNotSaveProfileSupabase.
   ///
   /// In en, this message translates to:
-  /// **'Could not save profile to Supabase'**
+  /// **'Could not save your profile. Please try again.'**
   String get couldNotSaveProfileSupabase;
 
   /// No description provided for @couldNotUpdateBoardRole.
@@ -4709,25 +4709,25 @@ abstract class AppLocalizations {
   /// No description provided for @publishErrorGenericEvent.
   ///
   /// In en, this message translates to:
-  /// **'Could not publish event. Check Supabase settings.'**
+  /// **'Could not publish the event. Please try again later.'**
   String get publishErrorGenericEvent;
 
   /// No description provided for @publishErrorMigrationEvent.
   ///
   /// In en, this message translates to:
-  /// **'Could not publish event. Run the latest events SQL migration.'**
+  /// **'Could not publish the event right now. Please contact support if this keeps happening.'**
   String get publishErrorMigrationEvent;
 
   /// No description provided for @publishErrorRlsPolicyEvent.
   ///
   /// In en, this message translates to:
-  /// **'Could not publish event. Check events RLS policies for this club account.'**
+  /// **'Could not publish this event for your club. Please contact support if this seems wrong.'**
   String get publishErrorRlsPolicyEvent;
 
   /// No description provided for @publishErrorStorageEvent.
   ///
   /// In en, this message translates to:
-  /// **'Could not upload event image. Check the event-images bucket policies.'**
+  /// **'Could not upload the event image. Please try again or choose another image.'**
   String get publishErrorStorageEvent;
 
   /// No description provided for @publishEventButton.
@@ -5105,7 +5105,7 @@ abstract class AppLocalizations {
   /// No description provided for @signupServerNotConfigured.
   ///
   /// In en, this message translates to:
-  /// **'Supabase is not configured. Start the app with SUPABASE_URL and SUPABASE_PUBLISHABLE_KEY.'**
+  /// **'Sign-up is temporarily unavailable. Please try again later.'**
   String get signupServerNotConfigured;
 
   /// No description provided for @signupUrlLabel.
@@ -6805,6 +6805,210 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'{n,plural, one{1 person you follow} other{{n} people you follow}}'**
   String peopleYouFollowCount(int n);
+
+  /// No description provided for @ticketTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Admission ticket'**
+  String get ticketTitle;
+
+  /// No description provided for @seeYourTicket.
+  ///
+  /// In en, this message translates to:
+  /// **'See your ticket'**
+  String get seeYourTicket;
+
+  /// No description provided for @ticketRefresh.
+  ///
+  /// In en, this message translates to:
+  /// **'Refresh ticket'**
+  String get ticketRefresh;
+
+  /// No description provided for @ticketNotIssued.
+  ///
+  /// In en, this message translates to:
+  /// **'No ticket issued yet. The organizer issues tickets after RSVP.'**
+  String get ticketNotIssued;
+
+  /// No description provided for @ticketReady.
+  ///
+  /// In en, this message translates to:
+  /// **'Ready for admission'**
+  String get ticketReady;
+
+  /// No description provided for @ticketPrivateHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Show this QR at the door. Keep it private.'**
+  String get ticketPrivateHint;
+
+  /// No description provided for @addToAppleWallet.
+  ///
+  /// In en, this message translates to:
+  /// **'Add to Apple Wallet'**
+  String get addToAppleWallet;
+
+  /// No description provided for @appleWalletTicketFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'Could not add this ticket to Apple Wallet. Please try again.'**
+  String get appleWalletTicketFailed;
+
+  /// No description provided for @addToGoogleWallet.
+  ///
+  /// In en, this message translates to:
+  /// **'Add to Google Wallet'**
+  String get addToGoogleWallet;
+
+  /// No description provided for @googleWalletTicketFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'Could not add this ticket to Google Wallet. Please try again.'**
+  String get googleWalletTicketFailed;
+
+  /// No description provided for @ticketIssue.
+  ///
+  /// In en, this message translates to:
+  /// **'Issue ticket'**
+  String get ticketIssue;
+
+  /// No description provided for @ticketIssued.
+  ///
+  /// In en, this message translates to:
+  /// **'Issued'**
+  String get ticketIssued;
+
+  /// No description provided for @ticketRevoke.
+  ///
+  /// In en, this message translates to:
+  /// **'Revoke ticket'**
+  String get ticketRevoke;
+
+  /// No description provided for @ticketReissue.
+  ///
+  /// In en, this message translates to:
+  /// **'Reissue ticket'**
+  String get ticketReissue;
+
+  /// No description provided for @ticketManage.
+  ///
+  /// In en, this message translates to:
+  /// **'Manage ticket'**
+  String get ticketManage;
+
+  /// No description provided for @ticketScan.
+  ///
+  /// In en, this message translates to:
+  /// **'Scan tickets'**
+  String get ticketScan;
+
+  /// No description provided for @ticketScanHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Online scanning only. Point the camera at an admission ticket QR.'**
+  String get ticketScanHint;
+
+  /// No description provided for @ticketCheckedIn.
+  ///
+  /// In en, this message translates to:
+  /// **'Valid — checked in'**
+  String get ticketCheckedIn;
+
+  /// No description provided for @ticketAlreadyUsed.
+  ///
+  /// In en, this message translates to:
+  /// **'Already used'**
+  String get ticketAlreadyUsed;
+
+  /// No description provided for @ticketScanAlreadyCheckedIn.
+  ///
+  /// In en, this message translates to:
+  /// **'Already checked in'**
+  String get ticketScanAlreadyCheckedIn;
+
+  /// No description provided for @ticketScanCancelled.
+  ///
+  /// In en, this message translates to:
+  /// **'Ticket canceled'**
+  String get ticketScanCancelled;
+
+  /// No description provided for @ticketCheckInTime.
+  ///
+  /// In en, this message translates to:
+  /// **'Check-in time'**
+  String get ticketCheckInTime;
+
+  /// No description provided for @ticketRevoked.
+  ///
+  /// In en, this message translates to:
+  /// **'Ticket revoked'**
+  String get ticketRevoked;
+
+  /// No description provided for @ticketWrongEvent.
+  ///
+  /// In en, this message translates to:
+  /// **'Wrong event'**
+  String get ticketWrongEvent;
+
+  /// No description provided for @ticketInvalid.
+  ///
+  /// In en, this message translates to:
+  /// **'Invalid ticket'**
+  String get ticketInvalid;
+
+  /// No description provided for @ticketScanNext.
+  ///
+  /// In en, this message translates to:
+  /// **'Scan next ticket'**
+  String get ticketScanNext;
+
+  /// No description provided for @ticketUnauthorized.
+  ///
+  /// In en, this message translates to:
+  /// **'You are not authorized to manage tickets for this event.'**
+  String get ticketUnauthorized;
+
+  /// No description provided for @ticketOperationFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'Could not update ticket. Check your connection and refresh. An RSVP is required.'**
+  String get ticketOperationFailed;
+
+  /// No description provided for @ticketConnectionFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'Could not confirm admission. Check your connection and scan again. The previous scan may have completed.'**
+  String get ticketConnectionFailed;
+
+  /// No description provided for @ticketCameraUnavailable.
+  ///
+  /// In en, this message translates to:
+  /// **'Camera unavailable. Allow camera access in Settings, then reopen the scanner. Manual check-in is also available on the event page.'**
+  String get ticketCameraUnavailable;
+
+  /// No description provided for @ticketCameraSettings.
+  ///
+  /// In en, this message translates to:
+  /// **'Camera settings'**
+  String get ticketCameraSettings;
+
+  /// No description provided for @ticketedEventLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Ticketed event'**
+  String get ticketedEventLabel;
+
+  /// No description provided for @ticketedEventHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Tickets are issued manually by organizers after RSVP. RSVPing does not issue a ticket.'**
+  String get ticketedEventHint;
+
+  /// No description provided for @ticketDisableWarning.
+  ///
+  /// In en, this message translates to:
+  /// **'Turning this off revokes all issued tickets. Turning it back on will not restore them.'**
+  String get ticketDisableWarning;
 }
 
 class _AppLocalizationsDelegate

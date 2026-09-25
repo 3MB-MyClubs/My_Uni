@@ -45,7 +45,7 @@ class SupabaseContentService {
   static const _eventSelectColumns =
       'id, club_id, title, description, location, image_url, starts_at, '
       'ends_at, image_path, created_by_user_id, tags, registration_url, '
-      'schedule, speakers, audience';
+      'schedule, speakers, audience, is_ticketed';
 
   bool _hasAppliedRemoteContent = false;
 
@@ -924,6 +924,7 @@ class SupabaseContentService {
       schedule: _eventSchedule(row['schedule']),
       speakers: _eventSpeakers(row['speakers']),
       audience: contentAudienceFromWire(row['audience']),
+      isTicketed: row['is_ticketed'] == true,
     );
   }
 

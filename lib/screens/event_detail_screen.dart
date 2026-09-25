@@ -43,6 +43,10 @@ import 'club_profile_screen.dart';
 import 'create_event_screen.dart';
 import 'event_attendee_list_screen.dart';
 import 'user_profile_screen.dart';
+import 'event_ticket_scan_screen.dart';
+import 'event_ticket_screen.dart';
+import '../services/event_ticket_service.dart';
+import '../widgets/event_ticket_card.dart';
 import '../services/content_visibility.dart';
 import '../widgets/content_audience_sheet.dart';
 
@@ -643,6 +647,27 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
                           accent: accent,
                           onView: _openClub,
                         ),
+
+                        if (event.isTicketed &&
+                            eventTicketService.availableFor(event.id) &&
+                            _currentSessionId.isNotEmpty)
+                          OutlinedButton.icon(
+                            key: const ValueKey('see-your-ticket'),
+                            onPressed: () => Navigator.of(context).push(
+                              MaterialPageRoute<void>(
+                                builder: (_) => EventTicketScreen(
+                                  eventId: event.id,
+                                  profileId: _currentSessionId,
+                                ),
+                              ),
+                            ),
+                            icon: const Icon(
+                              Icons.confirmation_number_outlined,
+                            ),
+                            label: Text(
+                              AppLocalizations.of(context)!.seeYourTicket,
+                            ),
+                          ),
 
                         // `attendee-section` 294:5 — promoted from below the
                         // speakers to directly under the host.
@@ -1389,7 +1414,7 @@ class _AdminHero extends StatelessWidget {
 }
 
 /// Attendees card for the admin view — initials, name, department.
-class _AdminAttendees extends StatelessWidget {
+class _AdminAttendees extends StatefulWidget {
   final Event event;
   final List<User> attendees;
   final Color accent;
@@ -1399,6 +1424,52 @@ class _AdminAttendees extends StatelessWidget {
     required this.attendees,
     required this.accent,
   });
+
+  @override
+  State<_AdminAttendees> createState() => _AdminAttendeesState();
+}
+
+class _AdminAttendeesState extends State<_AdminAttendees> {
+  Map<String, EventTicketState> _ticketStates = {};
+  int _ticketLoadGeneration = 0;
+
+  Event get event => widget.event;
+  List<User> get attendees => widget.attendees;
+  Color get accent => widget.accent;
+
+  @override
+  void initState() {
+    super.initState();
+    _refreshIssuedTickets();
+  }
+
+  @override
+  void didUpdateWidget(_AdminAttendees oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.event.id != event.id ||
+        oldWidget.event.isTicketed != event.isTicketed) {
+      _ticketStates = {};
+      _refreshIssuedTickets();
+    }
+  }
+
+  Future<void> _refreshIssuedTickets() async {
+    final generation = ++_ticketLoadGeneration;
+    if (!event.isTicketed || !eventTicketService.availableFor(event.id)) {
+      if (mounted) setState(() => _ticketStates = {});
+      return;
+    }
+    try {
+      final states = await eventTicketService.fetchTicketStates(event.id);
+      if (mounted && generation == _ticketLoadGeneration) {
+        setState(() => _ticketStates = states);
+      }
+    } catch (_) {
+      if (mounted && generation == _ticketLoadGeneration) {
+        setState(() => _ticketStates = {});
+      }
+    }
+  }
 
   String _initials(String name) {
     final parts = name.trim().split(RegExp(r'\s+'));
@@ -1438,6 +1509,26 @@ class _AdminAttendees extends StatelessWidget {
             ),
           ],
         ),
+        if (event.isTicketed && eventTicketService.availableFor(event.id))
+          Align(
+            alignment: Alignment.centerLeft,
+            child: TextButton.icon(
+              icon: const Icon(Icons.qr_code_scanner),
+              label: Text(AppLocalizations.of(context)!.ticketScan),
+              onPressed: () async {
+                await Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (_) => EventTicketScanScreen(
+                      eventId: event.id,
+                      eventTitle: event.title,
+                    ),
+                  ),
+                );
+                _refreshIssuedTickets();
+              },
+            ),
+          ),
         const SizedBox(height: 10),
         Container(
           decoration: BoxDecoration(
@@ -1526,6 +1617,75 @@ class _AdminAttendees extends StatelessWidget {
                                   ],
                                 ),
                               ),
+                              if (event.isTicketed &&
+                                  eventTicketService.availableFor(event.id))
+                                IconButton(
+                                  key: ValueKey('ticket-status-${user.id}'),
+                                  style: _ticketStates.containsKey(user.id)
+                                      ? IconButton.styleFrom(
+                                          backgroundColor: switch (_ticketStates[user.id]) {
+                                            EventTicketState.used => Colors.amber.withValues(alpha: 0.18),
+                                            EventTicketState.revoked => Colors.red.withValues(alpha: 0.14),
+                                            _ => Colors.green.withValues(alpha: 0.14),
+                                          },
+                                        )
+                                      : null,
+                                  icon: Icon(
+                                    _ticketStates.containsKey(user.id)
+                                        ? Icons.confirmation_number_rounded
+                                        : Icons.confirmation_number_outlined,
+                                    color: switch (_ticketStates[user.id]) {
+                                      EventTicketState.active => Colors.green,
+                                      EventTicketState.used => Colors.amber,
+                                      EventTicketState.revoked => Colors.red,
+                                      null => AppColors.secondaryText,
+                                    },
+                                  ),
+                                  tooltip: switch (_ticketStates[user.id]) {
+                                    EventTicketState.active => AppLocalizations.of(context)!.ticketIssued,
+                                    EventTicketState.used => AppLocalizations.of(context)!.ticketAlreadyUsed,
+                                    EventTicketState.revoked => AppLocalizations.of(context)!.ticketRevoked,
+                                    null => AppLocalizations.of(context)!.ticketManage,
+                                  },
+                                  onPressed: () async {
+                                    await showModalBottomSheet<void>(
+                                      context: context,
+                                      isScrollControlled: true,
+                                      builder: (_) => SafeArea(
+                                        child: SingleChildScrollView(
+                                          child: Column(
+                                            mainAxisSize: MainAxisSize.min,
+                                            children: [
+                                              Padding(
+                                                padding: const EdgeInsets.all(
+                                                  16,
+                                                ),
+                                                child: Text(user.name),
+                                              ),
+                                              EventTicketCard(
+                                                eventId: event.id,
+                                                profileId: user.id,
+                                                manage: true,
+                                                onChanged: (ticket) {
+                                                  _refreshIssuedTickets();
+                                                  if (ticket?.isActive ==
+                                                      true) {
+                                                    checkinStore
+                                                        .clearAfterTicketIssue(
+                                                          event.id,
+                                                          user.id,
+                                                        );
+                                                  }
+                                                },
+                                              ),
+                                            ],
+                                          ),
+                                        ),
+                                      ),
+                                    );
+                                    _refreshIssuedTickets();
+                                  },
+                                ),
                               // Manual door check-in toggle
                               ListenableBuilder(
                                 listenable: checkinStore,
@@ -3159,11 +3319,7 @@ class _EventSessionRow extends StatelessWidget {
           Column(
             crossAxisAlignment: CrossAxisAlignment.end,
             children: [
-              Icon(
-                Icons.schedule_rounded,
-                size: 14,
-                color: ClubUpColors.muted,
-              ),
+              Icon(Icons.schedule_rounded, size: 14, color: ClubUpColors.muted),
               const SizedBox(height: 4),
               Text(
                 _fmt(slot.time),
@@ -3316,10 +3472,7 @@ class _AttendingCard extends StatelessWidget {
           // bordered chip pinned to the trailing edge.
           Flexible(
             child: Container(
-              padding: const EdgeInsets.symmetric(
-                horizontal: 12,
-                vertical: 8,
-              ),
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
               decoration: BoxDecoration(
                 color: ClubUpColors.card,
                 borderRadius: BorderRadius.circular(16),

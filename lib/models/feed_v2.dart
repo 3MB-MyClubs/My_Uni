@@ -188,6 +188,7 @@ class FeedEventV2 {
   final List<Map<String, dynamic>> speakers;
   final int rsvpCount;
   final bool viewerIsAttending;
+  final bool isTicketed;
   final FeedClubV2 club;
 
   const FeedEventV2({
@@ -205,6 +206,7 @@ class FeedEventV2 {
     required this.speakers,
     required this.rsvpCount,
     required this.viewerIsAttending,
+    this.isTicketed = false,
     required this.club,
   });
 
@@ -223,6 +225,7 @@ class FeedEventV2 {
     speakers: _mapList(json['speakers']),
     rsvpCount: _integer(json['rsvp_count']),
     viewerIsAttending: json['viewer_is_attending'] == true,
+    isTicketed: json['is_ticketed'] == true,
     club: FeedClubV2.fromJson(_map(json['club'])),
   );
 }

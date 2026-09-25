@@ -14,10 +14,15 @@ import 'guest_session.dart';
 class SupabaseEventService {
   static const _imageBucket = 'event-images';
 
+  SupabaseEventService({SupabaseClient? client}) : _clientOverride = client;
+
+  final SupabaseClient? _clientOverride;
+
   SupabaseClient? get _client {
     // Guest mode reuses the unconfigured-backend path: with no client every
     // remote read/write in this service degrades to its existing local no-op.
     if (guestSession.isActive) return null;
+    if (_clientOverride != null) return _clientOverride;
     if (!SupabaseConfig.isConfigured) return null;
     return Supabase.instance.client;
   }
@@ -43,34 +48,43 @@ class SupabaseEventService {
             revision: 'cover',
           );
 
+    final params = <String, dynamic>{
+      'p_event_id': eventId,
+      'p_club_id': event.clubId,
+      'p_title': event.title,
+      'p_is_ticketed': event.isTicketed,
+      'p_description': event.description,
+      'p_location': event.location,
+      'p_event_date': _dateOnly(event.dateTime),
+      'p_starts_at': event.dateTime.toUtc().toIso8601String(),
+      'p_ends_at': event.endTime.toUtc().toIso8601String(),
+      'p_audience': event.audience.wireValue,
+      'p_image_path': uploadedImage?.path,
+      'p_image_url': uploadedImage?.publicUrl,
+      'p_tags': event.tags,
+      'p_registration_url': event.registrationUrl,
+      'p_schedule': event.schedule?.map((slot) => slot.toMap()).toList(),
+      'p_speakers': event.speakers.map((speaker) => speaker.toMap()).toList(),
+    };
     dynamic response;
     try {
-      response = await client
-          .rpc(
-            'create_club_event_transactional_v3',
-            params: {
-              'p_event_id': eventId,
-              'p_club_id': event.clubId,
-              'p_title': event.title,
-              'p_description': event.description,
-              'p_location': event.location,
-              'p_event_date': _dateOnly(event.dateTime),
-              'p_starts_at': event.dateTime.toUtc().toIso8601String(),
-              'p_ends_at': event.endTime.toUtc().toIso8601String(),
-              'p_audience': event.audience.wireValue,
-              'p_image_path': uploadedImage?.path,
-              'p_image_url': uploadedImage?.publicUrl,
-              'p_tags': event.tags,
-              'p_registration_url': event.registrationUrl,
-              'p_schedule': event.schedule
-                  ?.map((slot) => slot.toMap())
-                  .toList(),
-              'p_speakers': event.speakers
-                  .map((speaker) => speaker.toMap())
-                  .toList(),
-            },
-          )
-          .single();
+      try {
+        response = await client
+            .rpc('create_club_event_transactional_v4', params: params)
+            .single();
+      } on PostgrestException catch (error) {
+        if (event.isTicketed ||
+            !_isMissingRpc(error, 'create_club_event_transactional_v4')) {
+          rethrow;
+        }
+        // Older deployments can still publish ordinary events. A ticketed
+        // event must never be saved without its server-side ticket flag.
+        final legacyParams = Map<String, dynamic>.from(params)
+          ..remove('p_is_ticketed');
+        response = await client
+            .rpc('create_club_event_transactional_v3', params: legacyParams)
+            .single();
+      }
     } catch (error, stackTrace) {
       if (uploadedImage != null) {
         await _registerAbandonedUpload(
@@ -125,10 +139,11 @@ class SupabaseEventService {
     dynamic raw;
     try {
       raw = await client.rpc<Map<String, dynamic>>(
-        'update_club_event_transactional_v2',
+        'update_club_event_transactional_v3',
         params: {
           'p_event_id': event.id,
           'p_title': event.title,
+          'p_is_ticketed': event.isTicketed,
           'p_description': event.description,
           'p_location': event.location,
           'p_event_date': _dateOnly(event.dateTime),
@@ -176,6 +191,9 @@ class SupabaseEventService {
   /// recorded nowhere.
   Future<void> _rememberAudience(String id, ContentAudience audience) =>
       contentAudienceStore.setAudience(id, audience);
+
+  static bool _isMissingRpc(PostgrestException error, String functionName) =>
+      error.code == 'PGRST202' && error.message.contains(functionName);
 
   Future<void> deleteEvent(Event event) async {
     final client = _client;
@@ -226,6 +244,7 @@ class SupabaseEventService {
       // The column does not exist yet, so the client's choice is the only
       // source. Becomes contentAudienceFromWire(data['audience']) later.
       audience: fallback.audience,
+      isTicketed: data['is_ticketed'] == true,
     );
   }
 

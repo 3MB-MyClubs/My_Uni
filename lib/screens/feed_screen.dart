@@ -701,6 +701,7 @@ class _FeedScreenState extends State<FeedScreen> {
         createdByUserId: item.createdByUserId,
         tags: item.tags,
         registrationUrl: item.registrationUrl,
+        isTicketed: item.isTicketed,
         schedule: _feedEventSchedule(item.schedule),
         speakers: _feedEventSpeakers(item.speakers),
       );

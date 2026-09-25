@@ -412,6 +412,8 @@ verify_jwt = false
 verify_jwt = false
 [functions.send-push]
 verify_jwt = true
+[functions.google-wallet-ticket]
+verify_jwt = true
 [functions.notification-worker-v2]
 verify_jwt = false
 [functions.storage-cleanup-worker-v2]

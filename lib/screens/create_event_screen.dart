@@ -89,6 +89,7 @@ class _CreateEventScreenState extends State<CreateEventScreen> {
 
   // Registration (external sign-up link)
   bool _externalReg = false;
+  bool _isTicketed = false;
   final _regUrlCtrl = TextEditingController();
 
   // Speakers (name / role / LinkedIn)
@@ -123,6 +124,7 @@ class _CreateEventScreenState extends State<CreateEventScreen> {
     if (ev == null) return;
 
     _selectedAudience = audienceForEvent(ev);
+    _isTicketed = ev.isTicketed;
     _titleController.text = ev.title;
     _descController.text = ev.description;
     _locationController.text = ev.location;
@@ -514,6 +516,7 @@ class _CreateEventScreenState extends State<CreateEventScreen> {
         capacity: ev.capacity,
         speakers: speakers,
         audience: _selectedAudience,
+        isTicketed: _isTicketed,
       );
       Event saved;
       try {
@@ -570,6 +573,7 @@ class _CreateEventScreenState extends State<CreateEventScreen> {
       registrationUrl: (_externalReg && regUrl.isNotEmpty) ? regUrl : null,
       speakers: speakers,
       audience: _selectedAudience,
+      isTicketed: _isTicketed,
     );
 
     setState(() => _isPosting = true);
@@ -875,6 +879,19 @@ class _CreateEventScreenState extends State<CreateEventScreen> {
           active: _activePicker == 'audience',
           onTap: () => unawaited(_pickAudience()),
         ),
+        const SizedBox(height: 12),
+        SwitchListTile.adaptive(
+          key: const ValueKey('event-wizard-ticketed'),
+          contentPadding: EdgeInsets.zero,
+          title: Text(AppLocalizations.of(context)!.ticketedEventLabel),
+          subtitle: Text(AppLocalizations.of(context)!.ticketedEventHint),
+          value: _isTicketed,
+          onChanged: _isPosting
+              ? null
+              : (value) => setState(() => _isTicketed = value),
+        ),
+        if (_isEditing && widget.existing!.isTicketed && !_isTicketed)
+          Text(AppLocalizations.of(context)!.ticketDisableWarning),
       ],
     );
   }

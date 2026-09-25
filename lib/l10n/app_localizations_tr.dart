@@ -989,19 +989,19 @@ class AppLocalizationsTr extends AppLocalizations {
 
   @override
   String get publishErrorRlsPolicy =>
-      'Gönderi yayımlanamadı. Bu kulüp hesabı için club_posts RLS politikalarını kontrol et.';
+      'Bu kulüp için gönderi yayımlanamadı. Bunun bir hata olduğunu düşünüyorsanız destek ekibiyle iletişime geçin.';
 
   @override
   String get publishErrorMigration =>
-      'Gönderi yayımlanamadı. En son club_posts SQL migrasyonunu çalıştır.';
+      'Gönderi şu anda yayımlanamadı. Sorun sürerse destek ekibiyle iletişime geçin.';
 
   @override
   String get publishErrorStorage =>
-      'Fotoğraf yüklenemedi. post-images bucket politikalarını kontrol et.';
+      'Fotoğraf yüklenemedi. Tekrar deneyin veya başka bir fotoğraf seçin.';
 
   @override
   String get publishErrorGeneric =>
-      'Gönderi yayımlanamadı. Supabase ayarlarını kontrol et.';
+      'Gönderi yayımlanamadı. Lütfen daha sonra tekrar deneyin.';
 
   @override
   String get confirm => 'Onayla';
@@ -1029,7 +1029,7 @@ class AppLocalizationsTr extends AppLocalizations {
 
   @override
   String get clubLoginNotReady =>
-      'Kulüp girişi hazır değil. Supabase\'te club_auth_accounts tablosunu kontrol et.';
+      'Kulüp girişi şu anda kullanılamıyor. Lütfen daha sonra tekrar deneyin.';
 
   @override
   String get clubAdminLoginTitle => 'Kulüp Yönetici Girişi';
@@ -1075,7 +1075,8 @@ class AppLocalizationsTr extends AppLocalizations {
   String get signInAsAdmin => 'Yönetici Olarak Giriş Yap';
 
   @override
-  String get supabaseNotConfigured => 'Supabase yapılandırılmadı.';
+  String get supabaseNotConfigured =>
+      'Bu hizmet şu anda kullanılamıyor. Lütfen daha sonra tekrar deneyin.';
 
   @override
   String get passwordResetRequestFailed =>
@@ -1704,10 +1705,11 @@ class AppLocalizationsTr extends AppLocalizations {
 
   @override
   String get couldNotDeleteEventSupabase =>
-      'Etkinlik Supabase\'den silinemedi.';
+      'Etkinlik silinemedi. Lütfen tekrar deneyin.';
 
   @override
-  String get couldNotDeletePostSupabase => 'Gönderi Supabase\'den silinemedi.';
+  String get couldNotDeletePostSupabase =>
+      'Gönderi silinemedi. Lütfen tekrar deneyin.';
 
   @override
   String get couldNotLoadConnections => 'Bağlantılar yüklenemedi.';
@@ -1721,7 +1723,7 @@ class AppLocalizationsTr extends AppLocalizations {
 
   @override
   String get couldNotLoadProfileOptions =>
-      'Profil seçenekleri Supabase\'ten yüklenemedi.';
+      'Profil seçenekleri yüklenemedi. Lütfen tekrar deneyin.';
 
   @override
   String get couldNotLoadProfileOptionsRetry =>
@@ -1752,10 +1754,12 @@ class AppLocalizationsTr extends AppLocalizations {
   String get couldNotSaveChanges => 'Değişiklikler kaydedilemedi.';
 
   @override
-  String get couldNotSaveEventSupabase => 'Etkinlik Supabase\'e kaydedilemedi.';
+  String get couldNotSaveEventSupabase =>
+      'Etkinlik kaydedilemedi. Lütfen daha sonra tekrar deneyin.';
 
   @override
-  String get couldNotSaveProfileSupabase => 'Profil Supabase\'e kaydedilemedi';
+  String get couldNotSaveProfileSupabase =>
+      'Profiliniz kaydedilemedi. Lütfen tekrar deneyin.';
 
   @override
   String get couldNotUpdateBoardRole => 'Kurul üyesi rolü güncellenemedi.';
@@ -2850,19 +2854,19 @@ class AppLocalizationsTr extends AppLocalizations {
 
   @override
   String get publishErrorGenericEvent =>
-      'Etkinlik yayınlanamadı. Supabase ayarlarını kontrol et.';
+      'Etkinlik yayınlanamadı. Lütfen daha sonra tekrar deneyin.';
 
   @override
   String get publishErrorMigrationEvent =>
-      'Etkinlik yayınlanamadı. En son events SQL migration\'ını çalıştır.';
+      'Etkinlik şu anda yayınlanamadı. Sorun sürerse destek ekibiyle iletişime geçin.';
 
   @override
   String get publishErrorRlsPolicyEvent =>
-      'Etkinlik yayınlanamadı. Bu kulüp hesabı için events RLS politikalarını kontrol et.';
+      'Bu kulüp için etkinlik yayınlanamadı. Bunun bir hata olduğunu düşünüyorsanız destek ekibiyle iletişime geçin.';
 
   @override
   String get publishErrorStorageEvent =>
-      'Etkinlik görseli yüklenemedi. event-images bucket politikalarını kontrol et.';
+      'Etkinlik görseli yüklenemedi. Tekrar deneyin veya başka bir görsel seçin.';
 
   @override
   String get publishEventButton => 'Etkinliği Yayınla';
@@ -3093,7 +3097,7 @@ class AppLocalizationsTr extends AppLocalizations {
 
   @override
   String get signupServerNotConfigured =>
-      'Supabase yapılandırılmadı. Uygulamayı SUPABASE_URL ve SUPABASE_PUBLISHABLE_KEY ile başlat.';
+      'Kayıt işlemi şu anda kullanılamıyor. Lütfen daha sonra tekrar deneyin.';
 
   @override
   String get signupUrlLabel => 'Kayıt URL\'si';
@@ -4132,4 +4136,117 @@ class AppLocalizationsTr extends AppLocalizations {
     );
     return '$_temp0';
   }
+
+  @override
+  String get ticketTitle => 'Giriş bileti';
+
+  @override
+  String get seeYourTicket => 'Biletini gör';
+
+  @override
+  String get ticketRefresh => 'Bileti yenile';
+
+  @override
+  String get ticketNotIssued =>
+      'Henüz bilet düzenlenmedi. Organizatör RSVP sonrasında bilet düzenler.';
+
+  @override
+  String get ticketReady => 'Girişe hazır';
+
+  @override
+  String get ticketPrivateHint =>
+      'Bu QR kodunu girişte göster. Kimseyle paylaşma.';
+
+  @override
+  String get addToAppleWallet => 'Apple Wallet\'a Ekle';
+
+  @override
+  String get appleWalletTicketFailed =>
+      'Bu bilet Apple Wallet\'a eklenemedi. Lütfen tekrar dene.';
+
+  @override
+  String get addToGoogleWallet => 'Google Wallet\'a Ekle';
+
+  @override
+  String get googleWalletTicketFailed =>
+      'Bu bilet Google Wallet\'a eklenemedi. Lütfen tekrar dene.';
+
+  @override
+  String get ticketIssue => 'Bilet düzenle';
+
+  @override
+  String get ticketIssued => 'Düzenlendi';
+
+  @override
+  String get ticketRevoke => 'Bileti iptal et';
+
+  @override
+  String get ticketReissue => 'Yeniden bilet düzenle';
+
+  @override
+  String get ticketManage => 'Bileti yönet';
+
+  @override
+  String get ticketScan => 'Biletleri tara';
+
+  @override
+  String get ticketScanHint =>
+      'Tarama için internet gerekir. Kamerayı giriş bileti QR koduna doğrult.';
+
+  @override
+  String get ticketCheckedIn => 'Geçerli — giriş yapıldı';
+
+  @override
+  String get ticketAlreadyUsed => 'Zaten kullanılmış';
+
+  @override
+  String get ticketScanAlreadyCheckedIn => 'Zaten giriş yapıldı';
+
+  @override
+  String get ticketScanCancelled => 'Bilet iptal edildi';
+
+  @override
+  String get ticketCheckInTime => 'Giriş saati';
+
+  @override
+  String get ticketRevoked => 'Bilet iptal edilmiş';
+
+  @override
+  String get ticketWrongEvent => 'Başka bir etkinliğin bileti';
+
+  @override
+  String get ticketInvalid => 'Geçersiz bilet';
+
+  @override
+  String get ticketScanNext => 'Sonraki bileti tara';
+
+  @override
+  String get ticketUnauthorized =>
+      'Bu etkinliğin biletlerini yönetme yetkin yok.';
+
+  @override
+  String get ticketOperationFailed =>
+      'Bilet güncellenemedi. Bağlantını kontrol edip yenile. RSVP gerekir.';
+
+  @override
+  String get ticketConnectionFailed =>
+      'Giriş doğrulanamadı. Bağlantını kontrol edip tekrar tara. Önceki tarama tamamlanmış olabilir.';
+
+  @override
+  String get ticketCameraUnavailable =>
+      'Kamera kullanılamıyor. Ayarlardan kamera izni verip tarayıcıyı yeniden aç. Etkinlik sayfasından elle giriş de yapabilirsin.';
+
+  @override
+  String get ticketCameraSettings => 'Kamera ayarları';
+
+  @override
+  String get ticketedEventLabel => 'Biletli etkinlik';
+
+  @override
+  String get ticketedEventHint =>
+      'Biletleri organizatörler RSVP sonrasında elle düzenler. RSVP yapmak otomatik bilet oluşturmaz.';
+
+  @override
+  String get ticketDisableWarning =>
+      'Bu seçeneği kapatmak düzenlenen tüm biletleri iptal eder. Tekrar açmak eski biletleri geri getirmez.';
 }
