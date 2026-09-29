@@ -4168,6 +4168,17 @@ class AppLocalizationsTr extends AppLocalizations {
   String get addToGoogleWallet => 'Google Wallet\'a Ekle';
 
   @override
+  String get addToWallet => 'Cüzdana Ekle';
+
+  @override
+  String get walletPassHint =>
+      'Uyumlu bir bilet uygulamasında aç veya daha sonra içe aktarmak için .pkpass dosyasını kaydet.';
+
+  @override
+  String get walletPassTicketFailed =>
+      'Cüzdan bileti açılamadı veya kaydedilemedi. Lütfen tekrar dene.';
+
+  @override
   String get googleWalletTicketFailed =>
       'Bu bilet Google Wallet\'a eklenemedi. Lütfen tekrar dene.';
 

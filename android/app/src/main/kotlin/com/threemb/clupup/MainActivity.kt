@@ -14,9 +14,17 @@ class MainActivity : FlutterActivity() {
     private val walletRequestCode = 7421
     private val walletClient by lazy { Pay.getClient(this) }
     private var pendingWalletResult: MethodChannel.Result? = null
+    private val pkpassHandler by lazy { PkpassTicketHandler(this) }
 
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
         super.configureFlutterEngine(flutterEngine)
+        MethodChannel(flutterEngine.dartExecutor.binaryMessenger, "ku_app/pkpass_ticket")
+            .setMethodCallHandler { call, result ->
+                when (call.method) {
+                    "addPass" -> pkpassHandler.addPass(call.arguments as? ByteArray, result)
+                    else -> result.notImplemented()
+                }
+            }
         MethodChannel(flutterEngine.dartExecutor.binaryMessenger, channelName).setMethodCallHandler { call, result ->
             when (call.method) {
                 "openWeatherApp" -> result.success(openWeatherApp())
@@ -75,6 +83,7 @@ class MainActivity : FlutterActivity() {
 
     override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
         super.onActivityResult(requestCode, resultCode, data)
+        if (pkpassHandler.onActivityResult(requestCode, resultCode, data)) return
         if (requestCode != walletRequestCode) return
         val result = pendingWalletResult ?: return
         pendingWalletResult = null
@@ -87,6 +96,11 @@ class MainActivity : FlutterActivity() {
             )
             else -> result.error("wallet_save_failed", "Google Wallet did not save this pass", null)
         }
+    }
+
+    override fun onDestroy() {
+        pkpassHandler.dispose()
+        super.onDestroy()
     }
 
     private fun openWeatherApp(): Boolean {

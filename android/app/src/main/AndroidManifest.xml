@@ -31,6 +31,15 @@
         android:allowBackup="false"
         android:icon="@mipmap/ic_launcher"
         android:roundIcon="@mipmap/ic_launcher_round">
+        <provider
+            android:name="androidx.core.content.FileProvider"
+            android:authorities="${applicationId}.wallet_passes"
+            android:exported="false"
+            android:grantUriPermissions="true">
+            <meta-data
+                android:name="android.support.FILE_PROVIDER_PATHS"
+                android:resource="@xml/wallet_pass_paths" />
+        </provider>
         <activity
             android:name=".MainActivity"
             android:exported="true"
@@ -69,6 +78,10 @@
 
          In particular, this is used by the Flutter engine in io.flutter.plugin.text.ProcessTextPlugin. -->
     <queries>
+        <intent>
+            <action android:name="android.intent.action.VIEW" />
+            <data android:mimeType="application/vnd.apple.pkpass" />
+        </intent>
         <package android:name="com.google.android.apps.weather" />
         <package android:name="com.sec.android.daemonapp" />
         <package android:name="com.samsung.android.weather" />

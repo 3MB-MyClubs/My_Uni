@@ -2,6 +2,7 @@
   "version": "5",
   "specifiers": {
     "jsr:@supabase/functions-js@*": "2.112.3",
+    "jsr:@supabase/functions-js@2.112.3": "2.112.3",
     "npm:@supabase/supabase-js@2": "2.112.3",
     "npm:@supabase/supabase-js@2.112.3": "2.112.3",
     "npm:jose@6": "6.2.8",
@@ -284,4 +285,3 @@
     }
   }
 }
-

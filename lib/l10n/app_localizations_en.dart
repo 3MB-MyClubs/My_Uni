@@ -4180,6 +4180,17 @@ class AppLocalizationsEn extends AppLocalizations {
   String get addToGoogleWallet => 'Add to Google Wallet';
 
   @override
+  String get addToWallet => 'Add to Wallet';
+
+  @override
+  String get walletPassHint =>
+      'Open in a compatible pass app, or save the .pkpass file to import later.';
+
+  @override
+  String get walletPassTicketFailed =>
+      'Could not open or save this wallet pass. Please try again.';
+
+  @override
   String get googleWalletTicketFailed =>
       'Could not add this ticket to Google Wallet. Please try again.';
 

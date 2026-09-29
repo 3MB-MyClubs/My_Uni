@@ -2,6 +2,10 @@
 
 The attendee ticket card shows **Add to Apple Wallet** on iOS when Wallet can add passes. The app requests a fresh, signed `.pkpass` from `apple-wallet-ticket`, then opens Apple's add sheet. The server checks the signed-in user owns an active ticket before it generates the pass. The Wallet QR contains the same `clubup-ticket:v1:<token>` credential as the in-app QR; `scan_event_ticket` remains the admission authority.
 
+On Android, active attendee tickets show **Add to Wallet**. This downloads the same signed `.pkpass` and shows Android's app chooser for compatible installed pass apps using `application/vnd.apple.pkpass`. The user chooses which app to open each time, even when a default app is set. If no app can open it, Android's document picker saves the file for later import. Cancelling either picker is harmless. The file is handed off through a private cache FileProvider with temporary read access; cached exports older than a day are removed on the next export. Google Wallet is currently hidden, and its existing integration is retained for future use. No additional signing service or backend deployment is needed for this Android flow.
+
+The existing endpoint intentionally returns `application/octet-stream` so the Supabase Dart client decodes the response as bytes. Android supplies the pass-specific MIME type when opening or saving those bytes.
+
 ## Certificate setup
 
 The Apple Pass Type ID is `pass.com.3mb.clupup.events` and the team ID is `BPNS3G27Y8`. Generate its Pass Type ID certificate in Apple Developer and export the certificate **with its private key** from Keychain Access as a password protected `.p12` outside this repository.
@@ -19,6 +23,8 @@ Deploy `apple-wallet-ticket` with JWT verification enabled. The Supabase Auth to
 On 2026-09-25, version 1 was deployed to the MyClubs production project with JWT verification enabled. The four signing secrets were saved in Edge Function Secrets. An unauthenticated request returned HTTP 401. A physical iPhone test with an issued ticket is still required to confirm Apple's add sheet and admission scan end to end.
 
 ## Acceptance check
+
+On Android with multiple `.pkpass` apps installed, tap **Add to Wallet**, verify the compatible apps appear, choose one, and confirm the event, attendee, and QR import correctly. Set a default pass app and verify the chooser still appears. Repeat with no compatible app installed: save the `.pkpass`, then import it from a pass app. Also cancel the save picker and verify the button becomes usable again. Google Wallet must not appear on the ticket card. Repeat the revocation/reissue scan checks below with the imported Android pass. Physical-device import and save checks are still required.
 
 On a physical iPhone signed in as a ticket holder, open an active ticket and tap **Add to Apple Wallet**. Apple's add sheet should show the event name, attendee, venue, and QR. Add it, then scan its QR with the existing event scanner. Revoke or reissue that ticket and scan the old Wallet pass again; it must be rejected by the server. A reissued ticket has a new serial number and must be added as a new pass.
 

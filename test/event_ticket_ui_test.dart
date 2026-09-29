@@ -76,6 +76,50 @@ Widget app(Widget child) => MaterialApp(
 );
 
 void main() {
+  testWidgets('Android offers a pass file without checking Google Wallet', (
+    tester,
+  ) async {
+    const googleChannel = MethodChannel('ku_app/google_wallet_ticket');
+    final googleCalls = <MethodCall>[];
+    tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(
+      googleChannel,
+      (call) async {
+        googleCalls.add(call);
+        return true;
+      },
+    );
+    addTearDown(() {
+      tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(
+        googleChannel,
+        null,
+      );
+    });
+    final service = FakeTickets()
+      ..ticket = EventTicket(id: 't', token: 'a' * 64);
+    await tester.pumpWidget(
+      app(
+        EventTicketCard(
+          eventId: 'event',
+          profileId: 'holder',
+          service: service,
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+    expect(find.text('Add to Wallet'), findsOneWidget);
+    expect(find.text('Add to Google Wallet'), findsNothing);
+    expect(googleCalls, isEmpty);
+
+    service.ticket = EventTicket(
+      id: 't',
+      token: 'a' * 64,
+      revokedAt: DateTime.now(),
+    );
+    await tester.tap(find.byTooltip('Refresh ticket'));
+    await tester.pumpAndSettle();
+    expect(find.text('Add to Wallet'), findsNothing);
+  }, variant: TargetPlatformVariant.only(TargetPlatform.android));
+
   testWidgets('scanner shows a square guide and scanned holder details', (
     tester,
   ) async {

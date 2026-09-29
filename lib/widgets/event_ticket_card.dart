@@ -6,7 +6,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import '../l10n/app_localizations.dart';
 import '../services/apple_wallet_ticket_service.dart';
 import '../services/event_ticket_service.dart';
-import '../services/google_wallet_ticket_service.dart';
+import '../services/pkpass_ticket_service.dart';
 
 /// The holder's ticket, or staff controls for a single RSVP attendee.
 class EventTicketCard extends StatefulWidget {
@@ -36,7 +36,7 @@ class _EventTicketCardState extends State<EventTicketCard>
   String? _error;
   int _generation = 0;
   EventTicketService get _service => widget.service ?? eventTicketService;
-  bool get _googleWallet => googleWalletTicketService.supportedPlatform;
+  bool get _pkpassWallet => pkpassTicketService.supportedPlatform;
 
   void _showQr(String payload) {
     showDialog<void>(
@@ -60,9 +60,10 @@ class _EventTicketCardState extends State<EventTicketCard>
 
   Future<void> _checkWalletAvailability() async {
     try {
-      final available = _googleWallet
-          ? await googleWalletTicketService.canAddPasses()
-          : await appleWalletTicketService.canAddPasses();
+      // Android can always save the pass file, even without a wallet installed.
+      // Google Wallet is intentionally hidden until it is offered again.
+      final available =
+          _pkpassWallet || await appleWalletTicketService.canAddPasses();
       if (mounted) setState(() => _walletAvailable = available);
     } catch (_) {
       // Ticket display is still usable if the native Wallet API is unavailable.
@@ -72,8 +73,8 @@ class _EventTicketCardState extends State<EventTicketCard>
   Future<void> _addToWallet(String ticketId) async {
     setState(() => _addingToWallet = true);
     try {
-      if (_googleWallet) {
-        await googleWalletTicketService.addTicket(ticketId);
+      if (_pkpassWallet) {
+        await pkpassTicketService.addTicket(ticketId);
       } else {
         await appleWalletTicketService.addTicket(ticketId);
       }
@@ -87,8 +88,8 @@ class _EventTicketCardState extends State<EventTicketCard>
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text(
-              _googleWallet
-                  ? AppLocalizations.of(context)!.googleWalletTicketFailed
+              _pkpassWallet
+                  ? AppLocalizations.of(context)!.walletPassTicketFailed
                   : AppLocalizations.of(context)!.appleWalletTicketFailed,
             ),
           ),
@@ -214,11 +215,9 @@ class _EventTicketCardState extends State<EventTicketCard>
                   const SizedBox(height: 12),
                   OutlinedButton.icon(
                     key: ValueKey(
-                      _googleWallet
-                          ? 'add-to-google-wallet'
-                          : 'add-to-apple-wallet',
+                      _pkpassWallet ? 'add-to-wallet' : 'add-to-apple-wallet',
                     ),
-                    style: _googleWallet
+                    style: _pkpassWallet
                         ? OutlinedButton.styleFrom(
                             minimumSize: const Size(200, 48),
                           )
@@ -228,11 +227,18 @@ class _EventTicketCardState extends State<EventTicketCard>
                         : () => _addToWallet(ticket.id),
                     icon: const Icon(Icons.account_balance_wallet_outlined),
                     label: Text(
-                      _googleWallet
-                          ? l10n.addToGoogleWallet
-                          : l10n.addToAppleWallet,
+                      _pkpassWallet ? l10n.addToWallet : l10n.addToAppleWallet,
                     ),
                   ),
+                  if (_pkpassWallet)
+                    Padding(
+                      padding: const EdgeInsets.only(top: 8),
+                      child: Text(
+                        l10n.walletPassHint,
+                        textAlign: TextAlign.center,
+                        style: Theme.of(context).textTheme.bodySmall,
+                      ),
+                    ),
                 ],
               ],
               if (widget.manage)

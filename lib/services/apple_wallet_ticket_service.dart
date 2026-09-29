@@ -2,11 +2,14 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
+import 'wallet_pass_service.dart';
+
 /// Opens an authenticated, freshly signed pass in Apple's native add sheet.
 class AppleWalletTicketService {
-  AppleWalletTicketService({SupabaseClient? client}) : _client = client;
+  AppleWalletTicketService({SupabaseClient? client})
+    : _passes = WalletPassService(client: client);
 
-  final SupabaseClient? _client;
+  final WalletPassService _passes;
   static const _channel = MethodChannel('ku_app/apple_wallet_ticket');
 
   bool get supportedPlatform =>
@@ -19,15 +22,7 @@ class AppleWalletTicketService {
 
   Future<void> addTicket(String ticketId) async {
     if (!supportedPlatform) throw StateError('Apple Wallet requires iOS');
-    final client = _client ?? Supabase.instance.client;
-    final response = await client.functions.invoke(
-      'apple-wallet-ticket',
-      body: {'ticketId': ticketId},
-    );
-    final bytes = response.data;
-    if (bytes is! Uint8List || bytes.isEmpty) {
-      throw StateError('The Apple Wallet pass was empty');
-    }
+    final bytes = await _passes.downloadTicket(ticketId);
     await _channel.invokeMethod<void>('addPass', bytes);
   }
 }

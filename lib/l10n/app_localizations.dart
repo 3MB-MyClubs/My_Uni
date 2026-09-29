@@ -6860,6 +6860,24 @@ abstract class AppLocalizations {
   /// **'Add to Google Wallet'**
   String get addToGoogleWallet;
 
+  /// No description provided for @addToWallet.
+  ///
+  /// In en, this message translates to:
+  /// **'Add to Wallet'**
+  String get addToWallet;
+
+  /// No description provided for @walletPassHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Open in a compatible pass app, or save the .pkpass file to import later.'**
+  String get walletPassHint;
+
+  /// No description provided for @walletPassTicketFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'Could not open or save this wallet pass. Please try again.'**
+  String get walletPassTicketFailed;
+
   /// No description provided for @googleWalletTicketFailed.
   ///
   /// In en, this message translates to:

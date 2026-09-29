@@ -1,5 +1,6 @@
 import "jsr:@supabase/functions-js@2.112.3/edge-runtime.d.ts";
 import { createClient } from "npm:@supabase/supabase-js@2.112.3";
+import { importWalletPrivateKey } from "./private_key.ts";
 
 const uuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const noStore = { "Cache-Control": "no-store" };
@@ -26,14 +27,7 @@ async function signPass(ticket: { id: string; token: string; event_id: string },
   const issuerId = required("GOOGLE_WALLET_ISSUER_ID");
   if (!/^\d+$/.test(issuerId)) throw new Error("Invalid Google Wallet issuer ID");
   const email = required("GOOGLE_WALLET_SERVICE_ACCOUNT_EMAIL");
-  const pem = required("GOOGLE_WALLET_PRIVATE_KEY").replaceAll("\\n", "\n");
-  const keyBytes = Uint8Array.from(
-    atob(pem.replace(/-----BEGIN PRIVATE KEY-----|-----END PRIVATE KEY-----|\s/g, "")),
-    (char) => char.charCodeAt(0),
-  );
-  const key = await crypto.subtle.importKey(
-    "pkcs8", keyBytes, { name: "RSASSA-PKCS1-v1_5", hash: "SHA-256" }, false, ["sign"],
-  );
+  const key = await importWalletPrivateKey(required("GOOGLE_WALLET_PRIVATE_KEY"));
   const classId = issuerId + ".event_" + ticket.event_id.replaceAll("-", "_");
   const objectId = issuerId + ".ticket_" + ticket.id.replaceAll("-", "_");
   const claims = {
