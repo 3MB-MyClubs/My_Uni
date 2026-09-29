@@ -20,7 +20,7 @@ function base64url(bytes: Uint8Array): string {
 
 const encode = (value: unknown) => base64url(new TextEncoder().encode(JSON.stringify(value)));
 
-async function signPass(ticket: { id: string; token: string; event_id: string },
+async function signPass(ticket: { id: string; token: string; display_code: string; event_id: string },
   event: { title: string; location: string | null; starts_at: string; ends_at: string | null },
   holder: string): Promise<string> {
   const issuerId = required("GOOGLE_WALLET_ISSUER_ID");
@@ -65,8 +65,12 @@ async function signPass(ticket: { id: string; token: string; event_id: string },
         classId,
         state: "ACTIVE",
         ticketHolderName: holder,
-        ticketNumber: ticket.id,
-        barcode: { type: "QR_CODE", value: "clubup-ticket:v1:" + ticket.token },
+        ticketNumber: ticket.display_code,
+        barcode: {
+          type: "QR_CODE",
+          value: "clubup-ticket:v1:" + ticket.token,
+          alternateText: ticket.display_code,
+        },
       }],
     },
   };
@@ -96,7 +100,7 @@ Deno.serve(async (request) => {
 
     // Staff can read tickets through RLS; only the holder can export one.
     const { data: ticket, error: ticketError } = await client.from("event_tickets")
-      .select("id,token,event_id,profile_id")
+      .select("id,token,display_code,event_id,profile_id")
       .eq("id", ticketId).eq("profile_id", userData.user.id)
       .is("revoked_at", null).is("used_at", null).maybeSingle();
     if (ticketError) throw ticketError;

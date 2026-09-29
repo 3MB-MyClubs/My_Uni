@@ -4141,6 +4141,9 @@ class AppLocalizationsTr extends AppLocalizations {
   String get ticketTitle => 'Giriş bileti';
 
   @override
+  String get ticketCode => 'Bilet kodu';
+
+  @override
   String get seeYourTicket => 'Biletini gör';
 
   @override
@@ -4191,7 +4194,16 @@ class AppLocalizationsTr extends AppLocalizations {
 
   @override
   String get ticketScanHint =>
-      'Tarama için internet gerekir. Kamerayı giriş bileti QR koduna doğrult.';
+      'Bilet QR kodunu tara veya altı karakterli kodunu gir. İnternet bağlantısı gerekir.';
+
+  @override
+  String get ticketEnterCode => 'Bilet kodunu gir';
+
+  @override
+  String get ticketCodeHint => '6 karakter: harf ve rakam';
+
+  @override
+  String get ticketCheckInCode => 'Kodla giriş yap';
 
   @override
   String get ticketCheckedIn => 'Geçerli — giriş yapıldı';
@@ -4234,7 +4246,7 @@ class AppLocalizationsTr extends AppLocalizations {
 
   @override
   String get ticketCameraUnavailable =>
-      'Kamera kullanılamıyor. Ayarlardan kamera izni verip tarayıcıyı yeniden aç. Etkinlik sayfasından elle giriş de yapabilirsin.';
+      'Kamera kullanılamıyor. Bilet kodunu aşağıya gir veya Ayarlar\'dan kamera izni ver.';
 
   @override
   String get ticketCameraSettings => 'Kamera ayarları';

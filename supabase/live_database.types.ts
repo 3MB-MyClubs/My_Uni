@@ -983,6 +983,7 @@ export type Database = {
       }
       event_tickets: {
         Row: {
+          display_code: string
           event_id: string
           id: string
           issued_at: string
@@ -995,6 +996,7 @@ export type Database = {
           used_by: string | null
         }
         Insert: {
+          display_code?: string
           event_id: string
           id?: string
           issued_at?: string
@@ -1007,6 +1009,7 @@ export type Database = {
           used_by?: string | null
         }
         Update: {
+          display_code?: string
           event_id?: string
           id?: string
           issued_at?: string
@@ -3066,6 +3069,10 @@ export type Database = {
       revoke_user_sessions: { Args: { p_user_id: string }; Returns: number }
       scan_event_ticket: {
         Args: { p_event_id: string; p_token: string }
+        Returns: Json
+      }
+      scan_event_ticket_code: {
+        Args: { p_code: string; p_event_id: string }
         Returns: Json
       }
       send_message_v2: {

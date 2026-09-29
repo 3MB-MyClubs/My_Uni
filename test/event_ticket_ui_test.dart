@@ -16,6 +16,8 @@ class FakeTickets extends EventTicketService {
   bool authorized = true;
   bool failFetch = false;
   int scans = 0;
+  int codeScans = 0;
+  String? lastCode;
   int issues = 0;
   int revokes = 0;
   bool? reissueRequested;
@@ -41,6 +43,7 @@ class FakeTickets extends EventTicketService {
     return ticket = EventTicket(
       id: 't$issues',
       token: (reissue ? 'b' : 'a') * 64,
+      displayCode: reissue ? 'EF34GH' : 'AB12CD',
     );
   }
 
@@ -50,6 +53,7 @@ class FakeTickets extends EventTicketService {
     ticket = EventTicket(
       id: ticketId,
       token: 'a' * 64,
+      displayCode: 'AB12CD',
       revokedAt: DateTime.now(),
     );
   }
@@ -62,9 +66,24 @@ class FakeTickets extends EventTicketService {
   }
 
   @override
+  Future<TicketScanResult> scanCode(String eventId, String code) async {
+    codeScans++;
+    lastCode = code;
+    if (pending != null) return pending!.future;
+    return TicketScanResult(status);
+  }
+
+  @override
   Future<TicketPerson?> personForScan(
     String eventId,
     String payload,
+    TicketScanResult result,
+  ) async => person;
+
+  @override
+  Future<TicketPerson?> personForCode(
+    String eventId,
+    String code,
     TicketScanResult result,
   ) async => person;
 }
@@ -234,7 +253,7 @@ void main() {
 
   testWidgets('ticket QR appears on its own page', (tester) async {
     final service = FakeTickets()
-      ..ticket = EventTicket(id: 't', token: 'a' * 64);
+      ..ticket = EventTicket(id: 't', token: 'a' * 64, displayCode: 'AB12CD');
     await tester.pumpWidget(
       MaterialApp(
         localizationsDelegates: AppLocalizations.localizationsDelegates,
@@ -249,6 +268,7 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.text('Admission ticket'), findsWidgets);
     expect(find.byKey(const ValueKey('admission-ticket-qr')), findsOneWidget);
+    expect(find.text('AB12CD'), findsOneWidget);
   });
 
   testWidgets(
@@ -270,7 +290,7 @@ void main() {
       );
 
       final service = FakeTickets()
-        ..ticket = EventTicket(id: 't', token: 'a' * 64);
+        ..ticket = EventTicket(id: 't', token: 'a' * 64, displayCode: 'AB12CD');
       await tester.pumpWidget(
         app(
           EventTicketCard(
@@ -290,6 +310,10 @@ void main() {
         find.byKey(const ValueKey('admission-ticket-qr-expanded')),
       );
       expect(expanded.size, greaterThan(220));
+      expect(
+        find.byKey(const ValueKey('admission-ticket-code-expanded')),
+        findsOneWidget,
+      );
       expect(calls, ['maximize']);
 
       await tester.tap(find.byTooltip('Close'));
@@ -346,6 +370,8 @@ void main() {
     expect(service.issues, 1);
     expect(service.reissueRequested, false);
     expect(changed, [true]);
+    expect(find.byKey(const ValueKey('managed-ticket-code')), findsOneWidget);
+    expect(find.text('AB12CD'), findsOneWidget);
     expect(find.byType(QrImageView), findsNothing);
     await tester.tap(find.text('Revoke ticket'));
     await tester.pumpAndSettle();
@@ -356,6 +382,7 @@ void main() {
     await tester.pumpAndSettle();
     expect(service.reissueRequested, true);
     expect(changed, [true, false, true]);
+    expect(find.text('EF34GH'), findsOneWidget);
     expect(find.text('Ready for admission'), findsOneWidget);
   });
 
@@ -376,9 +403,96 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.text('CAMERA'), findsNothing);
     expect(
+      find.byKey(const ValueKey('ticket-manual-code-input')),
+      findsNothing,
+    );
+    expect(
       find.text('You are not authorized to manage tickets for this event.'),
       findsOneWidget,
     );
+  });
+
+  testWidgets('organizer can check in by six-character code', (tester) async {
+    final service = FakeTickets()
+      ..status = TicketScanStatus.checkedIn
+      ..person = const TicketPerson(fullName: 'Ada Lovelace');
+    await tester.pumpWidget(
+      MaterialApp(
+        localizationsDelegates: AppLocalizations.localizationsDelegates,
+        supportedLocales: AppLocalizations.supportedLocales,
+        home: EventTicketScanScreen(
+          eventId: 'event',
+          eventTitle: 'Event',
+          service: service,
+          scannerBuilder: (_) => const Text('Camera unavailable'),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+    final input = find.byKey(const ValueKey('ticket-manual-code-input'));
+    final submit = find.byKey(const ValueKey('ticket-manual-code-submit'));
+    expect(input, findsOneWidget);
+    expect(tester.widget<FilledButton>(submit).onPressed, isNull);
+    await tester.enterText(input, 'ab12cd');
+    await tester.pump();
+    expect(tester.widget<FilledButton>(submit).onPressed, isNotNull);
+    await tester.tap(submit);
+    await tester.pumpAndSettle();
+    expect(service.codeScans, 1);
+    expect(service.lastCode, 'AB12CD');
+    expect(service.scans, 0);
+    expect(find.text('Valid — checked in'), findsOneWidget);
+    expect(find.text('Ada Lovelace'), findsOneWidget);
+    await tester.tap(find.text('Scan next ticket'));
+    await tester.pumpAndSettle();
+    expect(tester.widget<TextField>(input).controller?.text, isEmpty);
+    expect(tester.widget<FilledButton>(submit).onPressed, isNull);
+  });
+
+  testWidgets('manual code entry fits a compact screen with keyboard open', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(320, 568);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.reset);
+    final service = FakeTickets();
+    await tester.pumpWidget(
+      MaterialApp(
+        localizationsDelegates: AppLocalizations.localizationsDelegates,
+        supportedLocales: AppLocalizations.supportedLocales,
+        home: EventTicketScanScreen(
+          eventId: 'event',
+          eventTitle: 'Event',
+          service: service,
+          scannerBuilder: (_) => const SizedBox(),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+    final input = find.byKey(const ValueKey('ticket-manual-code-input'));
+    await tester.tap(input);
+    await tester.pump();
+    expect(
+      tester.widget<EditableText>(find.byType(EditableText)).focusNode.hasFocus,
+      isTrue,
+    );
+    tester.view.viewInsets = const FakeViewPadding(bottom: 300);
+    await tester.pump();
+    expect(tester.takeException(), isNull);
+    expect(input, findsOneWidget);
+    expect(
+      tester.widget<EditableText>(find.byType(EditableText)).focusNode.hasFocus,
+      isTrue,
+    );
+    await tester.enterText(input, 'AB12CD');
+    final submit = find.byKey(const ValueKey('ticket-manual-code-submit'));
+    await tester.pump();
+    expect(tester.widget<TextField>(input).controller?.text, 'AB12CD');
+    expect(tester.widget<FilledButton>(submit).onPressed, isNotNull);
+    await tester.ensureVisible(submit);
+    await tester.tap(submit);
+    await tester.pumpAndSettle();
+    expect(service.codeScans, 1);
   });
 
   testWidgets(

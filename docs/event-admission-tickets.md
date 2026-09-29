@@ -2,7 +2,7 @@
 
 Create/edit event has a **Ticketed event / Biletli etkinlik** toggle, off by default. The description explains that organizers issue free tickets manually after RSVP. Ordinary events do not display ticket cards or scanner/issuance controls.
 
-For ticketed events, the event management page has **Scan tickets** above its attendee list and a ticket icon beside each attendee. Staff can issue, revoke, or reissue a ticket there. Attendees see a **See your ticket** button on the event page; the admission QR appears on the separate ticket page, with a refresh action. Existing manual check-in stays available. English and Turkish copy is included.
+For ticketed events, the event management page has **Scan tickets** above its attendee list and a ticket icon beside each attendee. Staff can issue, revoke, or reissue a ticket there. Attendees see a **See your ticket** button on the event page; the admission QR and a six-character ticket code appear on the separate ticket page. Organizers see the same code in the attendee list. If the camera cannot scan, staff can type that code in the scanner screen to check in the attendee. Existing manual check-in stays available. English and Turkish copy is included.
 
 ## Rules and authorization
 
@@ -11,6 +11,7 @@ For ticketed events, the event management page has **Scan tickets** above its at
 - Cancelling an RSVP revokes its ticket. RSVPing again does not reactivate that credential; staff must issue a replacement. A previous ticket admission does not prevent a new staff-issued ticket.
 - Club authentication accounts, linked board members in the club account context, and platform admins use the existing `private.can_manage_event` permission model. Removing a board role immediately removes ticket permissions. Ticket holder identity and acting staff identity are different: the server derives the latter from `auth.uid()`.
 - No payment, purchase flow, offline admission, or admission from event-sharing QR codes is included. Manual check-in remains the staff override for walk-ins and attendance corrections.
+- Manual ticket-code entry is event-scoped and requires organizer authorization. It uses the same ticket consumption checks as QR scanning, so revoked and used codes cannot admit again. A successful code entry is recorded as a manual check-in.
 
 - Disabling ticketing revokes all current tickets. Reenabling does not restore them. The server serializes toggle changes against issuance and scans with an event row lock. Events with tickets already manually issued before this migration retain ticketing; other existing events default off.
 - Creating a ticketed event, enabling its toggle, and RSVPing **never issue tickets automatically**. Issuance is always a separate authorized staff action.
@@ -18,6 +19,8 @@ For ticketed events, the event management page has **Scan tickets** above its at
 ## Credential and transaction design
 
 The QR payload is `clubup-ticket:v1:<64 lowercase hex characters>`. Supabase generates 32 cryptographically random bytes with `pgcrypto`, independent of the profile ID, event ID, and ticket row ID. Sharing URLs are not ticket credentials.
+
+Each ticket also has a unique six-character code containing letters and numbers. That code is shown to the attendee and organizer. It is a manual entry fallback; the QR retains its longer credential. Reissuing a ticket changes both values.
 
 `event_tickets` has RLS and authenticated SELECT only. The holder and authorized event staff can read credentials; other users and anonymous clients cannot. Credentials remain in widget memory and are not written to Hive, logs, analytics, URLs, or shared event messages. The database stores the credential so the holder can redisplay their ticket; backups and administrative database access must be treated as sensitive.
 
@@ -29,7 +32,7 @@ Scan results are `checked_in`, `already_used`, `revoked`, `wrong_event`, and `in
 
 ## Deployment
 
-1. Apply `supabase/migrations/20260925073316_event_admission_tickets.sql`, `supabase/migrations/20260925080255_optional_ticketed_events.sql`, and `supabase/migrations/20260925143000_reissue_used_event_tickets.sql` in order through the normal Supabase migration deployment **before** shipping the Flutter update. No Edge Function or new server secret is needed. All earlier migrations must already be applied.
+1. Apply the event-ticket migrations in order through the normal Supabase migration deployment **before** shipping the Flutter update, including `20260927072904_event_ticket_display_codes.sql` and `20260927073909_manual_ticket_code_checkin.sql`. All earlier migrations must already be applied.
 2. Run `flutter pub get` and rebuild native apps. `mobile_scanner` is pinned to 7.4.2; camera purpose text and macOS camera entitlements are included. iOS/Android builds integrate their native plugin dependencies; web camera access requires a secure origin.
 3. Smoke-test on real iOS and Android devices: permission denied/allowed, background/resume, valid QR, second scan, wrong event, revoke/reissue, manual check-in, and network loss. Camera hardware recognition cannot be proved by widget tests or simulator compilation.
 4. No tickets are backfilled or automatically issued for existing RSVPs. Organizers enable ticketing and then issue tickets from the attendee list.

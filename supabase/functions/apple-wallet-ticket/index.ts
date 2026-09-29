@@ -23,6 +23,7 @@ function certificate(name: string): Buffer {
 type TicketRow = {
   id: string;
   token: string;
+  display_code: string;
   event_id: string;
   profile_id: string;
 };
@@ -51,7 +52,10 @@ function createPass(ticket: TicketRow, event: EventRow, holder: string): Buffer 
     expirationDate: event.ends_at ?? undefined,
     eventTicket: {
       primaryFields: [{ key: "event", label: "EVENT", value: event.title }],
-      secondaryFields: [{ key: "holder", label: "ATTENDEE", value: holder }],
+      secondaryFields: [
+        { key: "holder", label: "ATTENDEE", value: holder },
+        { key: "ticketCode", label: "TICKET CODE", value: ticket.display_code },
+      ],
       auxiliaryFields: event.location
         ? [{ key: "location", label: "LOCATION", value: event.location }]
         : [],
@@ -65,6 +69,7 @@ function createPass(ticket: TicketRow, event: EventRow, holder: string): Buffer 
       format: "PKBarcodeFormatQR",
       message: `clubup-ticket:v1:${ticket.token}`,
       messageEncoding: "iso-8859-1",
+      altText: ticket.display_code,
     }],
   };
   const pass = new PKPass(
@@ -114,7 +119,7 @@ Deno.serve(async (request) => {
     // staff from exporting another person's bearer credential to Wallet.
     const { data: ticket, error: ticketError } = await client
       .from("event_tickets")
-      .select("id,token,event_id,profile_id")
+      .select("id,token,display_code,event_id,profile_id")
       .eq("id", ticketId)
       .eq("profile_id", userData.user.id)
       .is("revoked_at", null)

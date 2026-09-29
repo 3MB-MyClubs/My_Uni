@@ -13,6 +13,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import 'firebase_options.dart';
 import 'l10n/app_localizations.dart';
 import 'screens/app_launch_screen.dart';
+import 'screens/event_shared_link_screen.dart';
 import 'screens/login_screen.dart';
 import 'screens/signup_flow_screen.dart';
 import 'screens/update_required_screen.dart';
@@ -50,6 +51,7 @@ import 'services/supabase_config.dart';
 import 'onboarding/onboarding_service.dart';
 import 'debug/device_preview.dart';
 import 'services/event_cleanup_service.dart';
+import 'services/event_share_link.dart';
 import 'services/moderation_service.dart';
 import 'services/admin_moderation_service.dart';
 import 'services/terms_acceptance_service.dart';
@@ -68,6 +70,8 @@ void main() {
   StartupLog.event('S00_PROCESS_START');
   runZonedGuarded(() {
     WidgetsFlutterBinding.ensureInitialized();
+    eventLinkCoordinator.start();
+    if (kIsWeb) eventLinkCoordinator.receive(Uri.base);
     StartupLog.event('S01_BINDING_READY');
     startPerformanceFrameRecording(
       () => PlatformDispatcher.instance.implicitView?.display.refreshRate ?? 60,
@@ -352,17 +356,24 @@ class MyApp extends StatefulWidget {
     this.minimumLaunchDuration = const Duration(milliseconds: 300),
     this.updateService,
     this.startupInitializer,
+    this.linkCoordinator,
   });
 
   final Duration minimumLaunchDuration;
   final AppUpdateService? updateService;
   final Future<void> Function()? startupInitializer;
+  final EventLinkCoordinator? linkCoordinator;
 
   @override
   State<MyApp> createState() => _MyAppState();
 }
 
 class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
+  final _navigatorKey = GlobalKey<NavigatorState>();
+  EventLinkCoordinator get _links =>
+      widget.linkCoordinator ?? eventLinkCoordinator;
+  bool _eventLinkPushScheduled = false;
+  String _currentDestinationKey = 'launch';
   bool _isLaunching = true;
   bool _isBootstrapping = true;
   Timer? _launchTimer;
@@ -405,6 +416,8 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
+    _links.addListener(_schedulePendingEventLink);
+    _schedulePendingEventLink();
     if (widget.minimumLaunchDuration == Duration.zero) {
       _isLaunching = false;
     } else {
@@ -442,10 +455,41 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
   }
 
   @override
+  void didUpdateWidget(covariant MyApp oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    final oldLinks = oldWidget.linkCoordinator ?? eventLinkCoordinator;
+    if (oldLinks == _links) return;
+    oldLinks.removeListener(_schedulePendingEventLink);
+    _links.addListener(_schedulePendingEventLink);
+    _schedulePendingEventLink();
+  }
+
+  @override
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
+    _links.removeListener(_schedulePendingEventLink);
     _launchTimer?.cancel();
     super.dispose();
+  }
+
+  void _schedulePendingEventLink() {
+    if (_eventLinkPushScheduled || _links.pendingEventId == null) return;
+    _eventLinkPushScheduled = true;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _eventLinkPushScheduled = false;
+      if (!mounted || _currentDestinationKey != 'main-navigation') return;
+      final navigator = _navigatorKey.currentState;
+      if (navigator == null) return;
+      final eventId = _links.takePendingEventId();
+      if (eventId == null) return;
+      navigator.push<void>(
+        MaterialPageRoute(
+          settings: RouteSettings(name: EventShareLink.forEvent(eventId)),
+          builder: (_) => EventSharedLinkScreen(eventId: eventId),
+        ),
+      );
+    });
+    WidgetsBinding.instance.scheduleFrame();
   }
 
   @override
@@ -852,6 +896,8 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
             !_isLaunching &&
             destinationKey != 'terms-check' &&
             destinationKey != 'account-preferences-loading';
+        _currentDestinationKey = destinationKey;
+        if (destinationKey == 'main-navigation') _schedulePendingEventLink();
         if (isUsableDestination && !_didLogInitialRoute) {
           _didLogInitialRoute = true;
           StartupLog.event('S11_INITIAL_ROUTE', result: destinationKey);
@@ -932,6 +978,7 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
                 ),
         );
         return MaterialApp(
+          navigatorKey: _navigatorKey,
           debugShowCheckedModeBanner: false,
           title: 'ClubUp',
           themeMode: isDark ? ThemeMode.dark : ThemeMode.light,

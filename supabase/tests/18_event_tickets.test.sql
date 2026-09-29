@@ -31,6 +31,7 @@ insert into public.event_rsvps(event_id,profile_id) values
 
 select ok(not has_table_privilege('anon','public.event_tickets','SELECT'),'anonymous cannot read tickets');
 select ok(not has_function_privilege('anon','public.scan_event_ticket(uuid,text)','EXECUTE'),'anonymous cannot scan');
+select ok(not has_function_privilege('anon','public.scan_event_ticket_code(uuid,text)','EXECUTE'),'anonymous cannot enter ticket codes');
 select ok(not has_function_privilege('anon','private.issue_event_ticket(uuid,uuid,boolean)','EXECUTE'),'private implementation is not public');
 set local role authenticated;
 select set_config('request.jwt.claim.sub','18000000-0000-0000-0000-000000000001',true);
@@ -41,6 +42,12 @@ select throws_ok($$select public.issue_event_ticket('18200000-0000-0000-0000-000
  '42501','Not authorized to manage this event','manager cannot issue for unrelated club');
 select set_config('test.ticket', (public.issue_event_ticket('18200000-0000-0000-0000-000000000001','18000000-0000-0000-0000-000000000002')).token,true);
 select ok(current_setting('test.ticket') ~ '^[0-9a-f]{64}$','server generates 256-bit random credential');
+select set_config('test.code', (select display_code from public.event_tickets where token=current_setting('test.ticket')), true);
+select ok(current_setting('test.code') ~ '^[A-Z0-9]{6}$' and current_setting('test.code') ~ '[A-Z]' and current_setting('test.code') ~ '[0-9]',
+ 'issued ticket has a six-character code with letters and numbers');
+select ok(exists (select 1 from pg_indexes where schemaname='public' and tablename='event_tickets'
+ and indexname='event_tickets_event_display_code_key' and indexdef like 'CREATE UNIQUE INDEX%'),
+ 'ticket codes are unique within each event');
 select is((public.issue_event_ticket('18200000-0000-0000-0000-000000000001','18000000-0000-0000-0000-000000000002')).token,
  current_setting('test.ticket'),'repeat issuance returns same ticket');
 select is((select issued_by from public.event_tickets limit 1),auth.uid(),'issuer bound to caller');
@@ -50,10 +57,14 @@ select ok(not has_table_privilege('authenticated','public.event_tickets','DELETE
 
 select set_config('request.jwt.claim.sub','18000000-0000-0000-0000-000000000002',true);
 select is((select count(*) from public.event_tickets),1::bigint,'holder can read own ticket');
+select is((select display_code from public.event_tickets limit 1), current_setting('test.code'),
+ 'holder sees the same code as organizer');
 select throws_ok($$select public.issue_event_ticket('18200000-0000-0000-0000-000000000001',auth.uid())$$,
  '42501','Not authorized to manage this event','holder cannot self-issue');
 select throws_ok($$select public.scan_event_ticket('18200000-0000-0000-0000-000000000001',current_setting('test.ticket'))$$,
  '42501','Not authorized to manage this event','holder cannot self-check-in');
+select throws_ok($$select public.scan_event_ticket_code('18200000-0000-0000-0000-000000000001',current_setting('test.code'))$$,
+ '42501','Not authorized to manage this event','holder cannot check in with code');
 select throws_ok($$select public.revoke_event_ticket('18200000-0000-0000-0000-000000000001',(select id from public.event_tickets limit 1))$$,
  '42501','Not authorized to manage this event','holder cannot revoke');
 select set_config('request.jwt.claim.sub','18000000-0000-0000-0000-000000000003',true);
@@ -64,14 +75,25 @@ select ok(public.can_manage_event_tickets('18200000-0000-0000-0000-000000000001'
 select is((select count(*) from public.event_tickets),1::bigint,'authorized staff can read tickets');
 select is(public.scan_event_ticket('18200000-0000-0000-0000-000000000002',current_setting('test.ticket')),
  '{"status":"wrong_event"}'::jsonb,'wrong event reveals no attendee data');
+select is(public.scan_event_ticket_code('18200000-0000-0000-0000-000000000002',current_setting('test.code'))->>'status',
+ 'invalid','code lookup is limited to the selected event');
+select is(public.scan_event_ticket_code('18200000-0000-0000-0000-000000000001','AB12')->>'status',
+ 'invalid','incomplete manual code cannot admit');
+select is(public.scan_event_ticket_code('18200000-0000-0000-0000-000000000001',
+ case when current_setting('test.code') = 'A1A1A1' then 'B2B2B2' else 'A1A1A1' end)->>'status',
+ 'invalid','unknown manual code cannot admit');
 select is(public.scan_event_ticket('18200000-0000-0000-0000-000000000001',repeat('f',64))->>'status','invalid','unknown token invalid');
 select is(public.scan_event_ticket('18200000-0000-0000-0000-000000000001','18000000-0000-0000-0000-000000000002')->>'status','invalid','profile ID cannot admit');
 select is(public.scan_event_ticket('18200000-0000-0000-0000-000000000001',null)->>'status','invalid','null token invalid');
 select is(public.scan_event_ticket('18200000-0000-0000-0000-000000000001','https://clubup.app/events/18200000-0000-0000-0000-000000000001')->>'status','invalid','sharing QR cannot admit');
 select ok(public.revoke_event_ticket('18200000-0000-0000-0000-000000000001',(select id from public.event_tickets limit 1)),'staff can revoke');
 select is(public.scan_event_ticket('18200000-0000-0000-0000-000000000001',current_setting('test.ticket'))->>'status','revoked','revoked token rejected');
+select is(public.scan_event_ticket_code('18200000-0000-0000-0000-000000000001',current_setting('test.code'))->>'status',
+ 'revoked','revoked manual code cannot admit');
 select set_config('test.reissued',(public.issue_event_ticket('18200000-0000-0000-0000-000000000001','18000000-0000-0000-0000-000000000002',true)).token,true);
 select isnt(current_setting('test.reissued'),current_setting('test.ticket'),'reissue rotates secret');
+select isnt((select display_code from public.event_tickets where token=current_setting('test.reissued')),
+ current_setting('test.code'),'reissue rotates the visible code');
 select is(public.scan_event_ticket('18200000-0000-0000-0000-000000000001',current_setting('test.ticket'))->>'status','revoked','old secret remains revoked after reissue');
 select set_config('test.rotated', (public.issue_event_ticket('18200000-0000-0000-0000-000000000001','18000000-0000-0000-0000-000000000002',true)).token,true);
 select isnt(current_setting('test.rotated'),current_setting('test.reissued'),'reissue can atomically replace an active ticket');
@@ -94,8 +116,16 @@ select is((select count(*) from public.event_checkins where event_id='18200000-0
  0::bigint,'reissue clears the current check-in');
 select is(public.scan_event_ticket('18200000-0000-0000-0000-000000000001',current_setting('test.reissued'))->>'status',
  'revoked','prior used credential remains unusable');
+select set_config('test.after_entry_code',
+ (select display_code from public.event_tickets where token=current_setting('test.after_entry')),true);
+select is(public.scan_event_ticket_code('18200000-0000-0000-0000-000000000001',lower(current_setting('test.after_entry_code')))->>'status',
+ 'checked_in','six-character code admits the ticket and accepts lowercase input');
+select is((select method from public.event_checkins where event_id='18200000-0000-0000-0000-000000000001'),
+ 'manual','code entry records manual admission');
+select is(public.scan_event_ticket_code('18200000-0000-0000-0000-000000000001',current_setting('test.after_entry_code'))->>'status',
+ 'already_used','repeating a manual code cannot admit twice');
 select is(public.scan_event_ticket('18200000-0000-0000-0000-000000000001',current_setting('test.after_entry'))->>'status',
- 'checked_in','new ticket admits again');
+ 'already_used','QR also rejects a ticket already admitted by code');
 select set_config('test.third_entry',
  (public.issue_event_ticket('18200000-0000-0000-0000-000000000001','18000000-0000-0000-0000-000000000002',true)).token,true);
 select isnt(current_setting('test.third_entry'),current_setting('test.after_entry'),
@@ -122,5 +152,7 @@ select set_config('request.jwt.claim.sub','18000000-0000-0000-0000-000000000004'
 select is((select count(*) from public.event_tickets),0::bigint,'removed staff immediately loses ticket access');
 select throws_ok($$select public.scan_event_ticket('18200000-0000-0000-0000-000000000001',current_setting('test.reissued'))$$,
  '42501','Not authorized to manage this event','removed staff cannot scan despite retained context');
+select throws_ok($$select public.scan_event_ticket_code('18200000-0000-0000-0000-000000000001',current_setting('test.after_entry_code'))$$,
+ '42501','Not authorized to manage this event','removed staff cannot enter ticket codes');
 select * from finish();
 rollback;

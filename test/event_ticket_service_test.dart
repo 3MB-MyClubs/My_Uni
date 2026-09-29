@@ -12,6 +12,7 @@ void main() {
   final row = {
     'id': 'ticket-id',
     'token': token,
+    'display_code': 'AB12CD',
     'revoked_at': null,
     'used_at': null,
   };
@@ -30,6 +31,7 @@ void main() {
       expect(EventTicketService.tokenFromQr(payload), isNull);
     }
     expect(EventTicket.fromJson(row).qrPayload, 'clubup-ticket:v1:$token');
+    expect(EventTicket.fromJson(row).displayCode, 'AB12CD');
   });
 
   test(
@@ -108,6 +110,46 @@ void main() {
   );
 
   test(
+    'manual code normalizes input and calls the dedicated admission RPC',
+    () async {
+      var calls = 0;
+      final client = SupabaseClient(
+        'https://example.test',
+        'anon',
+        httpClient: MockClient((request) async {
+          calls++;
+          expect(request.url.path, '/rest/v1/rpc/scan_event_ticket_code');
+          expect(jsonDecode(request.body), {
+            'p_event_id': 'event',
+            'p_code': 'AB12CD',
+          });
+          return http.Response(
+            jsonEncode({'status': 'checked_in', 'profile_id': 'holder'}),
+            200,
+            request: request,
+            headers: {'content-type': 'application/json'},
+          );
+        }),
+      );
+      addTearDown(client.dispose);
+      final service = EventTicketService(client: client);
+      expect(EventTicketService.normalizeDisplayCode(' ab12cd '), 'AB12CD');
+      expect(EventTicketService.normalizeDisplayCode('ABCDEF'), isNull);
+      expect(EventTicketService.normalizeDisplayCode('123456'), isNull);
+      expect(EventTicketService.normalizeDisplayCode('AB12C'), isNull);
+      expect(
+        (await service.scanCode('event', ' ab12cd ')).status,
+        TicketScanStatus.checkedIn,
+      );
+      expect(
+        (await service.scanCode('event', 'short')).status,
+        TicketScanStatus.invalid,
+      );
+      expect(calls, 1);
+    },
+  );
+
+  test(
     'network failure and unknown responses never become admission success',
     () async {
       var calls = 0;
@@ -141,19 +183,27 @@ void main() {
         expect(request.url.path, '/rest/v1/event_tickets');
         return http.Response(
           jsonEncode([
-            {'profile_id': 'reissued', 'used_at': null, 'revoked_at': null},
+            {
+              'profile_id': 'reissued',
+              'display_code': 'AB12CD',
+              'used_at': null,
+              'revoked_at': null,
+            },
             {
               'profile_id': 'used',
+              'display_code': 'XY34ZT',
               'used_at': '2026-09-25T11:34:00Z',
               'revoked_at': null,
             },
             {
               'profile_id': 'cancelled',
+              'display_code': 'PQ56RS',
               'used_at': null,
               'revoked_at': '2026-09-25T11:35:00Z',
             },
             {
               'profile_id': 'reissued',
+              'display_code': 'JK78LM',
               'used_at': '2026-09-24T11:34:00Z',
               'revoked_at': '2026-09-25T11:35:00Z',
             },
@@ -165,14 +215,15 @@ void main() {
       }),
     );
     addTearDown(client.dispose);
-    expect(
-      await EventTicketService(client: client).fetchTicketStates('event'),
-      {
-        'reissued': EventTicketState.active,
-        'used': EventTicketState.used,
-        'cancelled': EventTicketState.revoked,
-      },
-    );
+    final states = await EventTicketService(
+      client: client,
+    ).fetchTicketStates('event');
+    expect(states['reissued']?.state, EventTicketState.active);
+    expect(states['reissued']?.displayCode, 'AB12CD');
+    expect(states['used']?.state, EventTicketState.used);
+    expect(states['used']?.displayCode, 'XY34ZT');
+    expect(states['cancelled']?.state, EventTicketState.revoked);
+    expect(states['cancelled']?.displayCode, 'PQ56RS');
   });
 
   test('guest mode cannot issue tickets even with a client', () async {

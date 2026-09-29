@@ -382,11 +382,16 @@ class SupabaseContentService {
 
   /// Resolves a shared event that is not in this device's current feed cache.
   /// A direct id query also covers valid events outside the feed time window.
-  Future<Event?> fetchEventById(String eventId) async {
+  Future<Event?> fetchEventById(
+    String eventId, {
+    bool forceRemote = false,
+  }) async {
     final normalizedId = eventId.trim();
     if (normalizedId.isEmpty) return null;
-    for (final event in events) {
-      if (event.id == normalizedId) return event;
+    if (!forceRemote) {
+      for (final event in events) {
+        if (event.id == normalizedId) return event;
+      }
     }
 
     final client = _client;

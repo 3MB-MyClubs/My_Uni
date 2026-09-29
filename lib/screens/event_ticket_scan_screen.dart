@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:intl/intl.dart';
 import 'package:mobile_scanner/mobile_scanner.dart';
 import 'package:permission_handler/permission_handler.dart';
@@ -31,6 +32,7 @@ class EventTicketScanScreen extends StatefulWidget {
 }
 
 class _EventTicketScanScreenState extends State<EventTicketScanScreen> {
+  final TextEditingController _codeController = TextEditingController();
   bool? _authorized;
   bool _busy = false;
   TicketScanResult? _result;
@@ -38,6 +40,13 @@ class _EventTicketScanScreenState extends State<EventTicketScanScreen> {
   bool _personLoading = false;
   String? _error;
   EventTicketService get _service => widget.service ?? eventTicketService;
+
+  @override
+  void dispose() {
+    _codeController.dispose();
+    super.dispose();
+  }
+
   @override
   void initState() {
     super.initState();
@@ -63,15 +72,31 @@ class _EventTicketScanScreenState extends State<EventTicketScanScreen> {
     }
   }
 
-  Future<void> _scan(String payload) async {
+  Future<void> _scan(String payload) => _admit(
+    () => _service.scan(widget.eventId, payload),
+    (result) => _service.personForScan(widget.eventId, payload, result),
+  );
+
+  Future<void> _submitCode() async {
+    final code = EventTicketService.normalizeDisplayCode(_codeController.text);
+    if (code == null) return;
+    FocusScope.of(context).unfocus();
+    await _admit(
+      () => _service.scanCode(widget.eventId, code),
+      (result) => _service.personForCode(widget.eventId, code, result),
+    );
+  }
+
+  Future<void> _admit(
+    Future<TicketScanResult> Function() checkIn,
+    Future<TicketPerson?> Function(TicketScanResult) findPerson,
+  ) async {
     if (_busy || _result != null || _error != null || _authorized != true) {
       return;
     }
     setState(() => _busy = true);
     try {
-      final result = await _service
-          .scan(widget.eventId, payload)
-          .timeout(const Duration(seconds: 15));
+      final result = await checkIn().timeout(const Duration(seconds: 15));
       if (!mounted) return;
       setState(() {
         _result = result;
@@ -82,9 +107,9 @@ class _EventTicketScanScreenState extends State<EventTicketScanScreen> {
       if (result.status != TicketScanStatus.invalid &&
           result.status != TicketScanStatus.wrongEvent) {
         try {
-          final person = await _service
-              .personForScan(widget.eventId, payload, result)
-              .timeout(const Duration(seconds: 15));
+          final person = await findPerson(
+            result,
+          ).timeout(const Duration(seconds: 15));
           if (mounted) setState(() => _person = person);
         } catch (_) {
           // Admission status remains authoritative even if profile loading fails.
@@ -108,9 +133,20 @@ class _EventTicketScanScreenState extends State<EventTicketScanScreen> {
     }
   }
 
+  void _reset() {
+    _codeController.clear();
+    setState(() {
+      _result = null;
+      _person = null;
+      _personLoading = false;
+      _error = null;
+    });
+  }
+
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context)!;
+    final keyboardOpen = MediaQuery.viewInsetsOf(context).bottom > 0;
     final status = _result?.status;
     final message =
         _error ??
@@ -131,170 +167,244 @@ class _EventTicketScanScreenState extends State<EventTicketScanScreen> {
             ? _buildScanResult(context, message)
             : Column(
                 children: [
-                  Padding(
-                    padding: const EdgeInsets.all(16),
-                    child: Text(
-                      widget.eventTitle,
-                      style: Theme.of(context).textTheme.titleLarge,
+                  if (!keyboardOpen)
+                    Padding(
+                      padding: const EdgeInsets.all(16),
+                      child: Text(
+                        widget.eventTitle,
+                        style: Theme.of(context).textTheme.titleLarge,
+                      ),
                     ),
-                  ),
-                  Expanded(
-                    child: _authorized != true
-                        ? Center(
-                            child: _error != null || _authorized == false
-                                ? Column(
-                                    mainAxisSize: MainAxisSize.min,
-                                    children: [
-                                      Text(_error ?? l10n.ticketUnauthorized),
-                                      TextButton(
-                                        onPressed: _authorize,
-                                        child: Text(l10n.ticketRefresh),
-                                      ),
-                                    ],
-                                  )
-                                : const CircularProgressIndicator(),
-                          )
-                        : Stack(
-                            fit: StackFit.expand,
-                            children: [
-                              widget.scannerBuilder?.call(_scan) ??
-                                  MobileScanner(
-                                    // The widget owns camera lifecycle, permission transitions, and disposal.
-                                    onDetect: (capture) {
-                                      for (final barcode in capture.barcodes) {
-                                        final value = barcode.rawValue;
-                                        if (value != null) {
-                                          _scan(value);
-                                          break;
-                                        }
-                                      }
-                                    },
-                                    errorBuilder: (context, error) => Center(
-                                      child: Column(
-                                        mainAxisSize: MainAxisSize.min,
-                                        children: [
-                                          Text(
-                                            l10n.ticketCameraUnavailable,
-                                            textAlign: TextAlign.center,
-                                          ),
-                                          TextButton(
-                                            onPressed: openAppSettings,
-                                            child: Text(
-                                              l10n.ticketCameraSettings,
-                                            ),
-                                          ),
-                                        ],
-                                      ),
-                                    ),
-                                  ),
-                              IgnorePointer(
-                                child: Center(
-                                  child: LayoutBuilder(
-                                    builder: (context, constraints) {
-                                      final size =
-                                          constraints.biggest.shortestSide *
-                                          0.78;
-                                      return Container(
-                                        key: const ValueKey(
-                                          'ticket-scan-frame',
+                  if (!keyboardOpen)
+                    Expanded(
+                      flex: 3,
+                      child: _authorized != true
+                          ? Center(
+                              child: _error != null || _authorized == false
+                                  ? Column(
+                                      mainAxisSize: MainAxisSize.min,
+                                      children: [
+                                        Text(_error ?? l10n.ticketUnauthorized),
+                                        TextButton(
+                                          onPressed: _authorize,
+                                          child: Text(l10n.ticketRefresh),
                                         ),
-                                        width: size,
-                                        height: size,
-                                        decoration: BoxDecoration(
-                                          border: Border.all(
-                                            color: Colors.white,
-                                            width: 3,
-                                          ),
-                                          borderRadius: BorderRadius.circular(
-                                            18,
-                                          ),
-                                          boxShadow: const [
-                                            BoxShadow(
-                                              color: Colors.black54,
-                                              blurRadius: 12,
+                                      ],
+                                    )
+                                  : const CircularProgressIndicator(),
+                            )
+                          : Stack(
+                              fit: StackFit.expand,
+                              children: [
+                                widget.scannerBuilder?.call(_scan) ??
+                                    MobileScanner(
+                                      // The widget owns camera lifecycle, permission transitions, and disposal.
+                                      onDetect: (capture) {
+                                        for (final barcode
+                                            in capture.barcodes) {
+                                          final value = barcode.rawValue;
+                                          if (value != null) {
+                                            _scan(value);
+                                            break;
+                                          }
+                                        }
+                                      },
+                                      errorBuilder: (context, error) => Center(
+                                        child: Column(
+                                          mainAxisSize: MainAxisSize.min,
+                                          children: [
+                                            Text(
+                                              l10n.ticketCameraUnavailable,
+                                              textAlign: TextAlign.center,
+                                            ),
+                                            TextButton(
+                                              onPressed: openAppSettings,
+                                              child: Text(
+                                                l10n.ticketCameraSettings,
+                                              ),
                                             ),
                                           ],
                                         ),
-                                      );
-                                    },
-                                  ),
-                                ),
-                              ),
-                            ],
-                          ),
-                  ),
-                  Padding(
-                    padding: const EdgeInsets.all(20),
-                    child: Column(
-                      children: [
-                        if (_busy)
-                          const LinearProgressIndicator()
-                        else
-                          Semantics(
-                            liveRegion: true,
-                            child: Row(
-                              children: [
-                                Icon(
-                                  status == TicketScanStatus.checkedIn
-                                      ? Icons.check_circle
-                                      : Icons.info_outline,
-                                  color: status == TicketScanStatus.checkedIn
-                                      ? Colors.green
-                                      : Theme.of(context).colorScheme.onSurface,
-                                ),
-                                const SizedBox(width: 12),
-                                Expanded(
-                                  child: Text(
-                                    message,
-                                    key: const ValueKey('ticket-scan-result'),
-                                    style: Theme.of(
-                                      context,
-                                    ).textTheme.titleMedium,
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ),
-                        if (_result != null &&
-                            status != TicketScanStatus.invalid &&
-                            status != TicketScanStatus.wrongEvent) ...[
-                          const SizedBox(height: 16),
-                          if (_personLoading)
-                            const CircularProgressIndicator()
-                          else
-                            Row(
-                              key: const ValueKey('ticket-scan-person'),
-                              children: [
-                                _ScannedPersonAvatar(person: _person),
-                                const SizedBox(width: 12),
-                                Expanded(
-                                  child: Text(
-                                    _person?.fullName.isNotEmpty == true
-                                        ? _person!.fullName
-                                        : l10n.unknownUser,
-                                    key: const ValueKey(
-                                      'ticket-scan-person-name',
+                                      ),
                                     ),
-                                    style: Theme.of(
-                                      context,
-                                    ).textTheme.titleLarge,
+                                IgnorePointer(
+                                  child: Center(
+                                    child: LayoutBuilder(
+                                      builder: (context, constraints) {
+                                        final size =
+                                            constraints.biggest.shortestSide *
+                                            0.78;
+                                        return Container(
+                                          key: const ValueKey(
+                                            'ticket-scan-frame',
+                                          ),
+                                          width: size,
+                                          height: size,
+                                          decoration: BoxDecoration(
+                                            border: Border.all(
+                                              color: Colors.white,
+                                              width: 3,
+                                            ),
+                                            borderRadius: BorderRadius.circular(
+                                              18,
+                                            ),
+                                            boxShadow: const [
+                                              BoxShadow(
+                                                color: Colors.black54,
+                                                blurRadius: 12,
+                                              ),
+                                            ],
+                                          ),
+                                        );
+                                      },
+                                    ),
                                   ),
                                 ),
                               ],
                             ),
-                        ],
-                        if ((_result != null || _error != null) &&
-                            _authorized == true)
-                          FilledButton(
-                            onPressed: () => setState(() {
-                              _result = null;
-                              _person = null;
-                              _personLoading = false;
-                              _error = null;
-                            }),
-                            child: Text(l10n.ticketScanNext),
+                    ),
+                  Expanded(
+                    key: const ValueKey('ticket-scan-footer'),
+                    flex: 2,
+                    child: SingleChildScrollView(
+                      child: Column(
+                        children: [
+                          if (_authorized == true)
+                            Padding(
+                              padding: const EdgeInsets.fromLTRB(20, 12, 20, 0),
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.stretch,
+                                children: [
+                                  TextField(
+                                    key: const ValueKey(
+                                      'ticket-manual-code-input',
+                                    ),
+                                    controller: _codeController,
+                                    maxLength: 6,
+                                    textCapitalization:
+                                        TextCapitalization.characters,
+                                    textInputAction: TextInputAction.done,
+                                    autocorrect: false,
+                                    inputFormatters: [
+                                      FilteringTextInputFormatter.allow(
+                                        RegExp(r'[A-Za-z0-9]'),
+                                      ),
+                                      LengthLimitingTextInputFormatter(6),
+                                      TextInputFormatter.withFunction(
+                                        (oldValue, newValue) =>
+                                            newValue.copyWith(
+                                              text: newValue.text.toUpperCase(),
+                                            ),
+                                      ),
+                                    ],
+                                    decoration: InputDecoration(
+                                      labelText: l10n.ticketEnterCode,
+                                      hintText: l10n.ticketCodeHint,
+                                      border: const OutlineInputBorder(),
+                                    ),
+                                    onSubmitted: (_) => _submitCode(),
+                                  ),
+                                  ValueListenableBuilder<TextEditingValue>(
+                                    valueListenable: _codeController,
+                                    builder: (context, value, _) =>
+                                        FilledButton.icon(
+                                          key: const ValueKey(
+                                            'ticket-manual-code-submit',
+                                          ),
+                                          onPressed:
+                                              !_busy &&
+                                                  EventTicketService.normalizeDisplayCode(
+                                                        value.text,
+                                                      ) !=
+                                                      null
+                                              ? _submitCode
+                                              : null,
+                                          icon: const Icon(
+                                            Icons.keyboard_alt_outlined,
+                                          ),
+                                          label: Text(l10n.ticketCheckInCode),
+                                        ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          Padding(
+                            padding: const EdgeInsets.all(20),
+                            child: Column(
+                              children: [
+                                if (_busy)
+                                  const LinearProgressIndicator()
+                                else
+                                  Semantics(
+                                    liveRegion: true,
+                                    child: Row(
+                                      children: [
+                                        Icon(
+                                          status == TicketScanStatus.checkedIn
+                                              ? Icons.check_circle
+                                              : Icons.info_outline,
+                                          color:
+                                              status ==
+                                                  TicketScanStatus.checkedIn
+                                              ? Colors.green
+                                              : Theme.of(
+                                                  context,
+                                                ).colorScheme.onSurface,
+                                        ),
+                                        const SizedBox(width: 12),
+                                        Expanded(
+                                          child: Text(
+                                            message,
+                                            key: const ValueKey(
+                                              'ticket-scan-result',
+                                            ),
+                                            style: Theme.of(
+                                              context,
+                                            ).textTheme.titleMedium,
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                if (_result != null &&
+                                    status != TicketScanStatus.invalid &&
+                                    status != TicketScanStatus.wrongEvent) ...[
+                                  const SizedBox(height: 16),
+                                  if (_personLoading)
+                                    const CircularProgressIndicator()
+                                  else
+                                    Row(
+                                      key: const ValueKey('ticket-scan-person'),
+                                      children: [
+                                        _ScannedPersonAvatar(person: _person),
+                                        const SizedBox(width: 12),
+                                        Expanded(
+                                          child: Text(
+                                            _person?.fullName.isNotEmpty == true
+                                                ? _person!.fullName
+                                                : l10n.unknownUser,
+                                            key: const ValueKey(
+                                              'ticket-scan-person-name',
+                                            ),
+                                            style: Theme.of(
+                                              context,
+                                            ).textTheme.titleLarge,
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                ],
+                                if ((_result != null || _error != null) &&
+                                    _authorized == true)
+                                  FilledButton(
+                                    onPressed: _reset,
+                                    child: Text(l10n.ticketScanNext),
+                                  ),
+                              ],
+                            ),
                           ),
-                      ],
+                        ],
+                      ),
                     ),
                   ),
                 ],
@@ -414,12 +524,7 @@ class _EventTicketScanScreenState extends State<EventTicketScanScreen> {
             child: SizedBox(
               width: double.infinity,
               child: FilledButton(
-                onPressed: () => setState(() {
-                  _result = null;
-                  _person = null;
-                  _personLoading = false;
-                  _error = null;
-                }),
+                onPressed: _reset,
                 child: Text(l10n.ticketScanNext),
               ),
             ),

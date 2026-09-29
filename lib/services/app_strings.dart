@@ -2051,4 +2051,52 @@ class S {
     'Only the hosting club can see who is going',
     'Kimlerin katıldığını yalnızca etkinliği düzenleyen kulüp görebilir',
   );
+
+  // ── EVENT TICKET area (`ticket-section` 750:5, `Ticket pop-up` 753:1371)
+  // Every ticket is a free admission the organiser issues by hand, so type and
+  // price are fixed copy rather than data. Badge labels are written in capitals
+  // here because `toUpperCase()` turns Turkish "i" into "I", not "İ".
+  static String get ticketSectionTitle => _t('Get my ticket', 'Biletimi al');
+  static String get ticketGetButton => _t('Get my ticket', 'Biletimi al');
+  static String get ticketStatusPending => _t('Pending', 'Bekliyor');
+  static String get ticketStatusActive => _t('Ticketing active', 'Bilet aktif');
+  static String get ticketStatusUsed => _t('Used', 'Kullanıldı');
+  static String get ticketStatusRevoked => _t('Revoked', 'İptal edildi');
+  static String get ticketTypeLabel => _t('TICKET TYPE', 'BİLET TÜRÜ');
+  static String get ticketTypeFree => _t('Free Admission', 'Ücretsiz Giriş');
+  static String get ticketPriceLabel => _t('PRICE', 'FİYAT');
+  static String get ticketPriceFree => _t('Free', 'Ücretsiz');
+  static String ticketsRemaining(int n) => n == 0
+      ? _t('No tickets remaining', 'Bilet kalmadı')
+      : n == 1
+      ? _t('1 ticket remaining', '1 bilet kaldı')
+      : _t('$n tickets remaining', '$n bilet kaldı');
+  static String get ticketSheetTitle => _t('Your ticket', 'Biletin');
+  static String get ticketOnTheList => _t('YOU’RE ON THE LIST', 'LİSTEDESİN');
+  static String get ticketPendingBadge =>
+      _t('AWAITING ISSUE', 'OLUŞTURULMAYI BEKLİYOR');
+  static String get ticketUsedBadge => _t('ALREADY SCANNED', 'ZATEN OKUTULDU');
+  static String get ticketRevokedBadge => _t('REVOKED', 'İPTAL EDİLDİ');
+  static String get ticketPresentAtDoor =>
+      _t('Present this code at the door', 'Bu kodu girişte göster');
+  static String get ticketBrightnessHint => _t(
+    'Keep screen brightness up for a quick scan.',
+    'Hızlı okutma için ekran parlaklığını yüksek tut.',
+  );
+  static String get ticketPendingTitle =>
+      _t('Your ticket isn’t issued yet', 'Biletin henüz oluşturulmadı');
+  static String get ticketUsedBody => _t(
+    'This ticket was already scanned at the door.',
+    'Bu bilet girişte zaten okutuldu.',
+  );
+  static String get ticketRevokedBody => _t(
+    'The organiser cancelled this ticket.',
+    'Düzenleyen bu bileti iptal etti.',
+  );
+  static String get ticketLoading =>
+      _t('Loading your ticket…', 'Biletin yükleniyor…');
+  static String get ticketDateTimeLabel => _t('DATE & TIME', 'TARİH VE SAAT');
+  static String get ticketVenueLabel => _t('VENUE', 'MEKAN');
+  static String get ticketAttendeeLabel => _t('ATTENDEE', 'KATILIMCI');
+  static String get ticketIdLabel => _t('TICKET ID', 'BİLET NO');
 }

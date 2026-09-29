@@ -17,6 +17,7 @@ import '../services/club_admin_access.dart';
 import '../services/club_follow_helper.dart';
 import '../services/content_store.dart';
 import '../services/event_attendee_visibility.dart';
+import '../services/event_share_link.dart';
 import '../services/locale_service.dart';
 import '../services/media_delivery_service.dart';
 import '../services/mock_data.dart';
@@ -44,20 +45,21 @@ import 'create_event_screen.dart';
 import 'event_attendee_list_screen.dart';
 import 'user_profile_screen.dart';
 import 'event_ticket_scan_screen.dart';
-import 'event_ticket_screen.dart';
 import '../services/event_ticket_service.dart';
 import '../widgets/event_ticket_card.dart';
+import '../widgets/event_ticket_design.dart';
 import '../services/content_visibility.dart';
 import '../widgets/content_audience_sheet.dart';
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Event detail — recreation of the `Event new design light` / `…black` frames
-// (`283:381` / `283:497`).
+// Event detail — recreation of the `Event Detail - Light` / `- Dark` frames
+// (`111:5` / `111:78`).
 //
-// A full-bleed hero photo that dissolves into the page, then one 20px column
-// on a uniform 32px rhythm: title block, host, who is going, about, tags,
-// speakers, programme schedule, bring friends and the registration CTA — with
-// the RSVP / add-to-calendar bar floating over the bottom clearance.
+// A 320pt hero photo, then one 20px column on a uniform 20px rhythm: title
+// block, host, about, who is going with the tags, the ticket section, share
+// with friends — then, for events that carry them, speakers, programme and the
+// registration CTA, which the frames do not draw. The RSVP / add-to-calendar
+// bar floats over the bottom clearance.
 //
 // The frames paint their accent `#1DA1F2`; that is a leftover from the Figma
 // template and the burgundy `ClubUpColors.accent` is used throughout instead,
@@ -246,6 +248,12 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
 
   int get _rsvpCount => supabaseEventRsvpCounts[_event.id] ?? _attendees.length;
 
+  String get _attendeeName {
+    final user = authService.currentUser;
+    if (user == null) return '';
+    return userState.displayNameFor(user.id, user.name);
+  }
+
   List<User> get _suggestedFriends {
     final excludedIds = {
       _currentSessionId,
@@ -433,7 +441,7 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
       chatStore.sendMessage(
         threadId: threadId,
         senderId: senderId,
-        content: '${_event.title}\nkuclubs://event/${_event.id}',
+        content: '${_event.title}\n${EventShareLink.forEvent(_event.id)}',
         kind: ChatMessageKind.event,
         title: _event.title,
         eventId: _event.id,
@@ -596,6 +604,10 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
     final hasSpeakers = event.speakers.isNotEmpty;
     final canEngage = _canUseStudentSocialActions;
     final showCta = canEngage && !_isPast;
+    final showTickets =
+        event.isTicketed &&
+        eventTicketService.availableFor(event.id) &&
+        _currentSessionId.isNotEmpty;
 
     return Scaffold(
       backgroundColor: ClubUpColors.background,
@@ -624,11 +636,11 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
                     onDelete: _confirmDelete,
                   ),
 
-                  // `scrollable-content` 283:410 — one 20px column with a
-                  // uniform 32px gap between every section, hairlines
-                  // included, so each rule is 32px clear on both sides.
+                  // `scrollable-content` 111:31 — one 20px column with a
+                  // uniform 20px gap between every section, hairlines
+                  // included, so each rule is 20px clear on both sides.
                   Padding(
-                    padding: const EdgeInsets.fromLTRB(20, 28, 20, 0),
+                    padding: const EdgeInsets.fromLTRB(20, 20, 20, 0),
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.stretch,
                       children: [
@@ -640,44 +652,44 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
 
                         const _EventSectionRule(),
 
-                        // `host-section` — the Follow pill is ours; the frames
-                        // leave that half of the row empty.
+                        // `host-section` 111:42
                         _HostCard(
                           event: event,
                           accent: accent,
                           onView: _openClub,
                         ),
 
-                        if (event.isTicketed &&
-                            eventTicketService.availableFor(event.id) &&
-                            _currentSessionId.isNotEmpty)
-                          OutlinedButton.icon(
-                            key: const ValueKey('see-your-ticket'),
-                            onPressed: () => Navigator.of(context).push(
-                              MaterialPageRoute<void>(
-                                builder: (_) => EventTicketScreen(
-                                  eventId: event.id,
-                                  profileId: _currentSessionId,
-                                ),
+                        const _EventSectionRule(),
+
+                        // `about-section` 111:51
+                        Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            _SecHead(
+                              AppLocalizations.of(context)!.aboutThisEvent,
+                            ),
+                            const SizedBox(height: 8),
+                            Text(
+                              event.description,
+                              style: figtree(
+                                size: 14,
+                                weight: FontWeight.w400,
+                                color: ClubUpColors.muted,
+                                height: 1.5,
                               ),
                             ),
-                            icon: const Icon(
-                              Icons.confirmation_number_outlined,
-                            ),
-                            label: Text(
-                              AppLocalizations.of(context)!.seeYourTicket,
-                            ),
-                          ),
+                          ],
+                        ),
 
-                        // `attendee-section` 294:5 — promoted from below the
-                        // speakers to directly under the host.
+                        // `attendees-section` 111:55 and `tags-row` 111:65 —
+                        // one band under a single rule, 20px apart.
                         //
-                        // Its rule lives inside the builder, not beside it:
+                        // The rule lives inside the builder, not beside it:
                         // there is nothing to show whenever the viewer can see
                         // no attendees — which is every session without
                         // Supabase, guest mode included — and a rule left
-                        // behind by a collapsed section reads as a doubled
-                        // hairline around an empty band.
+                        // behind by a collapsed band reads as a doubled
+                        // hairline around an empty gap.
                         ListenableBuilder(
                           listenable: rsvpStore,
                           builder: (_, _) {
@@ -689,71 +701,75 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
                               attendeeIds: _attendees.map((user) => user.id),
                               totalCount: _rsvpCount,
                             );
-                            if (visibility.isEmpty) {
+                            final hasTags = event.tags.isNotEmpty;
+                            if (visibility.isEmpty && !hasTags) {
                               return const SizedBox.shrink();
                             }
                             return Column(
                               crossAxisAlignment: CrossAxisAlignment.stretch,
                               children: [
                                 const _EventSectionRule(),
-                                _AttendingCard(
-                                  // The viewer's own RSVP counts towards
-                                  // "going" but is not one of the people they
-                                  // follow.
-                                  followedUserIds: visibility.visibleIds
-                                      .where((id) => id != _currentSessionId)
-                                      .toList(growable: false),
-                                  count: visibility.count,
-                                  onTap: visibility.showsNames
-                                      ? _openAttendees
-                                      : null,
-                                ),
+                                if (!visibility.isEmpty)
+                                  _AttendingCard(
+                                    // The viewer's own RSVP counts towards
+                                    // "going" but is not one of the people
+                                    // they follow.
+                                    followedUserIds: visibility.visibleIds
+                                        .where((id) => id != _currentSessionId)
+                                        .toList(growable: false),
+                                    count: visibility.count,
+                                    onTap: visibility.showsNames
+                                        ? _openAttendees
+                                        : null,
+                                  ),
+                                if (!visibility.isEmpty && hasTags)
+                                  const SizedBox(height: _EventSectionRule.gap),
+                                if (hasTags)
+                                  Wrap(
+                                    spacing: 8,
+                                    runSpacing: 8,
+                                    children: [
+                                      for (final tag in event.tags)
+                                        _EventTag(label: tag),
+                                    ],
+                                  ),
                               ],
                             );
                           },
                         ),
 
-                        const _EventSectionRule(),
-
-                        // `about-section`
-                        Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            _SecHead(
-                              AppLocalizations.of(context)!.aboutThisEvent,
-                            ),
-                            const SizedBox(height: 12),
-                            Text(
-                              event.description,
-                              style: figtree(
-                                size: 15,
-                                weight: FontWeight.w400,
-                                color: ClubUpColors.muted,
-                                height: 1.6,
-                              ),
-                            ),
-                          ],
-                        ),
-
-                        if (event.tags.isNotEmpty) ...[
+                        // `ticket-section` 750:5 — only where the organiser
+                        // runs tickets and the session can reach them.
+                        if (showTickets) ...[
                           const _EventSectionRule(),
-                          // `tags-row` — the leading chip carries the accent.
-                          Wrap(
-                            spacing: 8,
-                            runSpacing: 8,
-                            children: [
-                              for (var i = 0; i < event.tags.length; i++)
-                                _EventTag(
-                                  label: event.tags[i],
-                                  accented: i == 0,
-                                ),
-                            ],
+                          EventTicketSection(
+                            event: event,
+                            profileId: _currentSessionId,
+                            attendeeName: _attendeeName,
+                            goingCount: _rsvpCount,
                           ),
                         ],
 
-                        // Speakers, programme and registration run
-                        // divider-free: the last `Line` in the frames is
-                        // `283:455`, above the speakers heading.
+                        // `send-to-friends-section` 246:5 — student accounts
+                        // only. The frame runs it straight on from the ticket
+                        // card with no rule between them.
+                        if (canEngage) ...[
+                          if (showTickets)
+                            const SizedBox(height: _EventSectionRule.gap)
+                          else
+                            const _EventSectionRule(),
+                          _BringFriendsSection(
+                            friends: _quickInviteFriends,
+                            invitedFriendIds: _invitedFriendIds,
+                            onInvite: _inviteFriend,
+                            onSeeAll: _showAllSuggestedFriends,
+                            onShare: _shareEvent,
+                          ),
+                        ],
+
+                        // Speakers, programme and registration are not in
+                        // these frames. Events that carry them still show them,
+                        // below everything the frames draw.
                         if (hasSpeakers) ...[
                           const _EventSectionRule(),
                           Column(
@@ -765,7 +781,7 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
                                   AppLocalizations.of(context)!.speakers,
                                 ),
                               ),
-                              const SizedBox(height: 16),
+                              const SizedBox(height: 12),
                               _EventSpeakerCards(speakers: event.speakers),
                             ],
                           ),
@@ -787,30 +803,17 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
                                   )!.programmeSchedule,
                                 ),
                               ),
-                              const SizedBox(height: 16),
+                              const SizedBox(height: 12),
                               _EventProgramme(slots: event.schedule!),
                             ],
                           ),
                         ],
 
-                        // Friend invitations belong to student accounts only,
-                        // and are not in the frames — kept because nothing
-                        // else on the screen invites anyone.
-                        if (canEngage) ...[
-                          const _EventSectionRule(),
-                          _BringFriendsSection(
-                            friends: _quickInviteFriends,
-                            invitedFriendIds: _invitedFriendIds,
-                            onInvite: _inviteFriend,
-                            onSeeAll: _showAllSuggestedFriends,
-                            onShare: _shareEvent,
-                          ),
-                        ],
-
-                        // `registration-section` — the page's one filled CTA,
-                        // last in the column.
                         if (hasReg) ...[
-                          const SizedBox(height: _EventSectionRule.gap),
+                          if (hasSpeakers || hasProgramme)
+                            const SizedBox(height: _EventSectionRule.gap)
+                          else
+                            const _EventSectionRule(),
                           _EventRegistrationCta(
                             url: event.registrationUrl!.trim(),
                           ),
@@ -1430,7 +1433,7 @@ class _AdminAttendees extends StatefulWidget {
 }
 
 class _AdminAttendeesState extends State<_AdminAttendees> {
-  Map<String, EventTicketState> _ticketStates = {};
+  Map<String, EventTicketSummary> _ticketStates = {};
   int _ticketLoadGeneration = 0;
 
   Event get event => widget.event;
@@ -1614,6 +1617,20 @@ class _AdminAttendeesState extends State<_AdminAttendees> {
                                           color: AppColors.secondaryText,
                                         ),
                                       ),
+                                    if (_ticketStates[user.id]?.displayCode !=
+                                        null)
+                                      Text(
+                                        '${AppLocalizations.of(context)!.ticketCode}: ${_ticketStates[user.id]!.displayCode}',
+                                        key: ValueKey(
+                                          'attendee-ticket-code-${user.id}',
+                                        ),
+                                        style: TextStyle(
+                                          fontSize: 11,
+                                          fontWeight: FontWeight.w700,
+                                          letterSpacing: 1,
+                                          color: AppColors.secondaryText,
+                                        ),
+                                      ),
                                   ],
                                 ),
                               ),
@@ -1623,30 +1640,53 @@ class _AdminAttendeesState extends State<_AdminAttendees> {
                                   key: ValueKey('ticket-status-${user.id}'),
                                   style: _ticketStates.containsKey(user.id)
                                       ? IconButton.styleFrom(
-                                          backgroundColor: switch (_ticketStates[user.id]) {
-                                            EventTicketState.used => Colors.amber.withValues(alpha: 0.18),
-                                            EventTicketState.revoked => Colors.red.withValues(alpha: 0.14),
-                                            _ => Colors.green.withValues(alpha: 0.14),
-                                          },
+                                          backgroundColor:
+                                              switch (_ticketStates[user.id]
+                                                  ?.state) {
+                                                EventTicketState.used =>
+                                                  Colors.amber.withValues(
+                                                    alpha: 0.18,
+                                                  ),
+                                                EventTicketState.revoked =>
+                                                  Colors.red.withValues(
+                                                    alpha: 0.14,
+                                                  ),
+                                                _ => Colors.green.withValues(
+                                                  alpha: 0.14,
+                                                ),
+                                              },
                                         )
                                       : null,
                                   icon: Icon(
                                     _ticketStates.containsKey(user.id)
                                         ? Icons.confirmation_number_rounded
                                         : Icons.confirmation_number_outlined,
-                                    color: switch (_ticketStates[user.id]) {
+                                    color: switch (_ticketStates[user.id]
+                                        ?.state) {
                                       EventTicketState.active => Colors.green,
                                       EventTicketState.used => Colors.amber,
                                       EventTicketState.revoked => Colors.red,
                                       null => AppColors.secondaryText,
                                     },
                                   ),
-                                  tooltip: switch (_ticketStates[user.id]) {
-                                    EventTicketState.active => AppLocalizations.of(context)!.ticketIssued,
-                                    EventTicketState.used => AppLocalizations.of(context)!.ticketAlreadyUsed,
-                                    EventTicketState.revoked => AppLocalizations.of(context)!.ticketRevoked,
-                                    null => AppLocalizations.of(context)!.ticketManage,
-                                  },
+                                  tooltip:
+                                      switch (_ticketStates[user.id]?.state) {
+                                        EventTicketState.active =>
+                                          AppLocalizations.of(
+                                            context,
+                                          )!.ticketIssued,
+                                        EventTicketState.used =>
+                                          AppLocalizations.of(
+                                            context,
+                                          )!.ticketAlreadyUsed,
+                                        EventTicketState.revoked =>
+                                          AppLocalizations.of(
+                                            context,
+                                          )!.ticketRevoked,
+                                        null => AppLocalizations.of(
+                                          context,
+                                        )!.ticketManage,
+                                      },
                                   onPressed: () async {
                                     await showModalBottomSheet<void>(
                                       context: context,
@@ -1845,13 +1885,11 @@ class _Hero extends StatelessWidget {
   Widget build(BuildContext context) {
     final topPad = MediaQuery.paddingOf(context).top;
 
-    // `hero-container` 283:382 — 420 tall on the 402-wide frame, so the crop
-    // scales straight off the width instead of the old `width - 40` basis.
-    // The taller photo is what gives `hero-bottom-fade` room to melt into the
-    // page without swallowing the title block.
-    final heroHeight = (MediaQuery.sizeOf(context).width * 1.0448).clamp(
-      240.0,
-      460.0,
+    // `hero-container` 111:6 — 320 tall on the 402-wide frame, scaled off the
+    // width so the crop holds on every phone.
+    final heroHeight = (MediaQuery.sizeOf(context).width * 0.796).clamp(
+      220.0,
+      380.0,
     );
 
     return AnnotatedRegion<SystemUiOverlayStyle>(
@@ -1867,12 +1905,10 @@ class _Hero extends StatelessWidget {
               fit: BoxFit.cover,
               borderRadius: BorderRadius.zero,
             ),
-            // `top-scrim` 283:384 — a 100px band, not the full height: the
-            // frame only darkens the status bar and the glass buttons, and a
-            // full-height scrim would fight `hero-bottom-fade` below. The
-            // gradient itself stays [MediaScrim]'s semantic ramp (a little
-            // stronger than the frame's flat 60% black, and high-contrast
-            // aware) rather than a literal copy.
+            // `top-scrim` 111:8 — a 100px band that only darkens the status
+            // bar and the glass buttons. The gradient stays [MediaScrim]'s
+            // semantic ramp (high-contrast aware) rather than a literal copy.
+            // The photo ends on a hard edge: the frames draw no bottom fade.
             const Positioned(
               top: 0,
               left: 0,
@@ -1880,31 +1916,6 @@ class _Hero extends StatelessWidget {
               child: SizedBox(
                 height: 100,
                 child: MediaScrim(position: MediaScrimPosition.top),
-              ),
-            ),
-            // `hero-bottom-fade` 656:4 / 656:12 — the photo dissolves into the
-            // page over the last 140px so there is no hard edge between the
-            // cover and the content. Theme-aware: it has to land on exactly
-            // the colour the page is painted.
-            Positioned(
-              left: 0,
-              right: 0,
-              bottom: 0,
-              child: IgnorePointer(
-                child: Container(
-                  height: 140,
-                  decoration: BoxDecoration(
-                    gradient: LinearGradient(
-                      begin: Alignment.topCenter,
-                      end: Alignment.bottomCenter,
-                      colors: [
-                        ClubUpColors.background.withValues(alpha: 0),
-                        ClubUpColors.background,
-                      ],
-                      stops: const [0.25, 0.75],
-                    ),
-                  ),
-                ),
               ),
             ),
             Positioned(
@@ -1972,15 +1983,9 @@ class _Hero extends StatelessWidget {
   }
 }
 
-/// `back-button` / `bookmark-button` — a translucent blurred disc so the
-/// control reads over any photo.
-///
-/// The two frames disagree here on purpose. `283:400` (light) frosts the disc
-/// almost opaque — `rgba(255,255,255,0.7)` behind an 8px blur, a 40% white
-/// hairline and a `#18181B` glyph — while `283:516` (dark) keeps the dim
-/// `rgba(255,255,255,0.2)` disc and a white glyph. So this is one of the few
-/// spots on the screen where the *treatment*, not just the token, is
-/// theme-dependent.
+/// `back-button` / `bookmark-button` 111:24 / 111:29 — a dim
+/// `rgba(255,255,255,0.2)` disc behind a 6px blur with a white glyph, the same
+/// in both themes since it always sits on the photo.
 class _HeroGlassButton extends StatelessWidget {
   final IconData icon;
   final VoidCallback onTap;
@@ -1997,7 +2002,6 @@ class _HeroGlassButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final dark = themeService.isDark;
     return Semantics(
       button: true,
       label: semanticLabel,
@@ -2006,26 +2010,16 @@ class _HeroGlassButton extends StatelessWidget {
         child: ClipRRect(
           borderRadius: BorderRadius.circular(18),
           child: BackdropFilter(
-            filter: ImageFilter.blur(
-              sigmaX: dark ? 6 : 8,
-              sigmaY: dark ? 6 : 8,
-            ),
+            filter: ImageFilter.blur(sigmaX: 6, sigmaY: 6),
             child: Container(
               width: 36,
               height: 36,
               alignment: Alignment.center,
               decoration: BoxDecoration(
-                color: Colors.white.withValues(alpha: dark ? 0.2 : 0.7),
+                color: Colors.white.withValues(alpha: 0.2),
                 borderRadius: BorderRadius.circular(18),
-                border: Border.all(
-                  color: Colors.white.withValues(alpha: dark ? 0.2 : 0.4),
-                ),
               ),
-              child: Icon(
-                icon,
-                size: iconSize,
-                color: dark ? Colors.white : const Color(0xFF18181B),
-              ),
+              child: Icon(icon, size: iconSize, color: Colors.white),
             ),
           ),
         ),
@@ -2051,14 +2045,14 @@ class _EventTitleBlock extends StatelessWidget {
           mainAxisSize: MainAxisSize.min,
           children: [
             Container(
-              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
               decoration: BoxDecoration(
-                // `time-badge` — a 10% wash in light, doubled to 20% in dark so
-                // the pill still separates from the `#121212` page.
+                // `time-badge` 111:34 — a 10% wash in light, doubled to 20% in
+                // dark so the badge still separates from the `#121212` page.
                 color: ClubUpColors.accent.withValues(
                   alpha: themeService.isDark ? 0.2 : 0.1,
                 ),
-                borderRadius: BorderRadius.circular(999),
+                borderRadius: BorderRadius.circular(8),
               ),
               child: Text(
                 whenLabel,
@@ -2079,30 +2073,28 @@ class _EventTitleBlock extends StatelessWidget {
             ),
           ],
         ),
-        const SizedBox(height: 16),
-        // `event-title` — the frames set this in Figtree Black (900). Only
-        // 400–800 are bundled, so w800 is both the closest weight and the one
-        // Flutter would resolve w900 to anyway.
+        const SizedBox(height: 12),
+        // `111:36` — Figtree ExtraBold 24 at 1.2.
         Text(
           event.title,
           style: figtree(
-            size: 34,
+            size: 24,
             weight: FontWeight.w800,
             color: ClubUpColors.text,
-            height: 1.1,
+            height: 1.2,
           ),
         ),
         if (event.location.trim().isNotEmpty) ...[
-          const SizedBox(height: 16),
+          const SizedBox(height: 12),
           Row(
             children: [
               Container(
-                width: 32,
-                height: 32,
+                width: 28,
+                height: 28,
                 alignment: Alignment.center,
                 decoration: BoxDecoration(
                   color: ClubUpColors.chip,
-                  borderRadius: BorderRadius.circular(10),
+                  borderRadius: BorderRadius.circular(8),
                 ),
                 child: Icon(
                   Icons.place_outlined,
@@ -2110,7 +2102,7 @@ class _EventTitleBlock extends StatelessWidget {
                   color: ClubUpColors.muted,
                 ),
               ),
-              const SizedBox(width: 10),
+              const SizedBox(width: 8),
               Expanded(
                 child: Text(
                   event.location,
@@ -2130,15 +2122,15 @@ class _EventTitleBlock extends StatelessWidget {
 }
 
 /// The hairline the handoff puts between sections of the detail screen, with
-/// the 32px of air the frames give it on each side baked in.
+/// the 20px of air the frames give it on each side baked in.
 ///
-/// `scrollable-content` 283:410 is a 32px-gap flex whose hairlines are just
-/// more children, so a rule always sits 32px clear of the section above and
+/// `scrollable-content` 111:31 is a 20px-gap flex whose hairlines are just
+/// more children, so a rule always sits 20px clear of the section above and
 /// below it. Carrying the spacing here keeps that invariant in one place
 /// instead of at every call site.
 class _EventSectionRule extends StatelessWidget {
   /// The gap above and below every section boundary.
-  static const double gap = 32;
+  static const double gap = 20;
 
   const _EventSectionRule();
 
@@ -2153,40 +2145,29 @@ class _EventSectionRule extends StatelessWidget {
   );
 }
 
-/// `tag-*` — a student-side copy. The shared [_Tag] is also used by the club
-/// admin event screen, whose design has not been reviewed yet.
-///
-/// The frames draw the first chip accent-tinted and the rest neutral. Real
-/// [Event.tags] are free text, so [accented] is driven purely by position —
-/// the leading tag reads as the event's category — rather than by matching
-/// words, which would only ever work for English tags.
+/// `tag-*` 111:66 — a student-side copy. The shared [_Tag] is also used by the
+/// club admin event screen, whose design has not been reviewed yet. Every chip
+/// is neutral in these frames: card fill, hairline, SemiBold 12.
 class _EventTag extends StatelessWidget {
   final String label;
-  final bool accented;
 
-  const _EventTag({required this.label, this.accented = false});
+  const _EventTag({required this.label});
 
   @override
   Widget build(BuildContext context) {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
       decoration: BoxDecoration(
-        color: accented
-            ? ClubUpColors.accent.withValues(alpha: 0.08)
-            : ClubUpColors.card,
-        borderRadius: BorderRadius.circular(999),
-        border: Border.all(
-          color: accented
-              ? ClubUpColors.accent.withValues(alpha: 0.2)
-              : ClubUpColors.border,
-        ),
+        color: ClubUpColors.card,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: ClubUpColors.border),
       ),
       child: Text(
         label,
         style: figtree(
-          size: 13,
-          weight: FontWeight.w700,
-          color: accented ? ClubUpColors.accentText : ClubUpColors.text,
+          size: 12,
+          weight: FontWeight.w600,
+          color: ClubUpColors.text,
         ),
       ),
     );
@@ -2755,9 +2736,9 @@ class _RegistrationCard extends StatelessWidget {
 // Section header
 // ─────────────────────────────────────────────────────────────────────────────
 
-/// The 18px ExtraBold section heading the frames use for "About the event",
-/// "Speakers" and "Programme Schedule". Student-side only — the admin screen
-/// has its own [_AdminSecHead].
+/// The 16px Bold section heading `111:52` uses for "About the event", carried
+/// onto "Speakers" and "Programme Schedule" so the extras keep the page's
+/// rhythm. Student-side only — the admin screen has its own [_AdminSecHead].
 class _SecHead extends StatelessWidget {
   final String text;
   const _SecHead(this.text);
@@ -2767,8 +2748,8 @@ class _SecHead extends StatelessWidget {
     return Text(
       text,
       style: figtree(
-        size: 18,
-        weight: FontWeight.w800,
+        size: 16,
+        weight: FontWeight.w700,
         color: ClubUpColors.text,
       ),
     );
@@ -3459,61 +3440,66 @@ class _AttendingCard extends StatelessWidget {
     if (count == 0 && followedUserIds.isEmpty) return const SizedBox.shrink();
 
     final hasFaces = followedUserIds.isNotEmpty;
+    final muted = figtree(
+      size: 13,
+      weight: FontWeight.w600,
+      color: ClubUpColors.muted,
+    );
 
+    // `attendees-section` 111:55 — faces and an accent label, then the
+    // `see-all-btn` line. The frame's "+24 going" is a headcount, which a
+    // student is never shown (see [attendeeVisibilityFor]), so the second line
+    // only opens the friends list.
     return GestureDetector(
       key: const ValueKey('event-attending-card'),
       onTap: onTap,
       behavior: HitTestBehavior.opaque,
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          if (hasFaces) _DetailAvatarStack(userIds: followedUserIds),
-          // `going-count` 294:12 — the label moved off the bare row and into a
-          // bordered chip pinned to the trailing edge.
-          Flexible(
-            child: Container(
-              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-              decoration: BoxDecoration(
-                color: ClubUpColors.card,
-                borderRadius: BorderRadius.circular(16),
-                border: Border.all(color: ClubUpColors.border),
-              ),
-              child: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Flexible(
-                    child: Text(
-                      hasFaces
-                          ? (followedUserIds.length == 1
-                                ? S.oneFriendGoingLabel
-                                : S.friendsGoingLabel)
-                          : l10n.goingCount(count),
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: figtree(
-                        size: 13,
-                        weight: hasFaces ? FontWeight.w700 : FontWeight.w600,
-                        // Primary text, not the accent the frame draws: white
-                        // on the dark card, and still legible on the light
-                        // one, where a literal white would vanish.
-                        color: hasFaces
-                            ? ClubUpColors.text
-                            : ClubUpColors.muted,
-                      ),
+          if (hasFaces)
+            Row(
+              children: [
+                _DetailAvatarStack(userIds: followedUserIds),
+                const SizedBox(width: 10),
+                Flexible(
+                  child: Text(
+                    followedUserIds.length == 1
+                        ? S.oneFriendGoingLabel
+                        : S.friendsGoingLabel,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: figtree(
+                      size: 13,
+                      weight: FontWeight.w700,
+                      color: ClubUpColors.accentText,
                     ),
                   ),
-                  if (onTap != null) ...[
-                    const SizedBox(width: 8),
-                    Icon(
-                      Icons.chevron_right_rounded,
-                      size: 14,
-                      color: ClubUpColors.muted,
-                    ),
-                  ],
-                ],
-              ),
+                ),
+              ],
+            )
+          else
+            Text(
+              l10n.goingCount(count),
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: muted,
             ),
-          ),
+          if (onTap != null && hasFaces) ...[
+            const SizedBox(height: 8),
+            Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(l10n.seeAll, style: muted),
+                const SizedBox(width: 4),
+                Icon(
+                  Icons.chevron_right_rounded,
+                  size: 14,
+                  color: ClubUpColors.accentText,
+                ),
+              ],
+            ),
+          ],
         ],
       ),
     );
@@ -3536,15 +3522,15 @@ String _attendeeDisplayName(String userId) {
   return userState.displayNameFor(userId, person?.name ?? userId);
 }
 
-/// `attendee-avatars` 294:6 — up to five 32px discs, each pulled 10px over the
-/// one before it.
+/// `avatar-stack` 111:57 — up to five 24px discs, each pulled 8px over the one
+/// before it.
 class _DetailAvatarStack extends StatelessWidget {
   final List<String> userIds;
 
-  /// Disc diameter and the step between two neighbours; the 10px difference is
-  /// the overlap the frame draws with `mr-[-10px]`.
-  static const double _size = 32;
-  static const double _step = 22;
+  /// Disc diameter and the step between two neighbours; the 8px difference is
+  /// the overlap the frame draws with `mr-[-8px]`.
+  static const double _size = 24;
+  static const double _step = 16;
 
   const _DetailAvatarStack({required this.userIds});
 
@@ -3561,15 +3547,18 @@ class _DetailAvatarStack extends StatelessWidget {
             Positioned(
               left: i * _step,
               child: Container(
+                width: _size,
+                height: _size,
+                padding: const EdgeInsets.all(1.5),
                 decoration: BoxDecoration(
                   shape: BoxShape.circle,
-                  border: Border.all(color: ClubUpColors.background, width: 2),
+                  color: ClubUpColors.background,
                 ),
                 child: UserAvatar(
                   userId: shown[i],
                   name: _attendeeDisplayName(shown[i]),
-                  size: _size,
-                  fontSize: 13,
+                  size: _size - 3,
+                  fontSize: 10,
                 ),
               ),
             ),
@@ -3636,9 +3625,10 @@ class _BringFriendsSection extends StatelessWidget {
           ],
         ),
         const SizedBox(height: 12),
-        // `quick-send-row` — one tap per friend, the row scrolls sideways.
+        // `quick-send-row` 246:11 — one tap per friend, the row scrolls
+        // sideways; 48px faces in 56px columns.
         SizedBox(
-          height: 86,
+          height: 78,
           child: ListView.separated(
             scrollDirection: Axis.horizontal,
             padding: EdgeInsets.zero,
@@ -3648,7 +3638,7 @@ class _BringFriendsSection extends StatelessWidget {
               final friend = friends[i];
               final invited = invitedFriendIds.contains(friend.id);
               return SizedBox(
-                width: 64,
+                width: 56,
                 child: AnimatedSwitcher(
                   duration: reduceMotion
                       ? Duration.zero
@@ -3825,8 +3815,8 @@ class _QuickInviteFriendState extends State<_QuickInviteFriend>
           key: ValueKey('event-quick-invite-avatar-${widget.friend.id}'),
           duration: duration,
           curve: Curves.easeOutCubic,
-          width: 56,
-          height: 56,
+          width: 48,
+          height: 48,
           decoration: BoxDecoration(
             shape: BoxShape.circle,
             border: Border.all(
@@ -3851,8 +3841,8 @@ class _QuickInviteFriendState extends State<_QuickInviteFriend>
               child: UserAvatar(
                 userId: widget.friend.id,
                 name: displayName,
-                size: 56,
-                fontSize: 20,
+                size: 48,
+                fontSize: 17,
               ),
             ),
           ),
@@ -3904,7 +3894,7 @@ class _QuickInviteFriendState extends State<_QuickInviteFriend>
     );
 
     return SizedBox(
-      width: 64,
+      width: 56,
       child: Padding(
         padding: const EdgeInsets.only(top: 4),
         child: Semantics(

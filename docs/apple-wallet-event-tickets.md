@@ -1,6 +1,6 @@
 # Apple Wallet event tickets
 
-The attendee ticket card shows **Add to Apple Wallet** on iOS when Wallet can add passes. The app requests a fresh, signed `.pkpass` from `apple-wallet-ticket`, then opens Apple's add sheet. The server checks the signed-in user owns an active ticket before it generates the pass. The Wallet QR contains the same `clubup-ticket:v1:<token>` credential as the in-app QR; `scan_event_ticket` remains the admission authority.
+The attendee ticket card shows **Add to Apple Wallet** on iOS when Wallet can add passes. The app requests a fresh, signed `.pkpass` from `apple-wallet-ticket`, then opens Apple's add sheet. The server checks the signed-in user owns an active ticket before it generates the pass. The six-character ticket code appears as a pass field and barcode text. The Wallet QR contains the same `clubup-ticket:v1:<token>` credential as the in-app QR; `scan_event_ticket` remains the admission authority. The organizer sees the same code in the attendee list and ticket management sheet. A reissued ticket gets a new code.
 
 ## Certificate setup
 

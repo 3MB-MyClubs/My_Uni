@@ -10,6 +10,7 @@ import '../models/event.dart';
 import '../models/user.dart';
 import '../services/app_colors.dart';
 import '../services/auth_service.dart';
+import '../services/event_share_link.dart';
 import '../services/people_service.dart';
 import '../services/theme_service.dart';
 import '../services/user_state.dart';
@@ -67,7 +68,7 @@ class _EventShareSheetState extends State<EventShareSheet> {
   String _query = '';
   String? _feedback;
 
-  String get _eventLink => 'kuclubs://event/${widget.event.id}';
+  String get _eventLink => EventShareLink.forEvent(widget.event.id);
 
   List<User> get _filteredPeople {
     final normalized = _query.trim().toLowerCase();

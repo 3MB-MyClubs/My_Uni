@@ -1,5 +1,7 @@
 # Google Wallet event tickets
 
+The ticket number and text next to the barcode show the same six-character code visible to the attendee and organizer in the app. The QR retains its separate admission credential.
+
 On Android, active attendee tickets show **Add to Google Wallet** when the Google Wallet save API is available. The app requests a signed event ticket JWT from the `google-wallet-ticket` Edge Function and passes it to Google's native save sheet. The ticket QR uses the same `clubup-ticket:v1:<token>` credential as the in-app QR; `scan_event_ticket` remains the admission authority.
 
 ## Setup

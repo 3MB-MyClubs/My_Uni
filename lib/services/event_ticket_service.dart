@@ -7,17 +7,20 @@ class EventTicket {
   const EventTicket({
     required this.id,
     required this.token,
+    this.displayCode,
     this.revokedAt,
     this.usedAt,
   });
   factory EventTicket.fromJson(Map<String, dynamic> row) => EventTicket(
     id: row['id'] as String,
     token: row['token'] as String,
+    displayCode: row['display_code'] as String?,
     revokedAt: DateTime.tryParse(row['revoked_at']?.toString() ?? ''),
     usedAt: DateTime.tryParse(row['used_at']?.toString() ?? ''),
   );
   final String id;
   final String token;
+  final String? displayCode;
   final DateTime? revokedAt;
   final DateTime? usedAt;
   bool get isActive => revokedAt == null && usedAt == null;
@@ -57,11 +60,18 @@ class TicketPerson {
 
 enum EventTicketState { active, used, revoked }
 
+class EventTicketSummary {
+  const EventTicketSummary(this.state, this.displayCode);
+  final EventTicketState state;
+  final String? displayCode;
+}
+
 class EventTicketService {
   EventTicketService({SupabaseClient? client}) : _injectedClient = client;
   final SupabaseClient? _injectedClient;
   static const qrPrefix = 'clubup-ticket:v1:';
   static final _tokenPattern = RegExp(r'^[0-9a-f]{64}$');
+  static final _displayCodePattern = RegExp(r'^[A-Z0-9]{6}$');
   static final _eventPattern = RegExp(r'^[0-9a-fA-F-]{36}$');
 
   SupabaseClient? get _client {
@@ -84,6 +94,15 @@ class EventTicketService {
     if (!payload.startsWith(qrPrefix)) return null;
     final token = payload.substring(qrPrefix.length);
     return _tokenPattern.hasMatch(token) ? token : null;
+  }
+
+  static String? normalizeDisplayCode(String input) {
+    final code = input.trim().toUpperCase();
+    return _displayCodePattern.hasMatch(code) &&
+            code.contains(RegExp(r'[A-Z]')) &&
+            code.contains(RegExp(r'[0-9]'))
+        ? code
+        : null;
   }
 
   Future<bool> canManage(String eventId) async =>
@@ -113,24 +132,27 @@ class EventTicketService {
     return rows.map((row) => row['profile_id'] as String).toSet();
   }
 
-  Future<Map<String, EventTicketState>> fetchTicketStates(
+  Future<Map<String, EventTicketSummary>> fetchTicketStates(
     String eventId,
   ) async {
     final rows = await _requiredClient
         .from('event_tickets')
-        .select('profile_id, used_at, revoked_at')
+        .select('profile_id, display_code, used_at, revoked_at')
         .eq('event_id', eventId)
         .order('issued_at', ascending: false);
-    final states = <String, EventTicketState>{};
+    final states = <String, EventTicketSummary>{};
     for (final row in rows) {
       final profileId = row['profile_id'] as String;
       states.putIfAbsent(
         profileId,
-        () => row['revoked_at'] != null
-            ? EventTicketState.revoked
-            : row['used_at'] != null
-            ? EventTicketState.used
-            : EventTicketState.active,
+        () => EventTicketSummary(
+          row['revoked_at'] != null
+              ? EventTicketState.revoked
+              : row['used_at'] != null
+              ? EventTicketState.used
+              : EventTicketState.active,
+          row['display_code'] as String?,
+        ),
       );
     }
     return states;
@@ -173,6 +195,16 @@ class EventTicketService {
     return TicketScanResult.fromJson(Map<String, dynamic>.from(json as Map));
   }
 
+  Future<TicketScanResult> scanCode(String eventId, String input) async {
+    final code = normalizeDisplayCode(input);
+    if (code == null) return const TicketScanResult(TicketScanStatus.invalid);
+    final json = await _requiredClient.rpc(
+      'scan_event_ticket_code',
+      params: {'p_event_id': eventId, 'p_code': code},
+    );
+    return TicketScanResult.fromJson(Map<String, dynamic>.from(json as Map));
+  }
+
   /// Resolve the holder only for a ticket confirmed to belong to this event.
   /// The scan RPC intentionally omits identity for invalid and foreign codes.
   Future<TicketPerson?> personForScan(
@@ -186,11 +218,34 @@ class EventTicketService {
     }
     final token = tokenFromQr(payload);
     if (token == null) return null;
+    return _personForCredential(eventId, 'token', token, result);
+  }
+
+  Future<TicketPerson?> personForCode(
+    String eventId,
+    String input,
+    TicketScanResult result,
+  ) async {
+    if (result.status == TicketScanStatus.invalid ||
+        result.status == TicketScanStatus.wrongEvent) {
+      return null;
+    }
+    final code = normalizeDisplayCode(input);
+    if (code == null) return null;
+    return _personForCredential(eventId, 'display_code', code, result);
+  }
+
+  Future<TicketPerson?> _personForCredential(
+    String eventId,
+    String column,
+    String value,
+    TicketScanResult result,
+  ) async {
     final ticket = await _requiredClient
         .from('event_tickets')
         .select('profile_id, used_at')
         .eq('event_id', eventId)
-        .eq('token', token)
+        .eq(column, value)
         .maybeSingle();
     final profileId = result.profileId ?? ticket?['profile_id'] as String?;
     if (profileId == null) return null;

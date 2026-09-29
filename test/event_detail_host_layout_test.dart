@@ -202,7 +202,7 @@ void main() {
           const ValueKey('event-quick-invite-avatar-event-friend-ceren'),
         ),
       ),
-      const Size(56, 56),
+      const Size(48, 48),
     );
     await tester.ensureVisible(invite);
     await tester.tap(invite);

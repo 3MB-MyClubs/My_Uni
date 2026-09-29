@@ -9,6 +9,7 @@ import 'package:flutter_application_1/services/auth_service.dart';
 import 'package:flutter_application_1/services/mock_data.dart';
 import 'package:flutter_application_1/services/theme_service.dart';
 import 'package:flutter_application_1/services/user_state.dart';
+import 'package:flutter_application_1/widgets/club_avatar.dart';
 import 'package:flutter_application_1/widgets/clubup_design.dart';
 import 'package:flutter_application_1/widgets/event_cover_image.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -202,18 +203,18 @@ void main() {
   ) async {
     final event = await pumpDetail(tester);
 
-    // `hero-container` 283:382 — 420 tall on a 402-wide frame, so the crop
+    // `hero-container` 111:6 — 320 tall on a 402-wide frame, so the crop
     // scales off the full width. The cover fills the hero, so its box is the
     // hero's box.
     final hero = tester.getSize(find.byType(EventCoverImage));
     expect(hero.width, phone.width);
-    expect(hero.height, closeTo(phone.width * 1.0448, 1));
+    expect(hero.height, closeTo(phone.width * 0.796, 1));
 
-    // `event-title` — 34px, and the heaviest Figtree the app bundles.
+    // `111:36` — ExtraBold 24 at 1.2.
     final title = tester.widget<Text>(find.text(event.title));
-    expect(title.style?.fontSize, 34);
+    expect(title.style?.fontSize, 24);
     expect(title.style?.fontWeight, FontWeight.w800);
-    expect(title.style?.height, 1.1);
+    expect(title.style?.height, 1.2);
     expect(title.style?.fontFamily, 'Figtree');
 
     // `cta-reserve` 656:9 — a 56px bar spanning the 20px-padded column.
@@ -226,28 +227,21 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
-  testWidgets('the leading tag carries the accent and the rest stay neutral', (
-    tester,
-  ) async {
+  testWidgets('every tag is a neutral chip', (tester) async {
     await pumpDetail(tester);
 
-    final music = tester.widget<Text>(find.text('Music'));
-    final outdoor = tester.widget<Text>(find.text('Outdoor'));
-    final restricted = tester.widget<Text>(find.text('21+'));
-
-    expect(music.style?.color, ClubUpColors.accentText);
-    expect(music.style?.fontSize, 13);
-    expect(music.style?.fontWeight, FontWeight.w700);
-
-    // Position, not wording, decides the accent — so "21+" is as neutral as
-    // "Outdoor" even though the frame tints it rose.
-    expect(outdoor.style?.color, ClubUpColors.text);
-    expect(restricted.style?.color, ClubUpColors.text);
+    // `tags-row` 111:65 — no accented leading chip in these frames.
+    for (final label in const ['Music', 'Outdoor', '21+']) {
+      final tag = tester.widget<Text>(find.text(label));
+      expect(tag.style?.color, ClubUpColors.text);
+      expect(tag.style?.fontSize, 12);
+      expect(tag.style?.fontWeight, FontWeight.w600);
+    }
 
     expect(tester.takeException(), isNull);
   });
 
-  testWidgets('light mode paints the frame palette and frosts the header', (
+  testWidgets('light mode paints the frame palette over a dim header', (
     tester,
   ) async {
     await pumpDetail(tester);
@@ -263,9 +257,9 @@ void main() {
     final scaffold = tester.widget<Scaffold>(find.byType(Scaffold).first);
     expect(scaffold.backgroundColor, const Color(0xFFFAF9F6));
 
-    // `back-button` 283:401 — a near-opaque white disc with a dark glyph.
+    // `back-button` 111:24 — the dim disc and a white glyph, as in dark.
     final back = tester.widget<Icon>(find.byIcon(Icons.arrow_back_rounded));
-    expect(back.color, const Color(0xFF18181B));
+    expect(back.color, Colors.white);
     expect(back.size, 20);
 
     expect(tester.takeException(), isNull);
@@ -296,38 +290,35 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
-  testWidgets('a section rule is 32px clear of the content on both sides', (
+  testWidgets('a section rule is 20px clear of the content on both sides', (
     tester,
   ) async {
     await pumpDetail(tester);
 
-    // The rule between the tags row and the speakers heading — the last
-    // `Line` in the frames (`283:455`). Measured off the `Wrap` and the
-    // heading's own box; a chip's `Text` sits 8px inside its padding, which
-    // would read as 41px of air rather than 32.
-    final tagBottom = tester.getRect(find.byType(Wrap)).bottom;
-    final speakersTop = tester.getTopLeft(find.text('Speakers')).dy;
+    // The rule between the host row and the About heading. Measured off the
+    // 40px club avatar (the row's tallest child) and the heading's own box.
+    final hostBottom = tester.getRect(find.byType(ClubAvatar).first).bottom;
+    final aboutTop = tester.getTopLeft(find.text('About this event')).dy;
 
     final rule = find.byWidgetPredicate(
       (w) => w is Divider && w.color == ClubUpColors.border,
     );
     expect(rule, findsWidgets);
 
-    // Walk to the rule that actually sits between the two.
     Rect? between;
     for (var i = 0; i < rule.evaluate().length; i++) {
       final rect = tester.getRect(rule.at(i));
-      if (rect.top > tagBottom && rect.bottom < speakersTop) {
+      if (rect.top > hostBottom && rect.bottom < aboutTop) {
         between = rect;
         break;
       }
     }
-    expect(between, isNotNull, reason: 'no rule between tags and speakers');
+    expect(between, isNotNull, reason: 'no rule between host and about');
 
-    // The chip and heading text boxes carry their own line-box padding, so
-    // allow a couple of logical pixels either side of the 32.
-    expect(between!.top - tagBottom, closeTo(32, 3));
-    expect(speakersTop - between.bottom, closeTo(32, 3));
+    // The heading's text box carries its own line-box padding, so allow a
+    // couple of logical pixels either side of the 20.
+    expect(between!.top - hostBottom, closeTo(20, 3));
+    expect(aboutTop - between.bottom, closeTo(20, 3));
 
     expect(tester.takeException(), isNull);
   });

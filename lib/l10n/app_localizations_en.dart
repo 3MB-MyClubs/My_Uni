@@ -4154,6 +4154,9 @@ class AppLocalizationsEn extends AppLocalizations {
   String get ticketTitle => 'Admission ticket';
 
   @override
+  String get ticketCode => 'Ticket code';
+
+  @override
   String get seeYourTicket => 'See your ticket';
 
   @override
@@ -4203,7 +4206,16 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get ticketScanHint =>
-      'Online scanning only. Point the camera at an admission ticket QR.';
+      'Scan the ticket QR or enter its six-character code. Internet is required.';
+
+  @override
+  String get ticketEnterCode => 'Enter ticket code';
+
+  @override
+  String get ticketCodeHint => '6 characters: letters and numbers';
+
+  @override
+  String get ticketCheckInCode => 'Check in with code';
 
   @override
   String get ticketCheckedIn => 'Valid — checked in';
@@ -4246,7 +4258,7 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get ticketCameraUnavailable =>
-      'Camera unavailable. Allow camera access in Settings, then reopen the scanner. Manual check-in is also available on the event page.';
+      'Camera unavailable. Enter the ticket code below or allow camera access in Settings.';
 
   @override
   String get ticketCameraSettings => 'Camera settings';

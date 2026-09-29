@@ -38,12 +38,13 @@ class _EventTicketCardState extends State<EventTicketCard>
   EventTicketService get _service => widget.service ?? eventTicketService;
   bool get _googleWallet => googleWalletTicketService.supportedPlatform;
 
-  void _showQr(String payload) {
+  void _showQr(String payload, String? displayCode) {
     showDialog<void>(
       context: context,
       useSafeArea: false,
       builder: (context) => _ExpandedTicketQr(
         payload: payload,
+        displayCode: displayCode,
         title: AppLocalizations.of(context)!.ticketTitle,
         hint: AppLocalizations.of(context)!.ticketPrivateHint,
       ),
@@ -198,9 +199,21 @@ class _EventTicketCardState extends State<EventTicketCard>
               ),
               if (!widget.manage && ticket?.isActive == true) ...[
                 const SizedBox(height: 12),
+                if (ticket?.displayCode != null) ...[
+                  Text(l10n.ticketCode),
+                  SelectableText(
+                    ticket!.displayCode!,
+                    key: const ValueKey('admission-ticket-code'),
+                    style: Theme.of(context).textTheme.headlineMedium?.copyWith(
+                      fontWeight: FontWeight.bold,
+                      letterSpacing: 3,
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                ],
                 InkWell(
                   key: const ValueKey('admission-ticket-qr-action'),
-                  onTap: () => _showQr(ticket.qrPayload),
+                  onTap: () => _showQr(ticket.qrPayload, ticket.displayCode),
                   child: QrImageView(
                     key: const ValueKey('admission-ticket-qr'),
                     data: ticket!.qrPayload,
@@ -234,6 +247,18 @@ class _EventTicketCardState extends State<EventTicketCard>
                     ),
                   ),
                 ],
+              ],
+              if (widget.manage && ticket?.displayCode != null) ...[
+                const SizedBox(height: 8),
+                Text(l10n.ticketCode),
+                SelectableText(
+                  ticket!.displayCode!,
+                  key: const ValueKey('managed-ticket-code'),
+                  style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                    fontWeight: FontWeight.bold,
+                    letterSpacing: 2,
+                  ),
+                ),
               ],
               if (widget.manage)
                 Wrap(
@@ -284,11 +309,13 @@ class _EventTicketCardState extends State<EventTicketCard>
 class _ExpandedTicketQr extends StatefulWidget {
   const _ExpandedTicketQr({
     required this.payload,
+    required this.displayCode,
     required this.title,
     required this.hint,
   });
 
   final String payload;
+  final String? displayCode;
   final String title;
   final String hint;
 
@@ -364,6 +391,18 @@ class _ExpandedTicketQrState extends State<_ExpandedTicketQr>
                   child: Column(
                     mainAxisSize: MainAxisSize.min,
                     children: [
+                      if (widget.displayCode != null) ...[
+                        Text(AppLocalizations.of(context)!.ticketCode),
+                        SelectableText(
+                          widget.displayCode!,
+                          key: const ValueKey('admission-ticket-code-expanded'),
+                          style: Theme.of(context).textTheme.headlineMedium
+                              ?.copyWith(
+                                fontWeight: FontWeight.bold,
+                                letterSpacing: 3,
+                              ),
+                        ),
+                      ],
                       QrImageView(
                         key: const ValueKey('admission-ticket-qr-expanded'),
                         data: widget.payload,

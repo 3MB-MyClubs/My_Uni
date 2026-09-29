@@ -6812,6 +6812,12 @@ abstract class AppLocalizations {
   /// **'Admission ticket'**
   String get ticketTitle;
 
+  /// No description provided for @ticketCode.
+  ///
+  /// In en, this message translates to:
+  /// **'Ticket code'**
+  String get ticketCode;
+
   /// No description provided for @seeYourTicket.
   ///
   /// In en, this message translates to:
@@ -6905,8 +6911,26 @@ abstract class AppLocalizations {
   /// No description provided for @ticketScanHint.
   ///
   /// In en, this message translates to:
-  /// **'Online scanning only. Point the camera at an admission ticket QR.'**
+  /// **'Scan the ticket QR or enter its six-character code. Internet is required.'**
   String get ticketScanHint;
+
+  /// No description provided for @ticketEnterCode.
+  ///
+  /// In en, this message translates to:
+  /// **'Enter ticket code'**
+  String get ticketEnterCode;
+
+  /// No description provided for @ticketCodeHint.
+  ///
+  /// In en, this message translates to:
+  /// **'6 characters: letters and numbers'**
+  String get ticketCodeHint;
+
+  /// No description provided for @ticketCheckInCode.
+  ///
+  /// In en, this message translates to:
+  /// **'Check in with code'**
+  String get ticketCheckInCode;
 
   /// No description provided for @ticketCheckedIn.
   ///
@@ -6983,7 +7007,7 @@ abstract class AppLocalizations {
   /// No description provided for @ticketCameraUnavailable.
   ///
   /// In en, this message translates to:
-  /// **'Camera unavailable. Allow camera access in Settings, then reopen the scanner. Manual check-in is also available on the event page.'**
+  /// **'Camera unavailable. Enter the ticket code below or allow camera access in Settings.'**
   String get ticketCameraUnavailable;
 
   /// No description provided for @ticketCameraSettings.
